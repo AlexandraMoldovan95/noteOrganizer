@@ -20420,5 +20420,114 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW17",
+    "about": "the same file picked again is never recognised: a second attachment and a second copy on the disk, without a word",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        repeats = [p for p in filepaths if self._attached_already(p)]\n",
+        "replace": "        repeats = []\n"
+      }
+    ],
+    "must_fail": [
+      "picking a file the note already holds asks first"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW18",
+    "about": "a file is taken for one already attached by its name alone, though its bytes differ",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                if path and os.path.getsize(path) == size and filecmp.cmp(\n                        src_path, path, shallow=False):\n",
+        "replace": "                if path:\n"
+      }
+    ],
+    "must_fail": [
+      "...while a file of the same name with other bytes is attached unasked"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW19",
+    "about": "No to \"Attach it again?\" attaches the repeat all the same",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                filepaths = [p for p in filepaths if p not in repeats]\n",
+        "replace": "                filepaths = list(filepaths)\n"
+      }
+    ],
+    "must_fail": [
+      "picking a file the note already holds asks first",
+      "...and with a new file beside it, No keeps the repeat out"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW20",
+    "about": "a Yes to \"Already attached\" given after the editor moved on attaches the file to the note opened meanwhile",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            again = self.ask_yes_no(\"Already attached\", ask, icon=\"question\",\n                                    default=\"no\")\n            if asked_about != (self.selected_note_id, self.current_attachments):\n                return\n",
+        "replace": "            again = self.ask_yes_no(\"Already attached\", ask, icon=\"question\",\n                                    default=\"no\")\n"
+      }
+    ],
+    "must_fail": [
+      "...and a Yes given after the editor moved on attaches nothing to the note that opened meanwhile ("
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW21",
+    "about": "an empty file is attached without a remark",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            self._banner_after_undo(text, lambda: self._show_toast(text, kind=\"info\"))\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "an empty file is attached, and the banner says so"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW22",
+    "about": "two empty files are counted with the noun in the wrong form",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                    f\"{count_noun(len(empty), 'file')} are empty (0 bytes) — \"\n",
+        "replace": "                    f\"{len(empty)} file are empty (0 bytes) — \"\n"
+      }
+    ],
+    "must_fail": [
+      "...and two of them, counted"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

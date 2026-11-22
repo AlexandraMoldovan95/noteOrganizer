@@ -422,6 +422,9 @@ bullet and numbering buttons deliberately do nothing to a table.
 Attach one or more files to a note from the editor. Attached files show as a small list with their
 name and a way to remove them; click a file to open it, or Tab to its name and press Space or
 Enter. Removing an attachment deletes it from that note only — it doesn't touch anything else.
+Picking a file the note already holds — the same name and the same contents — asks
+**Already attached** before adding a second copy (No is the answer it leans to); an empty file is
+attached, and a banner says it is empty.
 
 Pictures open large, right in the app; **Close** or Escape puts them away. One the app cannot show
 itself — too large, or a kind it does not read under a picture's name — is offered to the program

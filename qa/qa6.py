@@ -844,6 +844,113 @@ app.load_note(saved_note)
 app.update()
 check('attachment survives switching away and back', len(app.current_attachments) == 1)
 
+# The same file picked again made a second attachment, and a second copy on
+# the disk, without a word; an empty file went in without a remark (the
+# review panel, 22 November). Asked once, No chosen; a file of the same name
+# with other bytes is another file; an empty one is attached and said.
+_d7_real_ask = app.ask_yes_no
+_d7_dir = tempfile.mkdtemp(prefix='qa6_d7_')
+_d7_paths = {}
+for _d7_name, _d7_text in (('qa6_attachment.txt', 'other content'), ('qa6_new.txt', 'new'),
+                           ('qa6_empty.txt', ''), ('qa6_empty_too.txt', '')):
+    _d7_paths[_d7_name] = os.path.join(_d7_dir, _d7_name)
+    with open(_d7_paths[_d7_name], 'w') as f:
+        f.write(_d7_text)
+
+
+def _d7_pick(paths, answer):
+    """Attach *paths*, answering every question with *answer*; the questions."""
+    asked = []
+    fd.askopenfilenames = lambda **k: tuple(paths)
+    app.ask_yes_no = lambda t, m, **k: (asked.append((t, m, k)),
+                                        answer() if callable(answer) else answer)[1]
+    try:
+        app.add_attachment(); app.update()
+    finally:
+        app.ask_yes_no = _d7_real_ask
+        fd.askopenfilenames = lambda **k: (tmp_file,)
+    return asked
+
+
+def _d7_names():
+    return [a.get('filename') for a in app.current_attachments]
+
+
+def _d7_drop_from(index):
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        while len(app.current_attachments) > index:
+            app.remove_attachment(len(app.current_attachments) - 1); app.update()
+    finally:
+        app.ask_yes_no = _d7_real_ask
+
+
+_d7_disk = len(os.listdir(NO.ATTACHMENTS_DIR))
+_d7_asked = _d7_pick([tmp_file], False)
+check(f'picking a file the note already holds asks first, No pre-selected, and No '
+      f'attaches nothing and copies nothing ({_d7_asked}; {_d7_names()})',
+      len(_d7_asked) == 1 and _d7_asked[0][0] == 'Already attached'
+      and '“qa6_attachment.txt” is already attached' in _d7_asked[0][1]
+      and _d7_asked[0][2].get('default') == 'no'
+      and _d7_asked[0][2].get('icon') != 'warning'
+      and _d7_names() == ['qa6_attachment.txt']
+      and len(os.listdir(NO.ATTACHMENTS_DIR)) == _d7_disk)
+_d7_pick([tmp_file], True)
+check(f'...and Yes attaches it again ({_d7_names()})',
+      _d7_names() == ['qa6_attachment.txt', 'qa6_attachment.txt'])
+_d7_drop_from(1)
+_d7_asked = _d7_pick([_d7_paths['qa6_attachment.txt']], False)
+check(f'...while a file of the same name with other bytes is attached unasked '
+      f'({_d7_asked}; {_d7_names()})',
+      not _d7_asked and _d7_names() == ['qa6_attachment.txt', 'qa6_attachment.txt'])
+_d7_drop_from(1)
+_d7_asked = _d7_pick([tmp_file, _d7_paths['qa6_new.txt']], False)
+check(f'...and with a new file beside it, No keeps the repeat out and attaches the '
+      f'new one, asked once ({len(_d7_asked)}; {_d7_names()})',
+      len(_d7_asked) == 1 and _d7_names() == ['qa6_attachment.txt', 'qa6_new.txt'])
+_d7_drop_from(1)
+_d7_before = (app.selected_note_id, app.current_attachments)
+_d7_other = []
+
+
+def _d7_moved_on():
+    app.selected_note_id = (_d7_before[0] or 0) + 999
+    app.current_attachments = _d7_other
+    return True
+
+
+try:
+    _d7_pick([tmp_file], _d7_moved_on)
+finally:
+    app.selected_note_id, app.current_attachments = _d7_before
+check(f'...and a Yes given after the editor moved on attaches nothing to the note '
+      f'that opened meanwhile ({_d7_other})', _d7_other == [])
+
+
+def _d7_banner():
+    return ' '.join(str(lbl.cget('text')) for frame, lbl in (
+        (app.toast_frame, app.toast_lbl),
+        (getattr(app, '_words_frame', None), getattr(app, '_words_lbl', None)))
+        if frame is not None and app._is_placed(frame))
+
+
+_d7_asked = _d7_pick([_d7_paths['qa6_empty.txt']], False)
+_d7_said = _d7_banner()
+check(f'an empty file is attached, and the banner says so ({_d7_asked}; {_d7_said!r})',
+      not _d7_asked and _d7_names() == ['qa6_attachment.txt', 'qa6_empty.txt']
+      and '“qa6_empty.txt” is empty (0 bytes) — attached anyway' in _d7_said)
+_d7_drop_from(1)
+app._hide_toast()
+_d7_pick([_d7_paths['qa6_empty.txt'], _d7_paths['qa6_empty_too.txt']], False)
+_d7_said = _d7_banner()
+check(f'...and two of them, counted ({_d7_said!r})',
+      '2 files are empty (0 bytes) — attached anyway' in _d7_said)
+_d7_drop_from(1)
+app._hide_toast()
+for _d7_path in _d7_paths.values():
+    os.remove(_d7_path)
+os.rmdir(_d7_dir)
+
 # ---- Removing an attachment CONFIRMS first (the no-confirm sweep) ----
 # The ✕ deleted the stored file permanently with no question at all —
 # the one destructive gesture outside the dialog system, found by the

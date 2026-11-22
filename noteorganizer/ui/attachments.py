@@ -10,6 +10,7 @@ which spares a file another note or Trash entry still names (ISSUES_LOG:
 two rules that keep them working: :mod:`noteorganizer.ui`.
 """
 
+import filecmp
 import os
 import shutil
 import tkinter as tk
@@ -23,7 +24,7 @@ from ..core import paths
 from ..core.model import (MAX_ATTACHMENTS, attachment_display_name,
                           file_type_of, how_to_open)
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
-                            attached_files_kept, attachment_names_in)
+                            attached_files_kept, attachment_names_in, count_noun)
 from .calendar_view import _fit_title
 from .dialogs import one_line
 
@@ -48,6 +49,22 @@ def _quoted(display_name):
     return one_line(stem, 100) + kind
 
 
+def _stored_name_for(original_name):
+    """The name a new attachment's copy is stored under: the moment, then the
+    file's own name. No colon, which the resolver refuses as a stream
+    (_attachment_path_within): only Linux allows one in a name."""
+    return (f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_"
+            f"{original_name.replace(':', '_')}")
+
+
+def _shown_when_attached(src_path, stored_as=None):
+    """The name *src_path* shows once attached, as every other route shows
+    it, so the save's normalize_note finds nothing to change."""
+    original_name = os.path.basename(src_path)
+    return attachment_display_name(original_name,
+                                   stored_as or _stored_name_for(original_name))
+
+
 class AttachmentsMixin:
     """Attachment handling for :class:`NoteOrganizer`.
 
@@ -60,6 +77,30 @@ class AttachmentsMixin:
             lambda: filedialog.askopenfilenames(title="Choose file(s) to attach"))
         if not filepaths:
             return
+        # The same file picked again made a second attachment, and a second
+        # copy on the disk, without a word: asked once for all of them, No
+        # chosen. The note asked about is held across the answer, as below.
+        repeats = [p for p in filepaths if self._attached_already(p)]
+        if repeats:
+            asked_about = (self.selected_note_id, self.current_attachments)
+            names = [_quoted(_shown_when_attached(p)) for p in repeats]
+            if len(names) == 1:
+                ask = (f"“{names[0]}” is already attached to this note, exactly "
+                       "as it is.\n\nAttach it again?")
+            else:
+                listed = "\n".join(f"  • {n}" for n in names[:10])
+                if len(names) > 10:
+                    listed += f"\n  … and {len(names) - 10:,} more"
+                ask = ("These files are already attached to this note, exactly "
+                       f"as they are:\n{listed}\n\nAttach them again?")
+            again = self.ask_yes_no("Already attached", ask, icon="question",
+                                    default="no")
+            if asked_about != (self.selected_note_id, self.current_attachments):
+                return
+            if not again:
+                filepaths = [p for p in filepaths if p not in repeats]
+                if not filepaths:
+                    return
         # normalize_note enforces MAX_ATTACHMENTS by truncating -- right for
         # a share code, wrong for a person's own files, which went at the
         # next load. Refused here instead, and said.
@@ -86,15 +127,10 @@ class AttachmentsMixin:
                 return
             filepaths = filepaths[:room]
         added_any = False
+        empty = []
         for src_path in filepaths:
-            original_name = os.path.basename(src_path)
-            # No colon in a stored name, which the resolver refuses as a
-            # stream (_attachment_path_within): only Linux allows one here.
-            unique_name = (f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_"
-                           f"{original_name.replace(':', '_')}")
-            # Shown as every other route shows it, so the save's
-            # normalize_note finds nothing to change.
-            shown = attachment_display_name(original_name, unique_name)
+            unique_name = _stored_name_for(os.path.basename(src_path))
+            shown = _shown_when_attached(src_path, unique_name)
             dest_path = os.path.join(paths.ATTACHMENTS_DIR, unique_name)
             try:
                 shutil.copy2(src_path, dest_path)
@@ -103,9 +139,46 @@ class AttachmentsMixin:
                 continue
             self.current_attachments.append({"filename": shown, "stored_as": unique_name})
             added_any = True
+            try:
+                if os.path.getsize(dest_path) == 0:
+                    empty.append(shown)
+            except OSError:
+                pass
         self.refresh_attachments_list()
         if added_any:
             self._schedule_autosave()
+        if empty:
+            # Attached as asked, and said: an empty file went in without a
+            # remark, and opened to nothing.
+            text = (f"“{_quoted(empty[0])}” is empty (0 bytes) — attached anyway"
+                    if len(empty) == 1 else
+                    f"{count_noun(len(empty), 'file')} are empty (0 bytes) — "
+                    "attached anyway")
+            self._banner_after_undo(text, lambda: self._show_toast(text, kind="info"))
+
+    def _attached_already(self, src_path):
+        """Whether this note already holds *src_path* as it is: the name it
+        would show, then its size, then its bytes. A file that cannot be read
+        counts as new; the copy says why it failed."""
+        try:
+            size = os.path.getsize(src_path)
+            shown = os.path.normcase(_shown_when_attached(src_path))
+        except (OSError, ValueError):
+            return False
+        for held in self.current_attachments:
+            if not isinstance(held, dict):
+                continue
+            name = attachment_display_name(held.get("filename"), held.get("stored_as"))
+            if os.path.normcase(name) != shown:
+                continue
+            path = _attachment_path_within(held.get("stored_as"))
+            try:
+                if path and os.path.getsize(path) == size and filecmp.cmp(
+                        src_path, path, shallow=False):
+                    return True
+            except (OSError, ValueError):
+                continue
+        return False
 
     def remove_attachment(self, index):
         if not (0 <= index < len(self.current_attachments)):
