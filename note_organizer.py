@@ -12818,6 +12818,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            f"“{one_line(title.strip() or 'Untitled note', 40)}” "
                            f"{'was' if left == 1 else 'were'} not added while its date or repeat "
                            "waits to be fixed: once it is, import the backup again.")
+        # A note brought back that sits in the Trash too, deleted here since
+        # the backup was made: in the list and in the Trash at once, unsaid.
+        trashed = {str(e.get("uid") or "").strip() for e in self.trash
+                   if isinstance(e, dict)} - {""}
+        in_trash = sum(1 for n in arrived
+                       if str(n.get("uid") or "").strip() in trashed)
+        if in_trash:
+            # Right after "Added ...", which "It" and "them" are about.
+            known_note = ((
+                (" It is" if in_trash == 1 else " They are all")
+                if in_trash == len(arrived) else
+                f" {in_trash} of them {'is' if in_trash == 1 else 'are'}"
+            ) + " in your Trash too (Settings → Recently deleted).") + known_note
         # A sign-out's word for the next start is no longer true: this import
         # finished, its merge saved -- and a session that ends with "Import
         # complete" on screen leaves none.

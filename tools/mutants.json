@@ -20802,6 +20802,42 @@
     "expect": "killed"
   },
   {
+    "id": "PW38",
+    "about": "a backup's note that is in the Trash too lands in the list as well, and Import complete says nothing of the Trash",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        in_trash = sum(1 for n in arrived\n",
+        "replace": "        in_trash = 0 * sum(1 for n in arrived\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's note that is in the Trash too is said to be"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW39",
+    "about": "one of two notes a backup brings, in the Trash too, is said as though all were",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if in_trash == len(arrived) else\n",
+        "replace": "                if True else\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's note that is in the Trash too is said to be"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "PW40",
     "about": "a file that is no backup at all is said in zipfile's words: \"File is not a zip file\"",
     "edits": [

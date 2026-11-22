@@ -1531,6 +1531,42 @@ if os.path.exists(_nf_zip):
 check(f"...and an export onto a full disk says so in words ({' '.join(_nf_said)[:160]!r})",
       any('The disk is full, so no backup was made' in s for s in _nf_said)
       and not any('Errno' in s for s in _nf_said))
+# A backup brought in with a note also in the Trash -- deleted here since the
+# backup was made -- puts it in the list too, and said nothing of the Trash
+# (the review panel, on the phone; the desktop did the same).
+_bt_zip = os.path.join(tempfile.gettempdir(), 'qa3_backup_trash.zip')
+_bt_said = {}
+_bt_info_was, _bt_ask_was, _bt_dlg_was = app.show_info, app.ask_yes_no, app._themed_dialog
+for _bt_case, _bt_uids in (('one', ['bt-gone-1']), ('some', ['bt-gone-1', 'bt-kept-2'])):
+    app.notes = []; app.save_notes()
+    app.trash = [dict(NO.normalize_note({'id': 801, 'title': 'Gone', 'body': 'g',
+                                         'uid': 'bt-gone-1'}),
+                      deleted_at=NO.now_stamp())]
+    NO.save_trash(app.trash)
+    with zipfile.ZipFile(_bt_zip, 'w') as zf:
+        zf.writestr('notes_data.json', json.dumps([
+            {'id': i + 1, 'title': 'Back %d' % i, 'body': 'b%d' % i, 'uid': u}
+            for i, u in enumerate(_bt_uids)]))
+    _bt_got = []
+    app.show_info = lambda *a, **k: _bt_got.append(' '.join(map(str, a)))
+    app.ask_yes_no = lambda *a, **k: True
+    app._themed_dialog = lambda *a, **k: 'all'
+    fd.askopenfilename = lambda **k: _bt_zip
+    try:
+        app.import_data()
+        t0 = time.time()
+        while app._import_state is not None and time.time() - t0 < 30:
+            app.update()
+    finally:
+        app.show_info, app.ask_yes_no, app._themed_dialog = _bt_info_was, _bt_ask_was, _bt_dlg_was
+    os.remove(_bt_zip)
+    _bt_said[_bt_case] = ' '.join(s for s in _bt_got if 'Import complete' in s)
+check(f"a backup's note that is in the Trash too is said to be, right after what was added "
+      f"({_bt_said})",
+      'Added 1 note from the backup. It is in your Trash too (Settings → Recently deleted).'
+      in _bt_said.get('one', '')
+      and 'Added 2 notes from the backup. 1 of them is in your Trash too' in _bt_said.get('some', ''))
+app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
 
 # A CRAFTED backup's settings.json: a million day colours under keys that are
 # no dates, and markers 100,000 characters long. Adopted whole, every note
