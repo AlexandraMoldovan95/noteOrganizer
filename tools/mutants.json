@@ -20091,5 +20091,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "TX08",
+    "about": "Ctrl+T on a line's first two letters gives them only what the line before shares, and the line loses its indent",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        keep = is_format_tag if \"\\n\" in one + two else _fmt_journal_tag\n",
+        "replace": "        keep = is_format_tag\n"
+      }
+    ],
+    "must_fail": [
+      "...and Ctrl+T on a line's first two letters keeps the line's indent"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

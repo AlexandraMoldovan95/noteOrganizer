@@ -8726,6 +8726,18 @@ _tyCP = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
 _tyCP = (_tyCP, _b.get('1.0', '1.end'))
 check(f"...and Ctrl+T with the caret inside an emoji leaves the emoji whole ({_tyCP!r})",
       _tyCP == (True, 'a\U0001F600b here'))
+# ...and a swap of a line's first two letters keeps the line's indent: Tk
+# gave them only what the line before shares, and an indented paragraph
+# lost its indent from its first letter, where Tk reads it.
+set_body('first line' + chr(10) + 'second words' + chr(10) + 'third')
+_b.tag_add('para_plain_1', '2.0', '3.0')
+_b.mark_set('insert', '2.1')
+_tyCI = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCI = (_tyCI, _b.get('2.0', '2.end'), [str(i) for i in _b.tag_ranges('para_plain_1')])
+_b.tag_remove('para_plain_1', '1.0', 'end')
+check(f"...and Ctrl+T on a line's first two letters keeps the line's indent ({_tyCI})",
+      _tyCI == (True, 'escond words', ['2.0', '3.0']))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----

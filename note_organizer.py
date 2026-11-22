@@ -566,10 +566,11 @@ def _fmt_journal_tag(name):
 def _transpose_keeping_styles(text, pos):
     """Tk's own Ctrl+T (tk::TextTranspose: the two characters before *pos*
     swapped, the caret after them, one undo step), but each character
-    keeps its own character formatting. Tk put the pair back with only the
+    keeps its own character formatting, and two characters of one line keep
+    their line's indent and alignment. Tk put the pair back with only the
     tags both neighbours share, so a bold letter swapped with a plain one
-    came back plain (case 480). Every other tag -- a line's indent or
-    alignment -- is given as Tk gives it. Returns "break"."""
+    came back plain (case 480), and a line's first two lost its indent.
+    Every other tag is given as Tk gives it. Returns "break"."""
     try:
         end = text.index(pos)
         if text.compare(f"{end}-1c", "==", "1.0"):
@@ -578,9 +579,6 @@ def _transpose_keeping_styles(text, pos):
         before = set(text.tag_names(f"{first}-1c")) if text.compare(first, ">", "1.0") else set()
         # The selection too, as Tk gives it: kept when both sides are in it.
         shared = {t for t in before & set(text.tag_names(end)) if not is_format_tag(t)}
-
-        def worn(index):
-            return tuple(shared | {t for t in text.tag_names(index) if is_format_tag(t)})
         # -2c and -1c step over an emoji whole, though it takes two of Tk's
         # places: an emoji beside the caret swaps whole, as in Tk's own swap
         # (a flag, a skin tone or a joined emoji is several, each swapped as
@@ -590,6 +588,14 @@ def _transpose_keeping_styles(text, pos):
         one, two = text.get(first), text.get(second)
         if len(one) != 1 or len(two) != 1 or any(0xD800 <= ord(c) <= 0xDFFF for c in one + two):
             return "break"
+        # Two of one line keep their line's indent and alignment as well (the
+        # tags the formatting journal keeps): given only what the line before
+        # shares, a swap of a line's first two took its indent away. A line
+        # break in the pair takes Tk's rule for those.
+        keep = is_format_tag if "\n" in one + two else _fmt_journal_tag
+
+        def worn(index):
+            return tuple(shared | {t for t in text.tag_names(index) if keep(t)})
         pair = (two, worn(second), one, worn(first))
         auto = text.tk.getboolean(text.cget("autoseparators"))
         if auto:
