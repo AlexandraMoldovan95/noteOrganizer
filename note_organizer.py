@@ -1840,9 +1840,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 msg += (
                     "\n\nThe unreadable file was preserved, untouched, at:\n"
                     f"{self._corrupt_notes_report}\n\n"
-                    "It may be repairable — keep it safe and restore from "
-                    "your most recent backup (Settings → Backup), or ask "
-                    "for help with the preserved file."
+                    "To have your notes back now, import your most recent "
+                    "backup: Settings → Backup → Import. Keep the preserved "
+                    "file either way: what could not be read is still in it."
                 )
             else:
                 # Nothing writes over it this run (storage._preserve_corrupt):

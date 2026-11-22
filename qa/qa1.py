@@ -10264,6 +10264,34 @@ check(f'...nor offers the copy of that unread file as a safety net '
       and not any('safety net' in s for s in _vb_said))
 app._version_backup_failed = False
 NO.VERSION_CHANGE = _original_version_change
+# A notes file it could not read, copied aside: the notice gives a step the
+# person can take alone, not "ask for help" with no one named (the review
+# panel, 22 November) -- and the step works in this very run: Import goes
+# as far as its chooser instead of saying to reopen first.
+import tkinter.filedialog as _uf_fd
+_uf_said = []
+_uf_warn, _uf_open = app.show_warning, _uf_fd.askopenfilename
+app.show_info = lambda *a, **k: _uf_said.append(' '.join(map(str, a)))
+app.show_warning = lambda *a, **k: _uf_said.append(' '.join(map(str, a)))
+_uf_chosen = []
+_uf_fd.askopenfilename = lambda **k: (_uf_chosen.append(k.get('title')), '')[1]
+app._corrupt_notes_report = 'notes_data_corrupt_qa1.json'
+try:
+    app.announce_startup_changes()
+    _uf_words = ' '.join(_uf_said)
+    del _uf_said[:]
+    app.import_data(); app.update()
+finally:
+    app.show_info, app.show_warning = _vb_info, _uf_warn
+    _uf_fd.askopenfilename = _uf_open
+    app._corrupt_notes_report = None
+check(f'an unreadable notes file, copied aside, is met with a step to take alone: '
+      f'import the latest backup ({_uf_words[-220:]!r})',
+      'notes_data_corrupt_qa1.json' in _uf_words
+      and 'Settings → Backup → Import' in _uf_words
+      and 'ask for help' not in _uf_words.lower())
+check(f'...and Import can be taken in that same run ({_uf_chosen}; {_uf_said})',
+      len(_uf_chosen) == 1 and not _uf_said)
 
 # ---- APP-WIDE SHORTCUTS: Ctrl+N / Ctrl+S / Ctrl+F (bind_all) ----
 # Verified through the real bindings on the app, not just the handlers.

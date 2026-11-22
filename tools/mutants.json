@@ -20402,5 +20402,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW16",
+    "about": "an unreadable notes file, copied aside, ends its notice with \"or ask for help\", naming no one to ask",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    \"To have your notes back now, import your most recent \"\n                    \"backup: Settings → Backup → Import. Keep the preserved \"\n                    \"file either way: what could not be read is still in it.\"\n",
+        "replace": "                    \"It may be repairable — keep it safe and restore from \"\n                    \"your most recent backup (Settings → Backup), or ask \"\n                    \"for help with the preserved file.\"\n"
+      }
+    ],
+    "must_fail": [
+      "an unreadable notes file, copied aside, is met with a step to take alone"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
