@@ -20041,7 +20041,7 @@
   },
   {
     "id": "TX04",
-    "about": "Ctrl+T reckons its two places by Tk's indices instead of characters (an emoji takes two indices)",
+    "about": "Kept for the gate (04af5cd5 names it): Ctrl+T reckons its two places by Tk's indices instead of characters",
     "edits": [
       {
         "file": "note_organizer.py",
@@ -20068,6 +20068,24 @@
     ],
     "must_fail": [
       "...and Ctrl+T on a cell's first two letters keeps the cell's alignment on them"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "TX07",
+    "about": "Ctrl+T with the caret parked inside an emoji swaps its two halves apart, into text no file can hold",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if len(one) != 1 or len(two) != 1 or any(0xD800 <= ord(c) <= 0xDFFF for c in one + two):\n            return \"break\"\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and Ctrl+T with the caret inside an emoji leaves the emoji whole"
     ],
     "suites": [
       "qa1"

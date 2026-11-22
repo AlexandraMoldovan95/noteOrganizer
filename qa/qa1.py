@@ -8716,6 +8716,16 @@ finally:
         app.report_callback_exception = _tyCM_was
 check(f"...and Ctrl+T right after an emoji swaps it whole, raising nothing ({_tyCM!r})",
       _tyCM == (True, 'ab\U0001F600 here', []))
+# ...and with the caret parked inside one (a road no click or arrow takes, but
+# a column reckoned wrong can): the mark splits the emoji, -1c lands on its
+# second half, and the swap reversed the halves into text no file can hold.
+set_body('a\U0001F600b here' + chr(10) + 'second line')
+_b.mark_set('insert', '1.2')
+_tyCP = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCP = (_tyCP, _b.get('1.0', '1.end'))
+check(f"...and Ctrl+T with the caret inside an emoji leaves the emoji whole ({_tyCP!r})",
+      _tyCP == (True, 'a\U0001F600b here'))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----

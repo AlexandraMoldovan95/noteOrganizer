@@ -582,8 +582,15 @@ def _transpose_keeping_styles(text, pos):
         def worn(index):
             return tuple(shared | {t for t in text.tag_names(index) if is_format_tag(t)})
         # -2c and -1c step over an emoji whole, though it takes two of Tk's
-        # places: an emoji beside the caret swaps whole, as in Tk's own swap.
-        pair = (text.get(second), worn(second), text.get(first), worn(first))
+        # places: an emoji beside the caret swaps whole, as in Tk's own swap
+        # (a flag, a skin tone or a joined emoji is several, each swapped as
+        # one, as there too). But a caret parked inside an emoji splits it,
+        # and -1c lands on its second half: the swap reversed the halves and
+        # left text no file can hold. Left as it is.
+        one, two = text.get(first), text.get(second)
+        if len(one) != 1 or len(two) != 1 or any(0xD800 <= ord(c) <= 0xDFFF for c in one + two):
+            return "break"
+        pair = (two, worn(second), one, worn(first))
         auto = text.tk.getboolean(text.cget("autoseparators"))
         if auto:
             text.configure(autoseparators=False)
@@ -4138,6 +4145,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # swapped had nothing before them to share it with, and jumped left.
             if aligned:
                 t.tag_add("cellalign", "1.0", "end")
+            # And an emoji's face goes with the emoji, laid per character.
+            self._editor_retag_emoji(t)
             return done
         entry.bind("<Control-t>", swap_keeping_styles)
         # The cell's menu from the keyboard, as a drawn control's opens: every
