@@ -20944,5 +20944,23 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW46",
+    "about": "the \"|\" word is said once a run, not once a cell opened: a cell opened again with one says nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if core_tables.CELL in content and not editor.get(\"pipe_said\"):\n                # The table's own divider, kept as \"/\" -- said once a cell opened:\n                # every autosave commits an open cell, and said it again.\n                editor[\"pipe_said\"] = True\n",
+        "replace": "            if core_tables.CELL in content and not getattr(self, \"_pipe_said\", False):\n                # The table's own divider, kept as \"/\" -- said once a cell opened:\n                # every autosave commits an open cell, and said it again.\n                self._pipe_said = True\n"
+      }
+    ],
+    "must_fail": [
+      "...and said again when the cell is opened again with one"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

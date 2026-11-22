@@ -3863,6 +3863,14 @@ try:
         app._commit_cell_editor(close=False); app.update()
     app._commit_cell_editor(); app.update()
     _pp_open = list(_pp_said[len(_pp_plain):])
+    # ...and opened again with a "|", said again: once a cell opened, not once a run.
+    _pp_mark = len(_pp_said)
+    app._open_cell_editor(app._grid_at_line(1), 2, 1)
+    _e = app._cell_editor['entry']
+    _e.delete('1.0', 'end')
+    _e.insert('1.0', '3|4')
+    app._commit_cell_editor(); app.update()
+    _pp_again = list(_pp_said[_pp_mark:])
     app._open_cell_editor(app._grid_at_line(1), 2, 1)
     _e = app._cell_editor['entry']
     _e.delete('1.0', 'end')
@@ -3885,6 +3893,8 @@ check(f'a "|" typed in a cell is kept as "/" and said ({_pp_typed}; then {_pp_pl
       and _pp_plain == [])
 check(f'...said once while its cell stays open through autosaves ({_pp_open})',
       _pp_open == [NO.NoteOrganizer.CELL_PIPE_WORDS])
+check(f'...and said again when the cell is opened again with one ({_pp_again})',
+      _pp_again == [NO.NoteOrganizer.CELL_PIPE_WORDS])
 check(f'...and pasted, too ({_pp_pasted})',
       _pp_pasted[0] == [NO.NoteOrganizer.CELL_PIPE_WORDS]
       and _pp_pasted[1][:2] == ['x/y', 'z'])
