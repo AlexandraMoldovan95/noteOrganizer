@@ -4145,8 +4145,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # swapped had nothing before them to share it with, and jumped left.
             if aligned:
                 t.tag_add("cellalign", "1.0", "end")
-            # And an emoji's face goes with the emoji, laid per character.
-            self._editor_retag_emoji(t)
+            # The emoji face is laid again at the key's release, as for every
+            # key (_grow_cell_editor).
             return done
         entry.bind("<Control-t>", swap_keeping_styles)
         # The cell's menu from the keyboard, as a drawn control's opens: every
