@@ -1,0 +1,19 @@
+# lows-r9-desktop, on Sonnet: the lows wave's ninth round
+# started 2026-11-22 00:40 UTC
+
+You are an adversarial reviewer. Attack one commit on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: d69b9c69. Read with `git -C D:/Projects/NoteOrganizer show d69b9c69` and the whole of `_transpose_keeping_styles` (note_organizer.py near line 566), with `_fmt_journal_tag` just above it. Read only; change nothing.
+
+The commit: in the Ctrl+T swap, when neither of the two swapped characters is a line break, each now keeps its own "journal" tags — character formatting plus the paragraph tags (`para_*`, e.g. `para_plain_1`, `para_bullet_2`) and alignment (`align_center`, `align_right`) — instead of only its character formatting; with a line break in the pair, Tk's rule (tags both neighbours share) stays. Reason: a swap of a line's first two letters had left them without the line's paragraph tag, where Tk reads the indent. qa1 adds "...and Ctrl+T on a line's first two letters keeps the line's indent"; mutant TX08 puts the old rule back.
+
+You may read `C:\Programs\Python313\tcl\tk8.6\text.tcl`. Look for:
+- Is it right that two characters of one line carry the same paragraph and alignment tags, so keeping each one's own changes nothing but the line's first characters? Can two characters of one line carry different `para_*` or `align_*` tags in this app (a numbered list's marker run, a list line's marker characters vs its words, a quote, a line half re-tagged by a paste or by `_resync_list_tags`), so that keeping each one's own now moves a paragraph tag to the wrong character, or leaves two paragraph tags on one line?
+- Does the formatting journal (Ctrl+Z restoring formatting; `_close_styled_delete_run`, `_native_delete_range`, `_tk_control_delete_range`) still agree with what the swap now lays, so that Ctrl+Z and Ctrl+Y give back exactly what was there?
+- A list line: do the list's marker, numbering (`_renumber_if_lines_fell`, `_resync_list_tags`) and hanging indent behave after a swap of its first letters, or of letters in its marker ("1." / "•")?
+- The table edges, a table cell (`swap_keeping_styles`, which has no para tags), and the case where the pair holds a line break: unchanged?
+- Is the qa1 check on a road the app reaches, and does it fail with TX08's edit?
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict; then "Not covered".

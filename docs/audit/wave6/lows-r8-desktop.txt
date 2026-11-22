@@ -1,0 +1,18 @@
+# lows-r8-desktop, on Sonnet: the lows wave's eighth round
+# started 2026-11-22 00:26 UTC
+
+You are an adversarial reviewer with fresh eyes. Read the Ctrl+T swap of a desktop notes app (Python + Tkinter) as it stands now, repository D:\Projects\NoteOrganizer, branch audit/d-val6, and attack it whole. Read only; change nothing.
+
+Where:
+- `_transpose_keeping_styles(text, pos)` in note_organizer.py (near line 566): swaps the two characters before `pos` (Tk's own Ctrl+T, tk::TextTranspose, in `C:\Programs\Python313\tcl\tk8.6\text.tcl`), each keeping its own character formatting (`is_format_tag`), every other tag given as Tk gives it (shared by the two neighbours), one undo step between separators; refuses when either character read is not one character or is a UTF-16 surrogate (a caret parked inside an emoji splits it).
+- Its two callers: the note body (`_caret_out_of_hidden`, search "Made here, each letter keeping its own style"; Alt is AltGr, left to Tk; table edges stop it first) and a table cell's editor (`swap_keeping_styles` in `_open_cell_editor`; it re-lays the cell's `cellalign` tag after the swap; the emoji face is relaid at the key's release by `_grow_cell_editor`).
+- Its checks in qa/qa1.py (search "Ctrl+T") and mutants TX01–TX05, TX07 in tools/mutants.json (TX04 is a kept equivalent).
+- History, if useful: `git -C D:/Projects/NoteOrganizer log --oneline fd48600b..HEAD -- note_organizer.py`, the latest being 59c3d3df.
+
+Look for what a person's ordinary use does: Ctrl+T at a line's start, at its end, at the note's start and end, beside a newline, inside or beside a selection, beside an emoji, on a bold, coloured, sized, highlighted letter, in a list line, a centred line, a table's text and a table cell, then Ctrl+Z and Ctrl+Y, then typing on. Does any road lose or damage words or styles, raise outside the guard, leave the formatting journal (Ctrl+Z restoring styles) out of step, or break the cell's commit back into the note? Does each check read what it claims and fail with its fix taken out; does each mutant's find match once and its must_fail truly fail?
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict; then "Not covered".

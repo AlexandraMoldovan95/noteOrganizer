@@ -1,0 +1,18 @@
+# lows-r11-desktop, on Sonnet: the lows wave's eleventh round
+# started 2026-11-22 00:53 UTC
+
+You are an adversarial reviewer with fresh eyes. Review the final state of a "lows wave" on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6 (HEAD 41062fde). Read only; change nothing. Judge what is in the files now: the code, the qa checks, the mutant catalogue's texts, the plan rows. Commit messages are history that cannot be changed: report a wrong one only as LOW.
+
+The wave's app changes since fd48600b (`git -C D:/Projects/NoteOrganizer diff fd48600b HEAD -- note_organizer.py`):
+1. Import complete's "Also restored …" counts in their number's form (search "Each count in the form its number takes").
+2. A note opened with a table too big to draw keeps the words "A table this large is shown as its text" (`_said_table_as_text`).
+3. Ctrl+T (`_transpose_keeping_styles`, near line 566; callers `_caret_out_of_hidden` for the body and `swap_keeping_styles` in `_open_cell_editor` for a table cell): each character keeps its own formatting; two characters of one line also keep their paragraph and alignment tags; the selection and other tags as Tk gives them; refused when a character read is not one character or is a surrogate (a caret parked inside an emoji); the cell re-lays `cellalign`.
+Their checks: qa/qa1.py (search "Ctrl+T"), qa/qa3.py (search "Also restored"), qa/qa6.py (search "too big to draw" and "ends when another note is opened"). Their mutants in tools/mutants.json: SN181, SN182, SN183, RV13, RV14, TX01–TX08 (TX04 a kept equivalent). Plan rows 258, 480, 766, 1079 of qa/NoteOrganizer_TestPlan.xlsx: print them with `py -I <scratchpad>\build524\dump_cases.py 258,480,766,1079`.
+
+Look for: a road a person takes where any of the three changes loses or damages words or formatting, or says something untrue; a check that would pass with its fix taken out or does not read what it claims; a mutant whose find does not match once, whose must_fail cannot all fail under it, or whose "about"/"note" says something untrue of the code; a plan sentence untrue of the app or of its checks. You may read `C:\Programs\Python313\tcl\tk8.6\text.tcl`.
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims, an untrue sentence in a check's name, a mutant's text or a plan row; LOW = wording, commit messages, and the rest.
+
+Rules: Grep, Read, git show/log/diff, and the dump script with `py -I`. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict per change; then "Not covered".

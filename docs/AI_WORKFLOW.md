@@ -294,7 +294,8 @@ The agents of waves 1 to 5 used about 107 million tokens, as their runs recorded
 its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
 its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.7
 million more to 19 November, 7.5 of them on Sonnet from 15 November, and the panel's fourth
-meeting 1.1: about 185 million in all, as [the audit's record](audit/README.md) adds them up. The whole audit had been
+meeting 1.1; its lows wave, 21 and 22 November, 2.8 more, on Sonnet: about 188 million in all,
+as [the audit's record](audit/README.md) adds them up. The whole audit had been
 estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 
@@ -320,7 +321,7 @@ four or five reviewers with separate territories, and a full wave only with my s
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
 
-The final audit was such a sign-off, and it ran far past its estimate: about 185 million agent
+The final audit was such a sign-off, and it ran far past its estimate: about 188 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
 A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
 them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in

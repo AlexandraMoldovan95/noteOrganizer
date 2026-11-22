@@ -1,0 +1,17 @@
+# lows-r2-phone, on Sonnet: the lows wave's second round
+# started 2026-11-21 23:21 UTC
+
+You are an adversarial reviewer. Attack one commit on an Android notes app (Kotlin, Jetpack Compose), repository D:\Projects\androidVersion, branch audit/a-val6. It fixes what a previous review round found in a "lows wave". Find what is wrong in it; read only, change nothing.
+
+Read it with `git -C D:/Projects/androidVersion show c2a8951`. It changes:
+- docs/DATA_FORMAT.md and docs/ISSUES_LOG.md: why a held file's messages say "until the app is closed from the recent apps and opened again" — a hold is cleared by the next start of the app's screen (Startup.prepare → Files.newStart), which Back gives on Android 8 to 11 but not on 12 and later, and closing from the recent apps gives on every version.
+- docs/STATUS.md: an old "closed and opened again" left by a line break.
+- qa/NoteOrganizer_Android_TestPlan.xlsx: cases 36, 501, 522, 11 and the downgrade sentence of 18 rows. List the changed cells with `py -I <scratchpad>\lows\plan_diff.py D:/Projects/androidVersion qa/NoteOrganizer_Android_TestPlan.xlsx c2a8951`.
+
+Look for: a claim about the app untrue against the code (MainActivity.kt and Startup.kt for when Startup.prepare runs, Files.kt for the holds; does anything else end a hold; is it true that Back does not recreate the activity on Android 12+ in this app — check the manifest and MainActivity for launch modes, onBackPressed handling, finish() calls); another place in the docs, the plan or the strings still saying the old words or the old reason ("as long as the app's process"); a plan step that cannot be done as written, or a result the app does not give (verify against the code and app/src/main/res/values/strings.xml); is "Google Play offers none" (no older build) a fair, true statement for the rows that say it.
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = something untrue a person reads in the app or the plan, a step that cannot be done as written, a regression; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff and the script above with `py -I`. Never run gradle, adb, the emulator, walk.py or mutate.py.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict line; then "Not covered".

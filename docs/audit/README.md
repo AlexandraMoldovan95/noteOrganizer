@@ -32,6 +32,11 @@ The early waves found the apps wrong; the late rounds, mostly their documents.
   its round 60, the phone's at its round 64. The rounds after found only sentences of the
   documents and the test plan the code did not bear out; from 15 November the plan was read once
   more, case by case.
+- **Wave 6's lows** (21 and 22 November): the lows its rounds had left were read again at HEAD;
+  of them the owner chose the apps' own and the plans' untrue rows. Four fixes reached the apps,
+  three on the desktop and one on the phone. The phone's loop closed at its second round; the
+  desktop's at its twelfth, the Ctrl+T fix and its neighbours taking eight of them
+  ([the story](../ISSUES_LOG.md#ctrlt-and-the-tags-tk-shares)).
 
 **When a wave stopped:** after two rounds in a row with nothing of medium severity or worse,
 save waves 3 and 4, whose last round the owner chose ([why](../AI_WORKFLOW.md#the-final-audit)). The
@@ -484,6 +489,15 @@ totals above are waves 1 to 5's.
 | [panel-fixes-phone.txt](wave6/panel-fixes-phone.txt), the documents changed after the panel, on Sonnet | Phone | 2026-11-15 17:06 | 1 | 0.07 |
 | [pages-check-desktop.txt](wave6/pages-check-desktop.txt), the corrections and the owner's two pages, on Sonnet | Desktop | 2026-11-19 19:10 | 1 | 0.13 |
 | [r99-desktop.txt](wave6/r99-desktop.txt), a test of the reviewers' recall: an ordinary round on a copy with eight defects put back, on Sonnet | Desktop | 2026-11-19 19:38 | 2 | 0.25 |
+| [lows-inventory-desktop.txt](wave6/lows-inventory-desktop.txt), the lows wave: the deferred lows read again at HEAD, on Sonnet | Desktop | 2026-11-21 21:27 | 1 | 0.31 |
+| [lows-inventory-phone.txt](wave6/lows-inventory-phone.txt), the same | Phone | 2026-11-21 21:27 | 1 | 0.31 |
+| [lows-plan-desktop.txt](wave6/lows-plan-desktop.txt), corrections of the plan's untrue rows, each read by the integrator before it was applied, on Sonnet | Desktop | 2026-11-21 22:29 | 1 | 0.35 |
+| [lows-plan-phone.txt](wave6/lows-plan-phone.txt), the same | Phone | 2026-11-21 22:30 | 1 | 0.20 |
+| [lows-r1-desktop.txt](wave6/lows-r1-desktop.txt), the lows wave's first round, on Sonnet | Desktop | 2026-11-21 22:59 | 1 | 0.21 |
+| [lows-r1-phone.txt](wave6/lows-r1-phone.txt), the same | Phone | 2026-11-21 22:59 | 1 | 0.15 |
+| [lows-r2-desktop.txt](wave6/lows-r2-desktop.txt), the second round, on Sonnet | Desktop | 2026-11-21 23:20 | 1 | 0.09 |
+| [lows-r2-phone.txt](wave6/lows-r2-phone.txt), the second round, clean: the phone's loop closes | Phone | 2026-11-21 23:21 | 1 | 0.09 |
+| [lows-r3-desktop.txt](wave6/lows-r3-desktop.txt) to [lows-r12-desktop.txt](wave6/lows-r12-desktop.txt), the third to the twelfth round, on Sonnet; the eleventh and the twelfth clean | Desktop | 2026-11-21 23:29 | 10 | 1.09 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.

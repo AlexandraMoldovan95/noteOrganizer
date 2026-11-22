@@ -1,0 +1,19 @@
+# lows-r10-desktop, on Sonnet: the lows wave's tenth round
+# started 2026-11-22 00:50 UTC
+
+You are an adversarial reviewer. Attack one commit on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: cb6689d7. Read with `git -C D:/Projects/NoteOrganizer show cb6689d7`. Read only; change nothing.
+
+It changes only qa/qa1.py and tools/mutants.json: two checks of the Ctrl+T swap (`_transpose_keeping_styles` in note_organizer.py near line 566, called from `_caret_out_of_hidden` for the note body) now make the paragraph tag as the app makes it (`app._paragraph_tag(_b, None, 1)`), lay it over `2.0`–`2.end` as the app does, and read the tags between the Ctrl+T press and its release (a helper `_ty_pressed` that sends KeyPress-Control_L, Control-KeyPress-t, `update_idletasks`, reads, then the releases and `update`), because the key's release runs `_refresh_format_buttons` → `_resync_list_tags`, which lays the line's tag again. Mutant TX08 (keep = is_format_tag) must fail both.
+
+Look for:
+- Does `update_idletasks` between press and release run anything that re-lays the tag (an after_idle from a KeyPress binding, e.g. `_reassert_line_alignment` or `_spread_typed_run`), so that the "press" read could pass under TX08 by luck, or fail with the fix by luck? Trace every KeyPress binding on body_text and every bindtag ahead of it (search `body_text.bind("<KeyPress>"`, `bindtags`, `NoteBodyStyledDelete`).
+- Is `take_focus` + `event_generate` the road a real key takes here (the bindtags order, the journal bindtag ahead of the body's)?
+- Does the helper leave state behind for the checks after it (the tag registered in `_paragraph_tags`, focus, the Control key's state, the formatting journal's open run)?
+- Is every claim of the commit message true: the old check's tag unregistered and saved only by an earlier qa1 step; the release mending the old rule's loss; the last two letters' road?
+- Does TX08's find still match once, and would both must_fail checks fail under it?
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a check that does not guard what it claims, a regression, a claim that misleads; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict; then "Not covered".

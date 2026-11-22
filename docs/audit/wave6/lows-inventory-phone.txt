@@ -1,0 +1,29 @@
+# lows-inventory-phone, on Sonnet: the deferred lows read again at HEAD
+# started 2026-11-21 21:27 UTC
+
+You are building an inventory, read-only, for the "lows wave" of an Android notes app (Kotlin, Jetpack Compose), repository D:\Projects\androidVersion (branch audit/a-val6). An audit ran many review rounds; each round's findings were saved as markdown. Findings of LOW severity from the later rounds were deliberately NOT fixed in their round but left for a wave of their own. Your job: list every such LOW that still stands at today's HEAD, with evidence, so the owner can choose what to fix. You change nothing in the repository.
+
+## Inputs (all under <scratchpad>\build524\wave6\)
+- every findings_r64_phone*.md through findings_r84_phone*.md (rounds 64–84; names like findings_r64_phone.md, findings_r64_phone_b.md, findings_r78_phone.md)
+- findings_full_p1.md … findings_full_p5.md (a reading of the whole test plan, five slices; their mediums were fixed, their lows deferred)
+- findings_panelfix_phone.md
+Earlier rounds (r63 and before) had their lows fixed in their own round: do not inventory them.
+
+Each file is free-form: a verdict per fix, then numbered findings, each with a severity word (LOW, MEDIUM, HIGH, sometimes "low-medium"). Take every LOW (and "low-medium" if it was not fixed as a medium). Most concern rows of the manual test plan (qa/NoteOrganizer_Android_TestPlan.xlsx, referred to by case number), some the app's code or words (app/src/main), some docs, tests (app/src/test), the emulator walk (tools/emulator/walk.py) or tools/mutants.json.
+
+Known deferred items, as a cross-check (they must appear in your list unless fixed since): round 82 — case 46 ("Set time automatically"), 283/338, 348 (the buttons), 129 (an "Automated" row whose precondition is seeded: this one is a question for the owner, category E).
+
+## How to check each against HEAD
+- A test plan row: run `py -I <scratchpad>\build524\dump_cases_phone.py 46,283,338` (comma-separated case numbers; prints the row). Read the script first to see what it prints. Batch many cases per call.
+- Code, tests, docs: use Grep/Read on the repository. Line numbers in the findings are from older commits; search by the words or names instead.
+- Decide: STANDS (the defect is still there: quote the current text or name file:line), FIXED (quote what changed), or UNCLEAR (say what you could not settle).
+
+## Rules
+- Read-only. Never run gradle, adb, the emulator, walk.py, mutate.py, or anything in the repository other than reading; the only script you run is dump_cases_phone.py above, with `py -I`.
+- Merge duplicates: the same case or the same defect reported by several rounds is one row, listing all its sources.
+- The owner's rules that define LOW: a long recipe someone "could" do by hand when the plan says not practical; an omission in an "Automated in part" note. Such items are lows to list, not to dismiss. The phone keeps a strict reading of "in part": a row covered only by unit tests, not on the screen, stays "in part" (the owner, 21 Nov); do not list a row as wrong for saying "in part" on those grounds.
+
+## Output
+Write <scratchpad>\lows_phone.md: a markdown table with columns: # | where (case N / file) | category | the defect in one sentence | status (STANDS/FIXED/UNCLEAR) | evidence now | sources (files). Categories: A = what a person sees or does in the app (behaviour, words); B = a test plan row (steps, expected, precondition, automation status wording); C = documentation; D = tests, walk, tools, mutant catalogue; E = needs the owner's decision. Group the table by category, STANDS first.
+
+Your final reply (short): counts per category and status; every category A item that STANDS, one line each; any E item; then a "Not covered" section confessing what you skipped, could not verify, or read only in part.

@@ -1,0 +1,17 @@
+# lows-r12-desktop, on Sonnet: the lows wave's twelfth round
+# started 2026-11-22 01:01 UTC
+
+You are an adversarial reviewer. Attack one commit on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: 6a7d0b78. Read with `git -C D:/Projects/NoteOrganizer show 6a7d0b78`. Read only; change nothing. Commit messages are history: report a wrong one only as LOW.
+
+It changes tools/mutants.json (a new mutant TX09 that makes the Ctrl+T swap refuse any astral character, "ord(c) > 0xFFFF", must_fail the two qa1 emoji checks; a note on TX07 about TX06's absence) and plan row 480 of qa/NoteOrganizer_TestPlan.xlsx (its automation cell names each Ctrl+T check's mutant). Print the row with `py -I <scratchpad>\build524\dump_cases.py 480`; the changed cell before/after with `py -I <scratchpad>\lows\plan_diff.py D:/Projects/NoteOrganizer qa/NoteOrganizer_TestPlan.xlsx 6a7d0b78`.
+
+Check against the code (`_transpose_keeping_styles` in note_organizer.py near line 566, the qa1 Ctrl+T checks — search qa/qa1.py for "Ctrl+T") and against the catalogue (each TX entry's find, must_fail, about, note):
+- Does TX09's find match the code exactly once, and would both its must_fail checks really fail under it (trace the two emoji checks' text, caret and the swap's first/second)? Would any other check fail under it too (harmless, but say so)?
+- Is every mutant row 480 now names really guarding the check it is named beside (TX01, TX02, TX03, TX05, TX07, TX08, TX09)? Any check of row 480 left unguarded, or any mutant named for a check it does not fail?
+- Is TX07's new note true? Is anything in the row's cell untrue of the app or its checks?
+
+Severity: MEDIUM = a mutant or a plan sentence that says something untrue of the code or the checks, a mutant that cannot fail what it names; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff and the two scripts with `py -I`. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict; then "Not covered".

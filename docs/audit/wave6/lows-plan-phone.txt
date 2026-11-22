@@ -1,0 +1,52 @@
+# lows-plan-phone, on Sonnet: corrections of the plan's untrue rows
+# started 2026-11-21 22:30 UTC
+
+You write corrections, as a script, for rows of a manual test plan that say something untrue. Android notes app (Kotlin, Jetpack Compose), repository D:\Projects\androidVersion (branch audit/a-val6). The plan is qa\NoteOrganizer_Android_TestPlan.xlsx, sheet "Test Cases". You never modify anything in the repository: you write a script and a report in the scratchpad, and you validate the script on a COPY of the plan.
+
+## Scope: only what is false
+An inventory of low findings is at <scratchpad>\lows_phone.md, "Category B (test plan rows), STANDS" (rows #3 to about #105). The owner chose: fix the rows that say something untrue, and nothing else. In scope, when on checking it is false:
+- a step that cannot be done as written (a control that is not on that screen; a missing step the expected result depends on; a precondition, often just "The app open on the phone.", that does not make what the steps need — a note with a table, a checklist, a styled word, a moved day; row #21 lists such cases);
+- an expected result that is not what the app does or says (quote the app's real words from app/src/main/res/values/strings.xml or the code);
+- a cell that names a check, a test, a walk part, a mutant id or a file that does not exist or does not do what the cell says (e.g. #3: "read by no check" when NotebookTest reads it — say "read by no walk part" if that is what is true; #15, #19);
+- an absolute sentence that is untrue (#72's "an older build installs only after an uninstall", which adb install -d disproves on a debug build: make it exact, e.g. "through Google Play or by tapping the file").
+- Steps that ask to close the app completely: write it as the app's own words now say it, "close it from the recent apps" (the app changed its messages to "closed from the recent apps and opened again" today, because Back and Home leave it running).
+Out of scope, leave untouched: omissions in "Automated in part" notes ("Left to the hand" not naming everything, "walked by no part and not named"), labels about long by-hand recipes ("Not practical by hand", "Not a hand check"), and the owner's strict rule that a row covered only by unit tests stays "in part" (do not change that). Out of scope too: cases 522 and 523 (changed today) and case 129 (a question for the owner).
+
+## How to read the plan and the code
+- `py -I <scratchpad>\build524\dump_cases_phone.py 6,7` prints rows; read the script first to see which columns. Batch many ids per call.
+- Verify every claim in the code with Grep/Read before you change a word: app/src/main (Kotlin and strings.xml), app/src/test, tools/emulator/walk.py, tools/mutants.json. Never trust the inventory's word alone; it was written by another agent.
+
+## The script
+Write <scratchpad>\lows\plan_fix_a_false.py, in exactly this pattern (copy it):
+
+```python
+import sys
+import openpyxl
+sys.stdout.reconfigure(encoding="utf-8")
+PLAN = sys.argv[1] if len(sys.argv) > 1 else r"D:\Projects\androidVersion\qa\NoteOrganizer_Android_TestPlan.xlsx"
+TITLE, PRE, STEPS, EXPECTED, AUTO = 4, 6, 7, 8, 15
+FRAGMENTS = [
+    ("6", AUTO, "old text, exactly as in the cell", "new text"),
+]
+def main():
+    wb = openpyxl.load_workbook(PLAN)
+    ws = wb["Test Cases"]
+    rows = {str(r[0].value): r for r in ws.iter_rows(min_row=2)}
+    for case, col, old, new in FRAGMENTS:
+        cell = rows[case][col - 1]
+        text = str(cell.value)
+        if text.count(old) != 1:
+            raise SystemExit("case %s col %d: %r found %d times" % (case, col, old[:60], text.count(old)))
+        cell.value = text.replace(old, new)
+    wb.save(PLAN)
+    print("fragments", len(FRAGMENTS))
+main()
+```
+Check the column numbers against the sheet's header row first (open it with openpyxl, read_only). Rules for fragments: change only the false words, the smallest piece that makes the cell true; `old` must occur exactly once in the cell; several fragments may touch one cell, applied in order. Only the precondition, steps, expected result and automation-status columns (and the title if the title itself is false). NEVER the owner's columns: Actual Result, Status, Build, Tested By, Test Date, Bug ID, Your notes. Write as the plan writes: plain English, short sentences, the app's real words in quotes, "Automated in part (…):" cells keep their shape.
+
+Validate: copy the plan to ...\scratchpad\lows\plan_copy_a.xlsx and run `py -I plan_fix_a_false.py <that copy>`; it must print the fragment count with no error. Then dump the changed rows from the copy (with a copy of dump_cases_phone.py pointed at it) and read them whole: each must read true and well. Do not run anything else: no gradle, adb, emulator, walk, mutate.
+
+## Report
+Write ...\scratchpad\lows\plan_fix_a_false.md: one line per changed case: case, what was false, the evidence (file:line), the change in a few words; then the in-scope rows you checked and found true after all (with why); then the rows you could not settle; then which changed rows carry Status "Pass" (read it from the copy with openpyxl).
+
+Your final reply, short: how many fragments and cases, the rows found true after all, the ones not settled, the Pass rows touched, and a "Not covered" section confessing what you skipped or verified only in part.

@@ -1,0 +1,20 @@
+# lows-r5-desktop, on Sonnet: the lows wave's fifth round
+# started 2026-11-21 23:47 UTC
+
+You are an adversarial reviewer. Attack one commit on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: 04af5cd5 (and the plan note 47fd6ade). Read with `git -C D:/Projects/NoteOrganizer show 04af5cd5`. Read only; change nothing.
+
+It does two things:
+1. A table cell's editor (a tk.Text built in `_open_cell_editor`, note_organizer.py, search "swap_keeping_styles") now binds `<Control-t>` to the same swap the note body uses, `_transpose_keeping_styles` (near line 566), after `_editor_flush_type_paint()`; Alt (AltGr) is left to Tk.
+2. `_transpose_keeping_styles` leaves the words alone when either of the two places is not one plain character (an emoji takes two of Tk's places in Tk 8.6.15, the second reading as "").
+qa1 checks: "Ctrl+T in a table cell keeps each letter's own style" and "...and Ctrl+T beside an emoji leaves the words as they were"; mutants TX03, TX04 in tools/mutants.json.
+
+Look for:
+- The cell: does binding `<Control-t>` on the cell editor bypass anything the cell needs on a key press (the generic `<KeyPress>` handler `_editor_key_press` and its type-paint state, `_editor_key_release` and the editor's growth, the emoji face retag `_editor_retag_emoji`, the cell's undo, the commit of the cell's words and styles back into the note's row when the cell closes)? Do the cell's own tags (cellalign, emojif, the header row's style) survive the swap as they should? Does the commit after a swap store the styles where the letters went? Is the new qa1 check on the road a person takes (focus in the cell, a real key event)?
+- The emoji guard: any ordinary character it now refuses wrongly (a newline at a line's start when the caret is at column 0, a tab, an accented letter, a character from the Basic Multilingual Plane), any astral case it still lets through (an emoji at `first` rather than `second`, a flag or a skin-tone pair, a ZWJ sequence)?
+- Mutants: does each `find` match the code exactly once, and would each `must_fail` check truly fail under it?
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. You may read Tk's own `C:\Programs\Python313\tcl\tk8.6\text.tcl`. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict line; then "Not covered".
