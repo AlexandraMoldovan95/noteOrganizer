@@ -20312,5 +20312,95 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW11",
+    "about": "the find bar opens with no room of its own: it covers half the category button, and a day's Edit the whole series",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_bar.update_idletasks()\n        self._fit_find_room()\n",
+        "replace": "        self._find_bar.update_idletasks()\n"
+      }
+    ],
+    "must_fail": [
+      "the open find bar covers none of the controls at the top of a note"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW12",
+    "about": "closing the find bar leaves its room: the page stays moved down with nothing above it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_open = False\n        self._fit_find_room()\n",
+        "replace": "        self._find_open = False\n"
+      }
+    ],
+    "must_fail": [
+      "...and closing it gives the page its top back"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW13",
+    "about": "the find bar's room ignores the first row's own space above it: the page drops further than it needs",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            top = int(float(pad[0] if isinstance(pad, (tuple, list)) else pad))\n",
+        "replace": "            top = 0\n"
+      }
+    ],
+    "must_fail": [
+      "...and moves the page down no further than it needs"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW14",
+    "about": "a repeat chosen while the find bar is open brings the series line up under the bar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._show_day_mode()\n        # The rows above the title, as they are now, under an open find bar.\n        self._fit_find_room()\n",
+        "replace": "        self._show_day_mode()\n"
+      }
+    ],
+    "must_fail": [
+      "...and a repeat chosen while it is open puts the series line below it too"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW15",
+    "about": "the way back to the Calendar, shown while the find bar is open, comes up under the bar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.calendar_return_btn.pack_forget()\n        # A row above the title, come or gone, under an open find bar.\n        self._fit_find_room()\n",
+        "replace": "            self.calendar_return_btn.pack_forget()\n"
+      }
+    ],
+    "must_fail": [
+      "...and so does the way back to the Calendar, shown while it is open"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

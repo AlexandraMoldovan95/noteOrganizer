@@ -316,6 +316,7 @@
   "_find_standing": "(self, text=None)",
   "_first_box_in": "(self, pop)",
   "_first_ring_row": "(self)",
+  "_fit_find_room": "(self)",
   "_fit_font_tags": "(self, start, end, like=None, size=None, family=None)",
   "_fit_grid": "(self, info)",
   "_fit_name": "(self, name, font, max_px)",

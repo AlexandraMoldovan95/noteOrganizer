@@ -551,7 +551,8 @@ counts beside the category headers always mean the whole list, drawn yet or not.
 at startup, at every pause in typing, and every time you came back to the list.*
 
 To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in
-the top-right corner of the editor — inside the window, not a separate dialog. It looks through
+the top-right corner of the editor — inside the window, not a separate dialog — and the note moves
+down a little to make room for it, so it covers nothing at the top. It looks through
 the note's text and its tables: type a word and every match highlights, with the current one
 filled in and boxed; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the
 count reads "3/12", and **Aa** switches on case-sensitivity (off, it also ignores diacritics, as

@@ -16012,6 +16012,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                               anchor="w", before=self.editor_top_row)
         else:
             self.calendar_return_btn.pack_forget()
+        # A row above the title, come or gone, under an open find bar.
+        self._fit_find_room()
 
     def _update_occurrence_banner(self):
         """Show which day of a repeating series the editor holds, or hide
@@ -16064,6 +16066,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.offschedule_btn.pack_forget()
         self._show_day_mode()
+        # The rows above the title, as they are now, under an open find bar.
+        self._fit_find_room()
 
     def _day_mode(self):
         """Whether the editor holds one day of a repeating series, opened on
@@ -18770,6 +18774,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(close, bg="card", fg="subtext")
         close.pack(side="left", padx=(2, 6))
         self._find_bar = bar
+        # The bar's own room at the top of the page (_fit_find_room).
+        self._find_room = tk.Frame(self.editor, height=0)
+        self.track_theme(self._find_room, bg="bg")
+
+    # Where the bar floats: this far below the top of the editor.
+    FIND_BAR_TOP = 6
+
+    def _fit_find_room(self):
+        """While the bar is open, the page starts below it: in the editor's
+        top-right corner it covered half the category button, and a day's
+        "Edit the whole series". As high as the first row needs (that row's
+        own space above it counts), fitted again when a row comes or goes
+        above the title, gone with the bar. Scrolled, the bar still floats."""
+        room = getattr(self, "_find_room", None)
+        if room is None:
+            return
+        try:
+            if not getattr(self, "_find_open", False):
+                room.pack_forget()
+                return
+            rows = [w for w in self.editor.pack_slaves() if w is not room]
+            if not rows:
+                return
+            pad = rows[0].pack_info().get("pady", 0)
+            if isinstance(pad, str):
+                pad = pad.split() or [0]
+            top = int(float(pad[0] if isinstance(pad, (tuple, list)) else pad))
+            need = max(0, 2 * self.FIND_BAR_TOP
+                       + self._find_bar.winfo_reqheight() - top)
+            room.configure(height=need)
+            if self.editor.pack_slaves()[0] is not room:
+                room.pack(fill="x", before=rows[0])
+        except tk.TclError:
+            pass
 
     def _open_find(self):
         if not hasattr(self, "body_text"):
@@ -18783,9 +18821,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             sel = ""
         if sel and "\n" not in sel:
             self._find_var.set(sel)
-        self._find_bar.place(relx=1.0, x=-8, y=6, anchor="ne")
+        self._find_bar.place(relx=1.0, x=-8, y=self.FIND_BAR_TOP, anchor="ne")
         self._find_bar.lift()
         self._find_open = True
+        # Its height is known once Tk has laid it out, the first time too.
+        self._find_bar.update_idletasks()
+        self._fit_find_room()
         self._find_entry.focus_set()
         self._find_entry.select_range(0, "end")
         self._find_rescan(reveal=True)
@@ -18815,6 +18856,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.focus_set()
             bar.place_forget()
         self._find_open = False
+        self._fit_find_room()
         self._find_missed = False
         self._find_clear()
         # A count the keys left for the pause, now the hits are gone.

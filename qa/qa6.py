@@ -7800,6 +7800,121 @@ finally:
     app.ask_yes_no = _wt_ask
 app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
 
+# ---- THE FIND BAR'S OWN ROOM AT THE TOP OF THE PAGE ----
+# Ctrl+F's bar floats in the editor's top-right corner, where the header
+# keeps its controls: it covered half the category button (the review panel,
+# 22 November), and on a day of a series "Edit the whole series". While it is
+# open the page starts below it, at any width, no lower than it needs; a row
+# that comes above the title while it is open does too; closing it gives the
+# page its top back.
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Plain', 'body': 'find me',
+                                'date': '2026-11-02'}),
+             NO.normalize_note({'id': 2, 'title': 'Weekly', 'body': 'find me',
+                                'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'}}),
+             NO.normalize_note({'id': 3, 'title': 'From the Calendar',
+                                'body': 'find me', 'date': '2026-11-16'})]
+app.save_notes(); app.refresh_note_list(); app.update()
+
+
+def _fr_page(w):
+    """*w*'s box in the page's own coordinates, which a scroll does not move."""
+    x = w.winfo_rootx() - app.editor.winfo_rootx()
+    y = w.winfo_rooty() - app.editor.winfo_rooty()
+    return (x, y, x + w.winfo_width(), y + w.winfo_height())
+
+
+def _fr_bar():
+    """The bar's box, carried into the page's coordinates through the canvas
+    it floats over (both its own place and the canvas's are read live)."""
+    c, b = app.editor_canvas, app._find_bar
+    page = c.bbox(app._editor_window)
+    x = c.canvasx(b.winfo_rootx() - c.winfo_rootx()) - page[0]
+    y = c.canvasy(b.winfo_rooty() - c.winfo_rooty()) - page[1]
+    return (x, y, x + b.winfo_width(), y + b.winfo_height())
+
+
+def _fr_covered(watched):
+    """The watched controls the open bar meets, and how far below the bar
+    the page's first row starts."""
+    bar = _fr_bar()
+    boxes = {name: _fr_page(w) for name, w in watched.items() if w.winfo_ismapped()}
+    met = sorted(name for name, r in boxes.items()
+                 if r[0] < bar[2] and bar[0] < r[2] and r[1] < bar[3] and bar[1] < r[3])
+    first = next((w for w in app.editor.pack_slaves()
+                  if w is not app._find_room and w.winfo_ismapped()), None)
+    gap = _fr_page(first)[1] - bar[3] if first is not None else None
+    return met, gap
+
+
+_fr_geo = app.geometry()
+_fr_seen = {}
+_fr_back = {}
+for _fr_size in ('1100x850', '900x600'):
+    app.geometry(_fr_size); app.update()
+    for _fr_id, _fr_day, _fr_name in ((1, None, 'a note'), (2, None, 'a series'),
+                                      (2, '2026-11-16', 'a day of a series')):
+        app.open_note_in_tab(app.find_note(_fr_id), occurrence_date=_fr_day)
+        app.update()
+        app.editor_canvas.yview_moveto(0.0); app.update()
+        _fr_top = _fr_page(app.editor_top_row)[1]
+        app._open_find(); app.update()
+        app.editor_canvas.yview_moveto(0.0); app.update()
+        _fr_seen[(_fr_size, _fr_name)] = _fr_covered({
+            'the category': app.category_menu, 'the title': app.title_entry,
+            'the series line': app.occurrence_banner,
+            'Edit the whole series': app.day_series_btn,
+            "the day's words": app.day_strip_lbl})
+        app._close_find(); app.update()
+        _fr_back[(_fr_size, _fr_name)] = (_fr_page(app.editor_top_row)[1] - _fr_top,
+                                          app._find_room.winfo_manager())
+app.geometry(_fr_geo); app.update()
+check(f'the open find bar covers none of the controls at the top of a note, a series '
+      f'or a day of one, at either width ({_fr_seen})',
+      len(_fr_seen) == 6 and all(not met and gap is not None and gap >= 0
+                                 for met, gap in _fr_seen.values()))
+check(f'...and moves the page down no further than it needs ({_fr_seen})',
+      all(gap is not None and gap <= 2 * app.FIND_BAR_TOP
+          for _met, gap in _fr_seen.values()))
+check(f'...and closing it gives the page its top back ({_fr_back})',
+      len(_fr_back) == 6 and all(v == (0, '') for v in _fr_back.values()))
+# A repeat chosen while the bar is open brings the series' line above the
+# title, under it; the room grows for the line.
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._open_find(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed()
+app.save_current_note(auto=False); app.update()
+app.editor_canvas.yview_moveto(0.0); app.update()
+_fr_rep = (app._find_open, NO.is_recurring(app.find_note(1)),
+           app._is_placed(app.occurrence_banner),
+           _fr_covered({'the series line': app.occurrence_banner,
+                        'the category': app.category_menu}))
+app._close_find(); app.update()
+check(f'...and a repeat chosen while it is open puts the series line below it too '
+      f'({_fr_rep})',
+      _fr_rep[:3] == (True, True, True)
+      and not _fr_rep[3][0] and _fr_rep[3][1] is not None and _fr_rep[3][1] >= 0)
+# The way back to the Calendar, shown above everything while the bar is open
+# (a note read back behind the editor keeps it), comes below the bar as well:
+# over a plain note, whose title row stands lower than the line it brings.
+app.open_note_in_tab(app.find_note(3)); app.update()
+app._open_find(); app.update()
+app._pending_calendar_return = {'year': 2026, 'month': 11, 'date_str': '2026-11-16'}
+app._update_calendar_return_button(); app.update()
+app.editor_canvas.yview_moveto(0.0); app.update()
+_fr_cal = (app._find_open, app._is_placed(app.calendar_return_btn),
+           _fr_covered({'Back to Calendar': app.calendar_return_btn}))
+app._pending_calendar_return = None
+app._update_calendar_return_button()
+app._close_find(); app.update()
+check(f'...and so does the way back to the Calendar, shown while it is open ({_fr_cal})',
+      _fr_cal[:2] == (True, True)
+      and not _fr_cal[2][0] and _fr_cal[2][1] is not None and _fr_cal[2][1] >= 0)
+app.notes = []; app.save_notes(); app.refresh_note_list(); app.update()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 
