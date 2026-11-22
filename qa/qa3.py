@@ -1283,6 +1283,18 @@ check('a failed single-note export leaves the existing file intact',
       open(_se_path, encoding='utf-8').read() == 'OLD-NOTE'
       and not os.path.exists(_se_path + '.tmp'))
 os.remove(_se_path)
+# ...and a full disk is said in words, as the backup's export says it, not
+# "[Errno 28] No space left on device" -- a sibling the backup's fix missed.
+_se_said = []
+app.show_error = lambda *a, **k: _se_said.append(' '.join(map(str, a)))
+app._write_export_file = lambda path, content: OSError(errno.ENOSPC, 'No space left on device')
+try:
+    app.export_note_as_file(app.notes[0], 'txt')
+finally:
+    del app._write_export_file
+check(f'...and a single-note export onto a full disk says so in words ({_se_said})',
+      any("The disk is full, so the file wasn't written" in s for s in _se_said)
+      and not any('Errno' in s for s in _se_said))
 app.show_error = NO.NoteOrganizer.show_error.__get__(app)  # restore the real one
 
 # ---- CLOSE waits for an in-flight worker (audit Z05-F01) ----

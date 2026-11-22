@@ -20962,5 +20962,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW47",
+    "about": "a single note's export onto a full disk says \"[Errno 28] No space left on device\"",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                \"or save it somewhere else, and try again.\" if self._disk_was_full(exc)\n",
+        "replace": "                \"or save it somewhere else, and try again.\" if False\n"
+      }
+    ],
+    "must_fail": [
+      "...and a single-note export onto a full disk says so in words"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

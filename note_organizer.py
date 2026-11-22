@@ -11889,8 +11889,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         content = self._note_export_content(note, fmt, title)
         exc = self._write_export_file(path, content)
         if exc is not None:
-            self.show_error("Export failed",
-                            f"Couldn't write the file:\n{exc}")
+            # A full disk in words, as the backup's export says it.
+            self.show_error("Export failed", (
+                "The disk is full, so the file wasn't written. Free up some space, "
+                "or save it somewhere else, and try again." if self._disk_was_full(exc)
+                else f"Couldn't write the file:\n{exc}"))
             return
         self._show_toast(f"Exported to {os.path.basename(path)}")
         if note.get("attachments"):
