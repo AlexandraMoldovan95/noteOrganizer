@@ -1486,6 +1486,7 @@ class SettingsPageMixin:
                     _delete_attachment_files(
                         [entry], spare=attachment_names_in(self.notes + kept))
                     self.trash = kept
+                    self._withdraw_gone_trash_offer()
                 # As the bulk delete's: Statistics' "In trash" kept the old
                 # figure.
                 self._render_statistics()
@@ -1778,6 +1779,7 @@ class SettingsPageMixin:
             _delete_attachment_files(
                 gone, spare=attachment_names_in(list(self.notes) + kept))
             self.trash = kept
+            self._withdraw_gone_trash_offer()
             # Statistics' "In trash" is what is there now: it kept the old
             # figure until the list next changed.
             self._render_statistics()

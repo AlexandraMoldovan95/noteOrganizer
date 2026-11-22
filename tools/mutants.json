@@ -20240,5 +20240,77 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW07",
+    "about": "a note restored from Settings leaves the banner that offered to put it back: \"Note moved to Trash\" over the note back in the list",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        save_trash(self.trash)\n        self._withdraw_gone_trash_offer()\n",
+        "replace": "        save_trash(self.trash)\n"
+      }
+    ],
+    "must_fail": [
+      "restoring the note a banner offers to put back takes the offer down"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW08",
+    "about": "emptying the Trash leaves a banner offering to put back a note that is gone for good",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            self.trash = kept\n            self._withdraw_gone_trash_offer()\n            # Statistics' \"In trash\" is what is there now",
+        "replace": "            self.trash = kept\n            # Statistics' \"In trash\" is what is there now"
+      }
+    ],
+    "must_fail": [
+      "...and emptying the Trash takes it down"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW09",
+    "about": "any restore takes the banner down, though the note it offers to put back is still in the Trash",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not offer[\"marks\"] <= here:\n",
+        "replace": "        if True:\n"
+      }
+    ],
+    "must_fail": [
+      "...while restoring another entry leaves it up"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW10",
+    "about": "a row's own Delete, for good, leaves the banner offering to put back the note it just destroyed",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                    self.trash = kept\n                    self._withdraw_gone_trash_offer()\n",
+        "replace": "                    self.trash = kept\n"
+      }
+    ],
+    "must_fail": [
+      "...and a row's own Delete, for good, takes it down"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

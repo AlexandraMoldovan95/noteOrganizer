@@ -7734,6 +7734,72 @@ check(f"Enter held on the note list, the calendar and every box that acts on it 
           "a full list's Add box", 'the date field', "a full template's Add box",
           'an inline rename')})
 
+# ---- THE TRASH BANNER'S OFFER, TAKEN DOWN WHEN ITS NOTE LEAVES THE TRASH ----
+# "Note moved to Trash" with its Undo stayed up over Settings -> Recently
+# deleted after that very note was restored there (the review panel).
+_wt_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.notes = [NO.normalize_note({'id': 1, 'title': 'Back soon', 'body': 'a'}),
+                 NO.normalize_note({'id': 2, 'title': 'Stays gone', 'body': 'b'}),
+                 NO.normalize_note({'id': 3, 'title': 'Undone', 'body': 'c'}),
+                 NO.normalize_note({'id': 4, 'title': 'Emptied', 'body': 'e'})]
+    app.trash = [{'id': 903, 'title': 'Older', 'body': 'd', 'category': 'General',
+                  'deleted_at': NO.now_stamp()}]
+    app.save_notes(); NO.save_trash(app.trash); app.refresh_note_list(); app.update()
+    def _wt_words():
+        """What the banner says, while it is up."""
+        return (str(app.toast_lbl.cget('text'))
+                if app._is_placed(app.toast_frame) else None)
+
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Back soon'), None)
+    app.update()
+    _wt_offer = app._toast_action
+    app._restore_from_trash(next(e for e in app.trash if e.get('title') == 'Back soon'))
+    app.update()
+    # Another banner may follow (an arrival a filter hides says so): the offer
+    # is what must be gone.
+    check(f'restoring the note a banner offers to put back takes the offer down '
+          f'({_wt_words()!r})',
+          _wt_offer is not None and app._toast_action is not _wt_offer
+          and 'moved to Trash' not in (_wt_words() or ''))
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Stays gone'), None)
+    app.update()
+    _wt_offer2 = app._toast_action
+    app._restore_from_trash(next(e for e in app.trash if e.get('title') == 'Older'))
+    app.update()
+    check(f'...while restoring another entry leaves it up ({_wt_words()!r})',
+          _wt_offer2 is not None and app._toast_action is _wt_offer2)
+    app.toggle_settings_panel('trash'); app.update()
+    _wt_row = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                    and str(w.cget('text')) == 'Delete'), None)
+    if _wt_row is not None:
+        _wt_row.invoke(); app.update()
+    check(f"...and a row's own Delete, for good, takes it down ({_wt_words()!r})",
+          _wt_row is not None and not app.trash and app._toast_action is not _wt_offer2
+          and 'moved to Trash' not in (_wt_words() or ''))
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Emptied'), None)
+    app.update()
+    _wt_offer3 = app._toast_action
+    app.toggle_settings_panel('trash'); app.update()
+    _wt_empty = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                      and 'Empty trash' in str(w.cget('text'))), None)
+    if _wt_empty is not None:
+        _wt_empty.invoke(); app.update()
+    check(f'...and emptying the Trash takes it down ({_wt_words()!r})',
+          _wt_empty is not None and not app.trash and _wt_offer3 is not None
+          and app._toast_action is not _wt_offer3
+          and 'moved to Trash' not in (_wt_words() or ''))
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Undone'), None)
+    app.update()
+    app._run_toast_action(); app.update()
+    check("...and the banner's own Undo still puts its note back",
+          any(n.get('title') == 'Undone' for n in app.notes)
+          and not any(e.get('title') == 'Undone' for e in app.trash))
+finally:
+    app.ask_yes_no = _wt_ask
+app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

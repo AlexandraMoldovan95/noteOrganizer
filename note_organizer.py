@@ -17961,9 +17961,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The bulk route is the easiest one to regret: a tick box, a
         # confirm, and a list that was filtered by whatever was typed in
         # the search box at the time.
-        self._show_toast(
-            f"Moved {count} {'note' if count == 1 else 'notes'} to Trash",
-            action=lambda: self._undo_trash(marks))
+        self._offer_trash_undo(f"Moved {count_noun(count, 'note')} to Trash", marks)
 
     def _bulk_change_category(self):
         if not self.selected_note_ids:
@@ -21548,6 +21546,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             "it stays in Recently deleted")
             return None
         save_trash(self.trash)
+        self._withdraw_gone_trash_offer()
         # A note kept aside, put back from the Trash, is the person's now: the
         # next Ctrl+Z spent it a second time.
         uids = {n.get("uid") for n in restored}
@@ -21571,6 +21570,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             # The panel was rebuilt or torn down since this was recorded.
             self._trash_panel_redraw = None
+
+    def _offer_trash_undo(self, words, marks):
+        """The banner offering to put back the notes just sent to the Trash,
+        remembered with the entries it names (_withdraw_gone_trash_offer)."""
+        action = lambda: self._undo_trash(marks)  # noqa: E731
+        self._show_toast(words, action=action)
+        self._trash_undo_offer = {"marks": set(marks), "action": action}
+
+    def _withdraw_gone_trash_offer(self):
+        """Take down the banner's offer once an entry it names has left the
+        Trash by another road, restored or deleted from Settings: "Note moved
+        to Trash" stayed over the note put back (the review panel). Its own
+        Undo cleared the banner first, so it passes untouched."""
+        offer = getattr(self, "_trash_undo_offer", None)
+        if offer is None:
+            return
+        if self._toast_action is not offer["action"]:
+            self._trash_undo_offer = None
+            return
+        here = {(e.get("id"), e.get("deleted_at")) for e in self.trash if isinstance(e, dict)}
+        if not offer["marks"] <= here:
+            self._trash_undo_offer = None
+            self._hide_toast()
 
     def _undo_trash(self, marks):
         """Put back the notes the toast's Undo was offered for. `marks` are
@@ -22067,8 +22089,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.
-            self._show_toast("Note moved to Trash",
-                             action=lambda: self._undo_trash(marks))
+            self._offer_trash_undo("Note moved to Trash", marks)
 
     def report_callback_exception(self, exc_type, exc_value, exc_tb):
         """Tk's handler for errors in a callback, which printed to a stderr
