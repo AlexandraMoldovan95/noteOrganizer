@@ -20094,7 +20094,7 @@
   },
   {
     "id": "TX08",
-    "about": "Ctrl+T on a line's first two letters gives them only what the line before shares, and the line loses its indent",
+    "about": "Ctrl+T on a line's first or last two letters gives them only what their neighbours share, and the line jumps out of its indent until the key's release",
     "edits": [
       {
         "file": "note_organizer.py",
@@ -20103,7 +20103,8 @@
       }
     ],
     "must_fail": [
-      "...and Ctrl+T on a line's first two letters keeps the line's indent"
+      "...and Ctrl+T on a line's first two letters keeps the line's indent",
+      "...and Ctrl+T on a line's last two letters keeps the line's indent"
     ],
     "suites": [
       "qa1"

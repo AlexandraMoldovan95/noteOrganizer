@@ -8726,18 +8726,38 @@ _tyCP = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
 _tyCP = (_tyCP, _b.get('1.0', '1.end'))
 check(f"...and Ctrl+T with the caret inside an emoji leaves the emoji whole ({_tyCP!r})",
       _tyCP == (True, 'a\U0001F600b here'))
-# ...and a swap of a line's first two letters keeps the line's indent: Tk
-# gave them only what the line before shares, and an indented paragraph
-# lost its indent from its first letter, where Tk reads it.
-set_body('first line' + chr(10) + 'second words' + chr(10) + 'third')
-_b.tag_add('para_plain_1', '2.0', '3.0')
-_b.mark_set('insert', '2.1')
-_tyCI = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
-                 ('Control_L',))
-_tyCI = (_tyCI, _b.get('2.0', '2.end'), [str(i) for i in _b.tag_ranges('para_plain_1')])
-_b.tag_remove('para_plain_1', '1.0', 'end')
+# ...and a swap of a line's first two letters keeps the line's indent as the
+# key goes down: Tk gave them only what the line before shares, and the line
+# jumped out of its indent, read from its first letter, until the key's
+# release laid the tag again -- for the whole of a held key's repeats. Read
+# between the press and the release. The tag made as the app makes it, over
+# the line as the app lays it.
+def _ty_pressed(caret):
+    set_body('first line' + chr(10) + 'second words' + chr(10) + 'third')
+    tag = app._paragraph_tag(_b, None, 1)
+    _b.tag_add(tag, '2.0', '2.end')
+    _b.mark_set('insert', caret)
+    if not take_focus(_b):
+        return None
+    _b.event_generate('<KeyPress-Control_L>')
+    _b.event_generate('<Control-KeyPress-t>')
+    app.update_idletasks()
+    said = (_b.get('2.0', '2.end'), [str(i) for i in _b.tag_ranges(tag)])
+    _b.event_generate('<Control-KeyRelease-t>')
+    _b.event_generate('<KeyRelease-Control_L>')
+    app.update()
+    _b.tag_remove(tag, '1.0', 'end')
+    return said
+
+
+_tyCI = _ty_pressed('2.1')
 check(f"...and Ctrl+T on a line's first two letters keeps the line's indent ({_tyCI})",
-      _tyCI == (True, 'escond words', ['2.0', '3.0']))
+      _tyCI == ('escond words', ['2.0', '2.12']))
+# ...and on its last two, where the neighbour after is the line break, which
+# the app's paragraph tag does not cover either.
+_tyCL = _ty_pressed('2.end')
+check(f"...and Ctrl+T on a line's last two letters keeps the line's indent ({_tyCL})",
+      _tyCL == ('second worsd', ['2.0', '2.12']))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----
