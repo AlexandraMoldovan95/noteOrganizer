@@ -760,6 +760,7 @@
   "_same_list_block": "(self, a, b)",
   "_save_on_the_way_out": "(self)",
   "_say_by_the_box": "(self, box, text)",
+  "_say_ctrl_tab_once": "(self, event)",
   "_say_hidden_arrivals": "(self, notes, what)",
   "_say_if_paste_was_cut": "(self, cut, in_body=False)",
   "_say_if_saved": "(self, written, text)",

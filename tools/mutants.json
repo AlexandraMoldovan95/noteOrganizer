@@ -20655,5 +20655,77 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW30",
+    "about": "a Tab pressed in a note's prose to leave it types a tab, and nothing says how to move on",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if delta > 0:\n                self._say_ctrl_tab_once(event)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the first Tab typed into prose says how to move on, once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW31",
+    "about": "the way on is said at every Tab typed into prose, not once",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if getattr(event, \"state\", 0) & 0x5 or getattr(self, \"_ctrl_tab_said\", False):\n",
+        "replace": "        if getattr(event, \"state\", 0) & 0x5:\n"
+      }
+    ],
+    "must_fail": [
+      "the first Tab typed into prose says how to move on, once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW32",
+    "about": "Ctrl+Tab in the comments, which does move on, is told how to move on",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if getattr(event, \"state\", 0) & 0x5 or getattr(self, \"_ctrl_tab_said\", False):\n",
+        "replace": "        if getattr(self, \"_ctrl_tab_said\", False):\n"
+      }
+    ],
+    "must_fail": [
+      "...and in the comments too, where Ctrl+Tab says nothing either"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW33",
+    "about": "a Tab in the comments types a tab, and nothing says how to move on",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.comments_text.bind(\"<Tab>\", self._say_ctrl_tab_once, add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and in the comments too, where Ctrl+Tab says nothing either"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

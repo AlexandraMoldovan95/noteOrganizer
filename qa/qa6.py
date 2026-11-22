@@ -5753,6 +5753,56 @@ except (KeyError, tk.TclError):
     pass
 check(f'...and Ctrl+Tab does leave the note, for the control after it ({_kw_held})',
       _kw_held is _kw_next and app.body_text.get('1.0', 'end-1c') == '')
+# A Tab pressed to leave the note typed a tab, and nothing said why (the
+# review panel): the first plain Tab into prose says Ctrl+Tab moves on, once
+# a run, and still types its tab; not Ctrl+Tab, nor a list line's indent.
+_th_said = []
+_th_real_say = app._say_by_the_box
+app._say_by_the_box = lambda box, text: (_th_said.append((box, text)),
+                                         _th_real_say(box, text))[1]
+app._ctrl_tab_said = False
+try:
+    app.new_note(); _kv_settle()
+    if _take_focus(app.body_text):
+        app.body_text.event_generate('<Control-Tab>'); _kv_settle()
+    _th_ctrl = list(_th_said)
+    app.new_note(); _kv_settle()
+    app.body_text.insert('1.0', '• milk')
+    if _take_focus(app.body_text):
+        app.body_text.mark_set('insert', '1.end')
+        app.body_text.event_generate('<Tab>'); _kv_settle()
+    _th_list = list(_th_said)
+    app.new_note(); _kv_settle()
+    app.body_text.insert('1.0', 'prose')
+    if _take_focus(app.body_text):
+        app.body_text.mark_set('insert', '1.end')
+        app.body_text.event_generate('<Tab>'); _kv_settle()
+        app.body_text.event_generate('<Tab>'); _kv_settle()
+    _th_body = (list(_th_said), app.body_text.get('1.0', 'end-1c'))
+    app._ctrl_tab_said = False
+    del _th_said[:]
+    if _take_focus(app.comments_text):
+        app.comments_text.event_generate('<Control-Tab>'); _kv_settle()
+    _th_comments_ctrl = list(_th_said)
+    if _take_focus(app.comments_text):
+        app.comments_text.event_generate('<Tab>'); _kv_settle()
+    _th_comments = (list(_th_said), app.comments_text.get('1.0', 'end-1c'))
+finally:
+    app._say_by_the_box = _th_real_say
+check(f'the first Tab typed into prose says how to move on, once, and types its '
+      f'tab ({_th_body})',
+      [(b, t) for b, t in _th_body[0]] == [(app.body_text, NO.NoteOrganizer.CTRL_TAB_WORDS)]
+      and _th_body[1] == 'prose\t\t'
+      and 'Ctrl+Tab moves on to the next control' in NO.NoteOrganizer.CTRL_TAB_WORDS)
+check(f"...but not at Ctrl+Tab, nor at a list line's indent ({_th_ctrl}; {_th_list})",
+      _th_ctrl == [] and _th_list == [])
+check(f'...and in the comments too, where Ctrl+Tab says nothing either '
+      f'({_th_comments_ctrl}; {_th_comments})',
+      _th_comments_ctrl == []
+      and [(b, t) for b, t in _th_comments[0]] == [(app.comments_text, NO.NoteOrganizer.CTRL_TAB_WORDS)]
+      and _th_comments[1] == '\t')
+app.comments_text.delete('1.0', 'end')
+app.new_note(); _kv_settle()
 # The body's own Tab and Shift+Tab matched a Control-held press first: on a
 # list line Ctrl+Tab indented and Ctrl+Shift+Tab outdented, and in prose
 # Ctrl+Shift+Tab did nothing at all.

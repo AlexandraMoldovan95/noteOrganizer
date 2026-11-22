@@ -1188,7 +1188,7 @@ keys inside a bulleted or numbered list, and Ctrl+Z in a table.
 | **Ctrl+F** | anywhere | Opens the find bar for searching within the current note. |
 | **Ctrl+Z** | while the banner offers **Undo**, anywhere with no typing of its own to take back | Takes the banner's **Undo** — a delete, a removed checklist row, a move. The banner stays while the keyboard is on its Undo. |
 | **Tab** / **Shift+Tab** | anywhere | Moves to the next / previous control; the page scrolls to show it. Every control a click can press is on the way. |
-| **Ctrl+Tab** / **Ctrl+Shift+Tab** | in the note or the comments box | Leaves the box (where Tab types a tab) for the next / previous control. |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | in the note or the comments box | Leaves the box (where Tab types a tab) for the next / previous control. The first tab you type there says so, once. |
 | **Esc** | a popup or a dropdown's list | Closes it, and the keyboard goes back to what opened it. |
 | **Space** / **Enter** | anywhere | Presses what the keyboard is on — a drawn button too: a theme, an alignment, a category's rename, colour or delete, the sidebar's ‹. |
 | **Ctrl+B** / **Ctrl+I** / **Ctrl+U** / **Ctrl+D** | the note's text, or an open table cell | Bold / Italic / Underline / Strikethrough — in a cell with nothing selected, the whole cell. The comments box is plain text: there they do nothing. |

@@ -9076,9 +9076,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         lines = self.body_text.get(f"{first}.0", f"{last}.end").split("\n")
         in_list = any(parse_list_marker(line)[0] for line in lines)
         if not in_list:
+            if delta > 0:
+                self._say_ctrl_tab_once(event)
             return "break" if delta < 0 else None
         self._change_paragraph_indent(delta)
         return "break"
+
+    # Said once a run, at the first Tab typed into a note's prose.
+    CTRL_TAB_WORDS = "Tab types a tab here. Ctrl+Tab moves on to the next control."
+
+    def _say_ctrl_tab_once(self, event):
+        """The first plain Tab typed into a note's prose, its body or its
+        comments, says how to move on: one pressed to leave the note got a
+        tab, and nothing said why (the review panel). The tab is typed all
+        the same; said once a run."""
+        if getattr(event, "state", 0) & 0x5 or getattr(self, "_ctrl_tab_said", False):
+            return
+        self._ctrl_tab_said = True
+        self._say_by_the_box(getattr(event, "widget", None) or self.body_text,
+                             self.CTRL_TAB_WORDS)
 
     def _leave_note_by_keys(self, delta):
         """Ctrl+Tab (*delta* 1) or Ctrl+Shift+Tab: the keyboard to the control
@@ -15677,6 +15693,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 self._paste_selection_capped, add="+")
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         self._after_edits_without_a_key(self.comments_text, self._schedule_autosave)
+        # Tab types a tab here too, Tk's own; said once how to move on.
+        self.comments_text.bind("<Tab>", self._say_ctrl_tab_once, add="+")
         # The comments box's toggle (4 rows <-> 12), remembered as the body's
         # is: a box someone expanded is a size they chose.
         self._add_text_resize_toggle(self.editor, self.comments_text,
