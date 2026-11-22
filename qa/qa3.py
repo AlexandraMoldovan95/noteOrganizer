@@ -192,6 +192,28 @@ _sc_out = NO.decode_share_code(app.clipboard_get())[0]
 check(f'Copy code copies the note as it is now, not as it was at Generate ({_sc_out.get("body")!r})',
       _sc_out.get('body') == 'share body and the fix')
 app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'share body')
+# Generate code from the page's top: the code at the page's foot sat below the
+# window's edge and nothing moved, so the button seemed to do nothing (the
+# review panel, 22 November). The code and its Copy button come into sight.
+app.editor_code_area.pack_forget(); app.update()
+app.editor_canvas.yview_moveto(0.0); app.update()
+app.share_current_note_as_code(); app.update()
+_gc_box = find_text_widget(app.editor_code_area)
+_gc_btn = next(w for w in app.editor_code_area.winfo_children()
+               if isinstance(w, tk.Button) and 'Copy code' in str(w.cget('text')))
+# Read in the page's own height, which a scroll does not move: an embedded
+# window's place on the screen waits for a redraw the suite may not get.
+_gc_page = app.editor_canvas.bbox(app._editor_window)
+_gc_seen = (_gc_box.winfo_rooty() - app.editor.winfo_rooty(),
+            _gc_btn.winfo_rooty() + _gc_btn.winfo_height() - app.editor.winfo_rooty())
+if not _gc_page or _gc_page[3] - _gc_page[1] <= app.editor_canvas.winfo_height():
+    print('SKIP Generate code brings its code into sight (the whole page fits this window)')
+else:
+    _gc_total = _gc_page[3] - _gc_page[1]
+    _gc_view = tuple(round(f * _gc_total) for f in app.editor_canvas.yview())
+    check(f'Generate code brings its code and Copy button into sight '
+          f'({_gc_seen} within {_gc_view} of a {_gc_total}-pixel page)',
+          _gc_view[0] <= _gc_seen[0] and _gc_seen[1] <= _gc_view[1] + 1)
 
 # decode round trip
 # Paragraphs travel too: without them a shared note arrived flush

@@ -20204,5 +20204,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW05",
+    "about": "Generate code puts its code at the page's foot and scrolls nowhere: below the window's edge, the button seems to do nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._editor_scroll_to_show(self.editor_code_area)\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "Generate code brings its code and Copy button into sight"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

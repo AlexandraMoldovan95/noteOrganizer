@@ -11914,6 +11914,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self._is_placed(self.editor_code_area):
             self.editor_code_area.pack(fill="x", padx=30, pady=(0, 20))
         self._render_editor_code(code, had_attachments, copy=copy)
+        # Brought into sight: at the page's foot it sat below the window.
+        self._editor_scroll_to_show(self.editor_code_area)
 
     def _code_for_open_note(self):
         """The share code of the note in the editor, and whether it has files
@@ -19378,9 +19380,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_raise_tags()
 
     def _find_ensure_visible(self):
-        """Scroll the editor PAGE (editor_canvas) so the body's own 12-line
-        viewport is on screen -- body_text.see() only drives the body's
-        inner scroll, not the page it sits inside."""
+        """Scroll the editor PAGE so the body's own 12-line viewport is on
+        screen -- body_text.see() only drives the body's inner scroll."""
+        self._editor_scroll_to_show(self.body_text)
+
+    def _editor_scroll_to_show(self, widget):
+        """Scroll the editor PAGE (editor_canvas) so *widget* is on screen;
+        nothing when it is already in sight. Generate code put its code
+        below the window's edge, and nothing moved."""
         try:
             self.editor_canvas.update_idletasks()
             bbox = self.editor_canvas.bbox(self._editor_window)
@@ -19389,8 +19396,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             total = bbox[3] - bbox[1]
             if total <= 0:
                 return
-            y = self.body_text.winfo_rooty() - self.editor.winfo_rooty()
-            h = self.body_text.winfo_height()
+            y = widget.winfo_rooty() - self.editor.winfo_rooty()
+            h = widget.winfo_height()
             canvas_h = self.editor_canvas.winfo_height()
             cur = self.editor_canvas.yview()[0] * total
             if y < cur:
