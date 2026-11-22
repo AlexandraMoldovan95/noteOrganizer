@@ -1899,6 +1899,8 @@ if os.name == "nt":
         show_warning=lambda *a, **k: None, show_error=lambda *a, **k: None,
         ask_yes_no=lambda *a, **k: True, refresh_attachments_list=lambda: None,
         _schedule_autosave=lambda: None, _while_native=lambda show: show())
+    # The real question whether it is attached already, which Add file asks first.
+    _m_editor._attached_already = lambda p: NO.NoteOrganizer._attached_already(_m_editor, p)
     _m_real_many = _tkfd_m.askopenfilenames
     _tkfd_m.askopenfilenames = lambda **k: (_m_src,)
     try:
