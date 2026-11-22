@@ -4373,6 +4373,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # they are about to type into, not stray whitespace.
             lead = len(content) - len(content.lstrip(" \t"))
             trimmed = content.strip(" \t").replace(core_tables.CELL, "/")
+            if core_tables.CELL in content:
+                # The table's own divider, kept as "/" -- and said, as it was not.
+                self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)
             display_styles = (display_styles or [])[lead:lead + len(trimmed)]
             while len(display_styles) < len(trimmed):
                 display_styles.append(dict(self._PLAIN_STYLE))
@@ -6696,6 +6699,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             source=lambda r, c: merged if (r, c) == (r0, c0) else (r, c))
         self._grid_after_op(first)
 
+    # A cell's "|" is the table's divider, so it is kept as "/" -- said so.
+    CELL_PIPE_WORDS = "A table cell can't hold “|”, so it was written as “/”."
+
     @_undo_atom
     def _grid_paste_cells(self, info, r, c):
         """Copied cells land as a block starting at the clicked cell,
@@ -6830,6 +6836,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
                                  extra=extra)
         self._grid_after_op(first)
+        # build() wrote each pipe as "/": said, before a cut, which matters more.
+        if any(core_tables.CELL in value for row in matrix for value in row):
+            self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)
         if cut:
             self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
 

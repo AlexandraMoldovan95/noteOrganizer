@@ -3835,6 +3835,44 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
       [core_tables.split_row(r) for r in lines_now()[:3]]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
 
+# A "|" typed or pasted into a cell is kept as "/", the table's own divider
+# -- and said, as it was not (the review panel, on the phone; the desktop
+# did the same). A cell with none says nothing.
+_pp_said = []
+_pp_real = app._say_by_the_box
+app._say_by_the_box = lambda box, text: (_pp_said.append(text), _pp_real(box, text))[1]
+_pp_body = app.body_text.get('1.0', 'end-1c')
+try:
+    for _pp_value in ('1|2', '12'):
+        app._open_cell_editor(app._grid_at_line(1), 2, 1)
+        _e = app._cell_editor['entry']
+        _e.delete('1.0', 'end')
+        _e.insert('1.0', _pp_value)
+        app._commit_cell_editor()
+        app.update()
+        if _pp_value == '1|2':
+            _pp_typed = (list(_pp_said), core_tables.split_row(lines_now()[2]))
+            del _pp_said[:]
+    _pp_plain = list(_pp_said)
+    set_body('| a | b |\n| c | d |')
+    app._render_table_grids(); app.update()
+    app._grid_cell_clip = None
+    app.clipboard_clear(); app.clipboard_append('x|y\tz')
+    del _pp_said[:]
+    app._grid_paste_cells(app._grid_at_line(1), 0, 0); app.update()
+    _pp_pasted = (list(_pp_said), core_tables.split_row(lines_now()[0]))
+finally:
+    app._say_by_the_box = _pp_real
+    set_body(_pp_body)
+    app._render_table_grids(); app.update()
+    _t = app._grid_at_line(1)   # the grid drawn again, for the checks below
+check(f'a "|" typed in a cell is kept as "/" and said ({_pp_typed}; then {_pp_plain})',
+      _pp_typed == ([NO.NoteOrganizer.CELL_PIPE_WORDS], ['Eggs', '1/2'])
+      and _pp_plain == [])
+check(f'...and pasted, too ({_pp_pasted})',
+      _pp_pasted[0] == [NO.NoteOrganizer.CELL_PIPE_WORDS]
+      and _pp_pasted[1][:2] == ['x/y', 'z'])
+
 # Ctrl+T in a cell swaps two letters each keeping its own style, as in the
 # note: Tk's own swap gave a bold letter swapped with a plain one back plain.
 app._open_cell_editor(app._grid_at_line(1), 1, 0)

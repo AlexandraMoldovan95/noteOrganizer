@@ -20800,5 +20800,41 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW42",
+    "about": "a \"|\" typed in a table cell becomes \"/\" without a word",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if core_tables.CELL in content:\n                # The table's own divider, kept as \"/\" -- and said, as it was not.\n                self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a \"|\" typed in a cell is kept as \"/\" and said"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW43",
+    "about": "a \"|\" pasted into table cells becomes \"/\" without a word",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if any(core_tables.CELL in value for row in matrix for value in row):\n            self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and pasted, too"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
