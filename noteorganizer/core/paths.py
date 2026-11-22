@@ -40,6 +40,12 @@ def writes_held(path):
     return os.path.normcase(os.path.abspath(path)) in WRITES_HELD
 
 
+def _count_noun(count, noun):
+    """storage.count_noun, imported when asked: storage imports this module."""
+    from .storage import count_noun
+    return count_noun(count, noun)
+
+
 # ---- Storage location: from source, beside the script; built, the profile's
 # "Note Organizer" folder (get_user_notebook_dir), never beside the exe, which
 # may be read-only or deleted on exit. AppData held it until 2026-10-27. ----
@@ -479,7 +485,7 @@ def run_migrations(app_dir):
         # it), and from here on the two are separate notebooks, said so.
         message = (
             f"Copied your notebook into this folder:\n{app_dir}\n\n"
-            f"Brought {moved} note(s) from:\n{appdata_dir}\n\n"
+            f"Brought {_count_noun(moved, 'note')} from:\n{appdata_dir}\n\n"
             "The notebook there is kept as it was, so changes made here "
             "will not appear in it, or the other way round."
         )
@@ -569,7 +575,7 @@ def run_migrations(app_dir):
 
     message = (
         f"Your notes now live in this folder:\n{app_dir}\n\n"
-        + (f"Imported {best_count} note(s) from:\n{best_dir}" if best_count
+        + (f"Imported {_count_noun(best_count, 'note')} from:\n{best_dir}" if best_count
            else f"Brought in the notebook from:\n{best_dir}")
     )
     if missing:

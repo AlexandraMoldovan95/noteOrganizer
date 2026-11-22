@@ -594,7 +594,7 @@ app.new_note(); app.update()
 # ---- IMPORT CODE with duplicate detection ----
 app.import_box.delete('1.0','end')
 app.import_box.insert('1.0', code)
-app.wait_variable = lambda var: click_dialog_button(app, 'Skip the 1 duplicate(s)')
+app.wait_variable = lambda var: click_dialog_button(app, 'Skip the duplicate')
 before = len(app.notes)
 # multi-note code needed to trigger the dialog path; build one with 1 dup + 1 fresh
 multi_notes = [
@@ -1157,7 +1157,7 @@ with zipfile.ZipFile(import_zip_path,'w') as zf:
     zf.write(os.path.join(backup_dir,'notes_data.json'), 'notes_data.json')
 fd.askopenfilename = lambda **k: import_zip_path
 
-app.wait_variable = lambda var: click_dialog_button(app, 'Skip the 1 duplicate(s)')
+app.wait_variable = lambda var: click_dialog_button(app, 'Skip the duplicate')
 before2 = len(app.notes)
 app.import_data()
 t0=time.time()
@@ -3349,7 +3349,7 @@ _pe_left = (NO.get_setting('last_export_at') is not None, _next_start_says())
 check(f'an export of the session alone, finished at the close, is not taken for the '
       f'backup, and the next start says what it holds ({_pe_session[0]}, '
       f'{_pe_session[1][:90]!r})',
-      _pe_session[0] is None and 'holds only the 2 note(s)' in _pe_session[1])
+      _pe_session[0] is None and 'holds only the 2 notes' in _pe_session[1])
 check(f'...and one that left a held file out says so at the next start '
       f'({_pe_left[1][:120]!r})',
       _pe_left[0] and 'not all of it' in _pe_left[1] and '20250101_tax.xlsx' in _pe_left[1]
@@ -4394,7 +4394,7 @@ check(f'"Add copies anyway" adds the note again as its own note '
       == ['Already here, unchanged'] and len(app.notes) == 2
       and len(set(_ie_uids)) == 2 and all(_ie_uids)
       and app.notes[1]['title'] == app.notes[0]['title']
-      and any('Added 1 note' in s for s in _ie_info))
+      and any('Added 1 note from the backup.' in s for s in _ie_info))
 if os.path.exists(_iezip):
     os.remove(_iezip)
 
@@ -4789,7 +4789,7 @@ check(f"...but not when its save was sent back to fix a date ({_ic_asked}, {_ic_
 # ...which is said, with the note named: deleted unsaid, they were what Skip
 # was offered for.
 check(f"...and the files left out are said ({_ic_said[-1:]})",
-      any('1 attached file(s) for “Groceries” were not added' in s for s in _ic_said))
+      any('1 attached file for “Groceries” was not added' in s for s in _ic_said))
 app._cancel_pending_autosave()
 app.open_blank_tab(); app.update()
 # ...and a look-alike bringing no file leaves the note open alone: read back
@@ -4832,7 +4832,9 @@ check(f"a backup of look-alikes bringing only a file a twin lacks offers Skip, w
       f"({_ic_offered}, {_ic_only})", 'qa3_ic_dup.txt' in _ic_only)
 # ...and says so: "Added 0 note(s)" and nothing more read as nothing done.
 check(f"...and the import says where the file went ({_ic_said[-1:]})",
-      any('1 attached file(s) went to the notes the skipped ones look like' in s for s in _ic_said))
+      any('1 attached file went to the note the skipped ones look like' in s for s in _ic_said))
+check(f"...and counts what it added in the form the number takes ({_ic_said[-1:]})",
+      any('Added 0 notes from the backup.' in s for s in _ic_said))
 for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
@@ -4913,8 +4915,8 @@ _bk_files = [a.get('stored_as') for a in (app.find_note(1) or {}).get('attachmen
 check(f"...and a file the update brings is given once, by the update, said as files alone "
       f"({_bk_asked}, {_bk_files}, {_bk_said[-1:]})",
       _bk_files == ['qa3_ic_known.txt']
-      and any('1 note(s) you already had took attached files' in s for s in _bk_said)
-      and not any('Updated 1 note(s)' in s or 'went to the notes' in s for s in _bk_said))
+      and any('1 note you already had took attached files' in s for s in _bk_said)
+      and not any('Updated 1 note' in s or 'went to the note' in s for s in _bk_said))
 # ...and a note typed into while the question waits (its autosave runs) still takes the file it was
 # offered for: its twin worked out after the question had another key, and the file was dropped.
 for _ic_name in _ic_names:
@@ -6174,8 +6176,9 @@ for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
                 setattr(app, _tw_name, _tw_was)
     _tw_said[_tw_case] = (
         _tw_shown,
-        any(("trashed notes could not be written to disk" if _tw_case == 'trash held'
-             else "trashed note(s) were not brought in") in m for _t, m in _tw_msgs))
+        any(("trashed notes could not be written to disk" in m) if _tw_case == 'trash held'
+            else ("of the backup's trashed notes" in m and "not brought in" in m)
+            for _t, m in _tw_msgs))
     _tw_heard = (_tw_heard if _tw_case != 'held' else []) + [
         _tw_case, [(t, m[-120:]) for t, m in _tw_msgs]]
 check(f"a backup's Trash is not brought in past the window this computer's next start "
@@ -6275,7 +6278,7 @@ check(f"a backup's trashed note keeps a category only the Trash uses, the newer 
       f"comes in, and a name a ceiling refuses is said ({sorted(_tc_trash)}, "
       f"{_tc_trash.get('Shed', {}).get('category')!r}; {_tc_msgs[-260:]!r})",
       _tc_trash.get('Shed', {}).get('category') == 'OnlyInTrash' and 'OnlyInTrash' in _tc_saved
-      and 'Twin' in _tc_trash and "1 of the backup's trashed note(s) were not brought in" in _tc_msgs
+      and 'Twin' in _tc_trash and "1 of the backup's trashed notes was not brought in" in _tc_msgs
       # The settings' and a note's long name counted once, a note's own and the
       # Trash's own once each.
       and "3 of the backup's categories could not be added" in _tc_msgs

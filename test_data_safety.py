@@ -1465,6 +1465,13 @@ check("choosing a window forgets that the last one was not known",
       _storage.trash_retention_days() == 90
       and _storage.TRASH_WINDOW_UNKNOWN not in _storage.load_settings()
       and _storage.trash_window_words("within") == " within 90 days")
+_storage.save_settings({"trash_retention_days": 1})
+check("a one-day window is promised as one day, not '1 days'",
+      _storage.trash_window_words("within") == " within 1 day")
+check("a count's noun takes the form its number takes",
+      [_storage.count_noun(n, "note") for n in (0, 1, 2)] == ["0 notes", "1 note", "2 notes"]
+      and _storage.count_noun(1, "category", "categories") == "1 category"
+      and _storage.count_noun(3, "category", "categories") == "3 categories")
 _storage.save_settings({})
 check("a window never chosen is still the default",
       _storage.trash_retention_days() == _storage.TRASH_RETENTION_DAYS)

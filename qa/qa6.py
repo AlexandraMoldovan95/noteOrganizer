@@ -2155,8 +2155,8 @@ def _rt_row_lines():
 _rt_left = app._days_left_in_trash(_RT_RECENT['deleted_at'])
 check("retention: ...and a row's days left follow the new window at once",
       _rt_left in (6, 7)
-      and any('%d day(s) left' % _rt_left in t for t in _rt_row_lines())
-      and not any('%d day(s) left' % (_rt_left + 23) in t
+      and any('%d days left' % _rt_left in t for t in _rt_row_lines())
+      and not any('%d days left' % (_rt_left + 23) in t
                   for t in _rt_row_lines()))
 
 # Over a held Trash its page says why it shows nothing: "Trash is empty" over
@@ -3819,8 +3819,8 @@ check('...while the note filed there goes to the Trash, restorable',
       and app.find_note(2) is None)
 check(f'...and the question counts only that note, naming the day apart '
       f'({_cd_asked and _cd_asked[0][1]!r})',
-      len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1]
-      and 'have a day filed under' in _cd_asked[0][1])
+      len(_cd_asked) == 1 and 'has 1 note. What should happen to it?' in _cd_asked[0][1]
+      and '1 repeating note has a day filed under' in _cd_asked[0][1])
 # Held by a day alone, there is no note to trash, so nothing offers to.
 NO.CATEGORY_COLORS['Away6d'] = '#aa6622'
 app.find_note(1)['overrides']['2026-09-21'] = {'body': 'away', 'category': 'Away6d'}
@@ -3855,7 +3855,7 @@ app._delete_category('Late6d', lambda: None); app.update()
 app._themed_dialog = _cd_real_dlg
 check(f'...and it counts the notes as they are once the open note is saved '
       f'({_cd_asked and _cd_asked[0][1]!r})',
-      len(_cd_asked) == 1 and '2 note(s)' in _cd_asked[0][1]
+      len(_cd_asked) == 1 and 'has 2 notes. What should happen to them?' in _cd_asked[0][1]
       and 'repeating' not in _cd_asked[0][1]
       and app.find_note(1)['category'] == 'Late6d')
 app.new_note(); app.update()
@@ -3891,7 +3891,7 @@ check(f'Yes to deleting a category\'s notes trashes the notes its question '
       f'{_cd_asked and _cd_asked[0][1]!r})',
       [e.get('title') for e in app.trash] == ['Counted']
       and _cd_late == 'General'
-      and len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1])
+      and len(_cd_asked) == 1 and 'has 1 note.' in _cd_asked[0][1])
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 

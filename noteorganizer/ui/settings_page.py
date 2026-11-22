@@ -38,6 +38,7 @@ from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
     trash_window_words,
+    count_noun,
     choose_trash_window,
     # The entries a window outlived, deleting none: the purge's own answer,
     # so the confirmation cannot promise another number.
@@ -1434,7 +1435,7 @@ class SettingsPageMixin:
         remaining = self._days_left_in_trash(meta)
         sub = f"deleted {show_date(meta[:10])}" if meta else "deleted"
         if remaining is not None:
-            sub += f" · {remaining} day(s) left"
+            sub += f" · {count_noun(remaining, 'day')} left"
         if repeats:
             sub += f" · repeats {describe_recurrence(shown).lower()}"
         sub_lbl = tk.Label(left, text=sub, bg=self.colors["card"],
@@ -1964,8 +1965,8 @@ class SettingsPageMixin:
 
         total_dupes = sum(len(g) - 1 for g in groups)
         # Not "could be removed": a group ticked whole goes whole.
-        tk.Label(parent, text=f"Found {len(groups)} group(s): {total_dupes} note(s) "
-                              "beyond the first of each.",
+        tk.Label(parent, text=f"Found {count_noun(len(groups), 'group')}: "
+                              f"{count_noun(total_dupes, 'note')} beyond the first of each.",
                  font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["subtext"],
                  wraplength=self.px(520), justify="left").pack(padx=12, pady=(0, 2), anchor="w")
         tk.Label(parent, text="Tick the copies you want to remove. Keep as many as "
@@ -3331,7 +3332,8 @@ class SettingsPageMixin:
         General either way, and are named apart."""
         days = ""
         if days_only:
-            days = (f"{days_only} repeating note(s) have a day filed under "
+            days = (f"{count_noun(days_only, 'repeating note')} "
+                    f"{'has' if days_only == 1 else 'have'} a day filed under "
                     f"“{name}”; those days move to “{PROTECTED_CATEGORY}” "
                     "either way.")
         if not count:
@@ -3347,7 +3349,8 @@ class SettingsPageMixin:
                 default="Cancel")
         return self._themed_dialog(
             "Delete category",
-            f"“{name}” has {count} note(s). What should happen to them?"
+            f"“{name}” has {count_noun(count, 'note')}. What should happen to "
+            f"{'it' if count == 1 else 'them'}?"
             + (f"\n\n{days}" if days else ""),
             kind="warning",
             # "delete_notes" moves to the Trash, restorable like any delete: a
@@ -3404,8 +3407,9 @@ class SettingsPageMixin:
             return
         if not self.ask_yes_no(
             "Move duplicates to trash",
-            f"Move {len(to_trash)} selected note(s) to the trash? "
-            f"You can restore them{trash_window_words('within')}.",
+            f"Move {count_noun(len(to_trash), 'selected note')} to the trash? "
+            f"You can restore {'it' if len(to_trash) == 1 else 'them'}"
+            f"{trash_window_words('within')}.",
             # Enter answers a question now: a reflexive one deletes nothing.
             icon="question", default="no"
         ):
@@ -3471,7 +3475,7 @@ class SettingsPageMixin:
         # Not "Cleaned up" after the refused write's own words.
         if announce and written:
             self.show_info("Cleaned up",
-                                f"Moved {len(to_trash)} duplicate(s) to the trash.")
+                                f"Moved {count_noun(len(to_trash), 'duplicate')} to the trash.")
         refresh()
 
     def _build_settings_name_panel(self, parent):

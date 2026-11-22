@@ -49,6 +49,10 @@ something, each RULE below, and gains one the next time another does:
    a constant, paths.JSON_UNREADABLE.
 7. Is this a figure from 0 to 9?
 8. What has the person typed in the date field?
+9. Is this field showing its grey hint?
+10. Is this count's noun in the form its number takes? -- forty "note(s)"
+   wrote both forms where the number was known; a fix to one sentence left
+   its neighbours (0.101.542). Owner: storage.count_noun.
 
 An allowance that matches nothing fails the gate too: an exception nobody
 can see is not a reviewed exception, it is a comment.
@@ -293,6 +297,45 @@ HINT_PROSE = [
 ]
 
 
+# The tenth question: is this count's noun in the form its number takes? Its
+# owner is storage.count_noun. Asked of the app's string literals only (an
+# f-string's pieces included), never of code, comments or docstrings: a
+# "note(s)" wrote both forms where the number was known.
+COUNT_FORMS = re.compile(r"[a-z]\(s\)")
+COUNT_OWNER = "count_noun"
+COUNT_ALLOWED = {
+    "build_recurrence_section":
+        "labels beside the interval and the month's days, where the number "
+        "is being typed: no one form is true while it is written",
+    "on_recurrence_changed": "the same interval label, worded for each frequency",
+    "update_recurrence_summary": "quotes the days as typed, before any number is read",
+    "_date_and_repeat_to_store": "quotes the repeat's days as typed",
+    "add_attachment": "the system file chooser's title, shown before any file is picked",
+}
+COUNT_SHAPES = ['def f(n):\n    return f"{n} note(s) moved"',
+                'def f():\n    x = "Skip the 3 duplicate(s)"']
+COUNT_PROSE = ['def f(s):\n    """The cell(s) a docstring names."""\n    return [dict(s) for s in s]',
+               'def f():\n    pass  # "0 note(s)" in a comment',
+               'def f(s):\n    return str(s) + repr(s)']
+
+
+def count_form_hits(tree, owner):
+    """(line, function) of each string literal writing "(s)" after a word."""
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = getattr(node, "body", None) or []
+            if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                docstrings.add(id(body[0].value))
+    hits = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in docstrings and COUNT_FORMS.search(node.value)):
+            hits.append((node.lineno, owner.get(node.lineno, "<module>")))
+    return hits
+
+
 def enclosing_functions(tree):
     """line number -> innermost enclosing function name."""
     owner = {}
@@ -319,15 +362,23 @@ def enclosing_functions(tree):
 def main():
     problems = []
     used = set()            # (rule's question, allowed name) that matched somewhere
+    count_problems = []
+    count_used = set()
     for path in FILES:
         src = io.open(path, encoding="utf-8").read()
         lines = src.split("\n")
         try:
-            owner = enclosing_functions(ast.parse(src))
+            tree = ast.parse(src)
+            owner = enclosing_functions(tree)
         except SyntaxError as exc:
             print("cannot parse %s: %s" % (path, exc))
             return 1
         rel = os.path.relpath(path, ROOT)
+        for lineno, func in count_form_hits(tree, owner):
+            if func in COUNT_ALLOWED:
+                count_used.add(func)
+            else:
+                count_problems.append((rel, lineno, func))
         for rule in RULES:
             seen_funcs = set()
             for i in range(len(lines)):
@@ -362,6 +413,28 @@ def main():
         print("one-definition gate: the ninth rule misses %r and takes %r" % (unseen, taken))
         return 1
 
+    # The tenth question proved on its own shapes, as the ninth is.
+    def counted(code):
+        tree = ast.parse(code)
+        return count_form_hits(tree, enclosing_functions(tree))
+    unseen = [s for s in COUNT_SHAPES if not counted(s)]
+    taken = [s for s in COUNT_PROSE if counted(s)]
+    if unseen or taken:
+        print("one-definition gate: the count rule misses %r and takes %r" % (unseen, taken))
+        return 1
+    if count_problems:
+        print("one-definition gate: %d count(s) written in both forms\n" % len(count_problems))
+        for rel, lineno, func in count_problems:
+            print("  %s:%d  in %s()" % (rel, lineno, func))
+        print("\n      question : is this count's noun in the form its number takes?")
+        print("      owned by : %s() -- \"1 note\", \"2 notes\"; or, for a label where" % COUNT_OWNER)
+        print("      no number is known yet, an entry in COUNT_ALLOWED WITH the reason.")
+        return 1
+    stale = sorted(set(COUNT_ALLOWED) - count_used)
+    if stale:
+        print("one-definition gate: count allowance(s) that match nothing: %s" % ", ".join(stale))
+        return 1
+
     # An allowance that matches nothing is a comment, not a reviewed
     # exception: it once hid that its function had changed shape.
     unused = [(rule, name) for rule in RULES for name in rule.allowed
@@ -374,7 +447,7 @@ def main():
         return 1
 
     if not problems:
-        print("one-definition gate: clean (%d file(s), %d rule(s))"
+        print("one-definition gate: clean (%d file(s), %d rule(s) and the count question)"
               % (len(FILES), len(RULES)))
         return 0
 

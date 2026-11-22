@@ -7700,7 +7700,7 @@ check('same-title notes never overwrite each other',
 check('bulk export renders through the same pipeline as single',
       _first == app._note_export_content(_exp_note, 'txt', 'Export <trial>'))
 check('bulk export announces the count',
-      any('Exported 2 note(s)' in t for t in _toastsX))
+      any('Exported 2 notes' in t for t in _toastsX))
 check('bulk export leaves selection mode',
       not app.selection_mode and not app.selected_note_ids)
 

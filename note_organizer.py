@@ -228,6 +228,7 @@ from noteorganizer.core.storage import (
     TRASH_WINDOW_UNKNOWN,
     trash_retention_days,
     trash_window_words,
+    count_noun,
     choose_trash_window,
     load_settings,
     save_settings,
@@ -1941,7 +1942,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if isinstance(count, int) and not isinstance(count, bool):
                     lines.append(
                         f"The backup saved to {name} as {when} "
-                        f"holds only the {count} note(s) written in that "
+                        f"holds only the {count_noun(count, 'note')} written in that "
                         "session, not your notes file, which could not be "
                         "opened then. Settings → Backup → Import brings its "
                         "notes in beside yours.")
@@ -2067,14 +2068,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # "Cleanup pass" under "setup complete".
             removed_bits = []
             if stats["empty_removed"]:
-                removed_bits.append(f"{stats['empty_removed']} empty note(s)")
+                removed_bits.append(count_noun(stats["empty_removed"], "empty note"))
             if stats["duplicates_removed"]:
                 removed_bits.append(
-                    f"{stats['duplicates_removed']} exact duplicate(s)")
+                    count_noun(stats["duplicates_removed"], "exact duplicate"))
+            gone = (stats["empty_removed"] or 0) + (stats["duplicates_removed"] or 0)
             summary = (
                 f"While tidying up, {' and '.join(removed_bits)} "
-                f"were removed.\n"
-                f"{stats['after']} of your {stats['before']} note(s) remain."
+                f"{'was' if gone == 1 else 'were'} removed.\n"
+                f"{stats['after']} of your {count_noun(stats['before'], 'note')} "
+                f"{'remains' if stats['after'] == 1 else 'remain'}."
             )
             if backup_path:
                 summary += (f"\n\nEverything as it was before is saved in:\n"
@@ -2625,7 +2628,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.show_info(
                     "Backup of this session saved",
                     f"Saved to:\n{state['save_path']}\n\n"
-                    f"It holds the {state['session_only']} note(s) written since "
+                    f"It holds the {count_noun(state['session_only'], 'note')} written since "
                     "Note Organizer started, and not your notes file, which "
                     "could not be opened then. " + (
                         "Close Note Organizer and open it again; Settings → Backup "
@@ -11058,12 +11061,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             twins.setdefault(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)
         return twins
 
+    @staticmethod
+    def _skip_duplicates_label(count):
+        """The button that leaves the look-alikes out, in the form its count takes."""
+        return "Skip the duplicate" if count == 1 else f"Skip the {count} duplicates"
+
     def _all_lookalike_choice(self, count, other, where, pending):
         """The question when every note left in a code or a backup (*where*)
         looks like one already here. With the rest of the import *pending* --
         an Update agreed to, copies kept -- it can skip them and go on:
         Cancel, its only no, dropped those unsaid."""
-        said = (f"All {count}{other} note(s) in this {where} look identical "
+        said = (f"The{other} note in this {where} looks identical to one you "
+                "already have" if count == 1 else
+                f"All {count}{other} notes in this {where} look identical "
                 "to notes you already have")
         if not pending:
             return self._themed_dialog(
@@ -11344,13 +11354,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if fresh:
                 choice = self._themed_dialog(
                     "Possible duplicates",
-                    f"{dupe_count} of the{other} {len(valid)} note(s) in this code "
-                    f"look identical to notes you already have ({SAME_AS}).",
+                    f"{dupe_count} of the{other} {count_noun(len(valid), 'note')} in this code "
+                    f"{'looks' if dupe_count == 1 else 'look'} identical to notes you "
+                    f"already have ({SAME_AS}).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
-                             (f"Skip the {dupe_count} duplicate(s)", "skip")],
-                    default=f"Skip the {dupe_count} duplicate(s)",
+                             (self._skip_duplicates_label(dupe_count), "skip")],
+                    default=self._skip_duplicates_label(dupe_count),
                 )
             else:
                 choice = self._all_lookalike_choice(len(valid), other, "code",
@@ -11379,8 +11390,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         notes_word = "note" if added == 1 else "notes"
         self._say_hidden_arrivals(arrived, f"Added {added} {notes_word}")
         self.import_box.delete("1.0", "end")
-        skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid else ""
-        oversize_note = (f" — {oversized} oversized note(s) trimmed to safe limits"
+        skipped_note = (f" ({count_noun(dupe_count, 'duplicate')} skipped)"
+                        if dupe_count and to_import is not valid else "")
+        oversize_note = (f" — {count_noun(oversized, 'oversized note')} trimmed to safe limits"
                          if oversized else "")
         known_note = ((f", updated {updated}" if updated else "")
                       + (f", {unchanged} already here" if unchanged else ""))
@@ -12413,13 +12425,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if fresh:
                 choice = self._themed_dialog(
                     "Possible duplicates",
-                    f"{dupe_count} of the{other} {len(valid_notes)} note(s) in this "
-                    f"backup look identical to notes you already have ({SAME_AS}).",
+                    f"{dupe_count} of the{other} {count_noun(len(valid_notes), 'note')} in this "
+                    f"backup {'looks' if dupe_count == 1 else 'look'} identical to notes you "
+                    f"already have ({SAME_AS}).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
-                             (f"Skip the {dupe_count} duplicate(s)", "skip")],
-                    default=f"Skip the {dupe_count} duplicate(s)",
+                             (self._skip_duplicates_label(dupe_count), "skip")],
+                    default=self._skip_duplicates_label(dupe_count),
                 )
             else:
                 # A look-alike's files its twin lacks are what Skip goes on
@@ -12653,19 +12666,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # them now.
         self._drop_unclaimed_import_files(state)
 
-        skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
+        skipped_note = (f" ({count_noun(dupe_count, 'duplicate')} skipped)"
+                        if dupe_count and to_import is not valid_notes else "")
         extras_note = ""
         parts = []
         # Each count in the form its number takes: "2 category/categories"
         # was read as the app's own words (case 1079).
         if added_categories:
-            parts.append(f"{added_categories} categor{'y' if added_categories == 1 else 'ies'}")
+            parts.append(count_noun(added_categories, "category", "categories"))
         if restored_decor:
-            parts.append(f"{restored_decor} calendar day marking{'' if restored_decor == 1 else 's'}")
+            parts.append(count_noun(restored_decor, "calendar day marking"))
         if added_templates:
-            parts.append(f"{added_templates} template{'' if added_templates == 1 else 's'}")
+            parts.append(count_noun(added_templates, "template"))
         if added_trash:
-            parts.append(f"{added_trash} trashed note{'' if added_trash == 1 else 's'}")
+            parts.append(count_noun(added_trash, "trashed note"))
         if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
         if unwritten:
@@ -12674,14 +12688,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             + " could not be written to disk; the backup still holds them.")
         if trash_left_out:
             extras_note += (
-                f" {trash_left_out} of the backup's trashed note(s) were not brought in: " + (
+                f" {trash_left_out} of the backup's trashed notes "
+                f"{'was' if trash_left_out == 1 else 'were'} not brought in: " + (
                     "how long the Trash keeps notes could not be read here this time, so "
                     "the next start could have removed them." if settings_held else
                     f"they are older than the {keep_days} days this computer's Trash keeps "
                     "notes, so the next start would have removed them.")
                 + " The backup still holds them.")
         if earlier > 0:
-            extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
+            extras_note += (f" Earlier text of {count_noun(earlier, 'day')} "
                             "of a repeating note kept as notes of their own.")
         if refused_names:
             extras_note += (
@@ -12693,34 +12708,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # done, and invited a second import over newer text.
         known_note = ""
         if updated:
-            known_note += (f" Updated {updated} note(s) you already had "
-                           "(“↩ Restore previous” undoes each one).")
+            known_note += (f" Updated {count_noun(updated, 'note')} you already had "
+                           f"(“↩ Restore previous” undoes {'it' if updated == 1 else 'each one'}).")
         if files_only:
-            known_note += (f" {files_only} note(s) you already had took "
+            known_note += (f" {count_noun(files_only, 'note')} you already had took "
                            "attached files this computer lacked.")
         if unchanged:
-            known_note += (f" {unchanged} note(s) were already here, "
-                           "unchanged, and were skipped.")
+            were = "was" if unchanged == 1 else "were"
+            known_note += (f" {count_noun(unchanged, 'note')} {were} already here, "
+                           f"unchanged, and {were} skipped.")
         # The files a skipped look-alike gave its twin, said: "Added 0" and
         # nothing more over a backup that brought only them.
         if state.get("files_given"):
-            known_note += (f" {state['files_given']} attached file(s) went to the notes "
-                           "the skipped ones look like.")
+            given = state["files_given"]
+            known_note += (f" {count_noun(given, 'attached file')} went to "
+                           f"{'the note' if given == 1 else 'the notes'} the skipped ones look like.")
         if state.get("files_left"):
             # Named: it was said to someone still on Settings.
             left, title = state["files_left"]
-            known_note += (f" {left} attached file(s) for “{one_line(title.strip() or 'Untitled note', 40)}” "
-                           "were not added while its date or repeat waits to be fixed: once it is, "
-                           "import the backup again.")
+            known_note += (f" {count_noun(left, 'attached file')} for "
+                           f"“{one_line(title.strip() or 'Untitled note', 40)}” "
+                           f"{'was' if left == 1 else 'were'} not added while its date or repeat "
+                           "waits to be fixed: once it is, import the backup again.")
         # A sign-out's word for the next start is no longer true: this import
         # finished, its merge saved -- and a session that ends with "Import
         # complete" on screen leaves none.
         self._take_back_cut_short("import")
         self._import_asking = None
         self.show_info("Import complete",
-                       f"Added {len(to_import) + len(copies)} note(s) from the backup."
+                       f"Added {count_noun(len(to_import) + len(copies), 'note')} from the backup."
                        f"{known_note}{skipped_note}{extras_note}")
-        self._say_hidden_arrivals(arrived, f"Added {len(arrived)} note(s) from the backup")
+        self._say_hidden_arrivals(arrived, f"Added {count_noun(len(arrived), 'note')} from the backup")
 
     # ---------- Theme helpers ----------
     def get_note_color(self, note):
@@ -17937,7 +17955,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_editor_snapshot()
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
-        self._say_if_saved(written, f"Moved {count} note(s) to trash")
+        self._say_if_saved(written, f"Moved {count_noun(count, 'note')} to trash")
         # The bulk route is the easiest one to regret: a tick box, a
         # confirm, and a list that was filtered by whatever was typed in
         # the search box at the time.
@@ -17957,7 +17975,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A pixel less padding all round, which each row's ring takes back.
         frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
         frame.pack(padx=1, pady=1)
-        tk.Label(frame, text=f"Move {len(self.selected_note_ids)} note(s) to:",
+        tk.Label(frame, text=f"Move {count_noun(len(self.selected_note_ids), 'note')} to:",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=7, pady=(4, 2))
 
@@ -18006,7 +18024,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The calendar draws a note with no colour of its own in its
             # category's -- its dots, and an open day's stripes.
             self.render_calendar()
-            self._say_if_saved(written, f"Moved {count} note(s) to \u201c{cat}\u201d")
+            self._say_if_saved(written, f"Moved {count_noun(count, 'note')} to \u201c{cat}\u201d")
             # A way back: it had neither question nor Undo.
             self._offer_category_undo({"marks": marks, "applied": cat})
 
@@ -18046,7 +18064,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
         frame.pack(padx=1, pady=1)
         tk.Label(frame,
-                 text=f"Export {len(self.selected_note_ids)} note(s) as:",
+                 text=f"Export {count_noun(len(self.selected_note_ids), 'note')} as:",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=7,
                                                     pady=(4, 2))
@@ -18087,7 +18105,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Same-title notes get " (2)", " (3)" -- never an overwrite."""
         ext = {"html": ".html", "txt": ".txt"}[fmt]
         folder = self._while_native(lambda: filedialog.askdirectory(
-            title=f"Export {len(self.selected_note_ids)} note(s) into…"))
+            title=f"Export {count_noun(len(self.selected_note_ids), 'note')} into…"))
         if not folder:
             return
         written, failed, failed_ids, used = 0, [], set(), set()
@@ -18115,7 +18133,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             more = f"\n…and {len(failed) - 5} more" if len(failed) > 5 else ""
             self.show_error(
                 "Export incomplete",
-                f"{written} note(s) exported, {len(failed)} failed to write:"
+                f"{count_noun(written, 'note')} exported, {len(failed)} failed to write:"
                 f"\n\n{named}{more}\n\nThose are still selected, to try again.")
             # Only the ones that failed stay ticked: cleared, a retry meant
             # ticking them all again; kept whole, it wrote the rest twice.
@@ -18123,11 +18141,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._update_bulk_selected_label()
             self.refresh_note_list()
             return
-        self._show_toast(f"Exported {written} note(s)")
+        self._show_toast(f"Exported {count_noun(written, 'note')}")
         self._exit_selection_mode_after_bulk_action()
         if written and not failed and self.ask_yes_no(
                 "Open the folder?",
-                f"{written} file(s) were saved.\n\nOpen the folder now?",
+                f"{count_noun(written, 'file')} {'was' if written == 1 else 'were'} saved."
+                "\n\nOpen the folder now?",
                 icon="question"):
             try:
                 os.startfile(folder)
@@ -21627,7 +21646,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Every one kept off by a category gone since is said as that: it
             # was "Nothing left to put back" with the notes still there.
             self._show_toast(
-                f"{homeless} note(s) could not go back to a category that no longer exists"
+                f"{count_noun(homeless, 'note')} could not go back to a category that no longer exists"
                 if homeless else "Nothing left to put back", kind="info")
             return
 
@@ -21638,9 +21657,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (get_note_color), so it is redrawn.
         self.render_calendar()
         self._say_if_saved(written, (
-            f"Put back {len(restored)} note(s); {homeless} could not go "
+            f"Put back {count_noun(len(restored), 'note')}; {homeless} could not go "
             "back to a category that no longer exists") if homeless
-            else f"Put back {len(restored)} note(s)")
+            else f"Put back {count_noun(len(restored), 'note')}")
 
     def _undo_checklist_delete(self, items, index, item, where=None):
         """Put a removed checklist item back where it was. `items`, the list

@@ -462,7 +462,9 @@ app5f._cleanup_report = ({'before': 5, 'empty_removed': 1,
 app5f.announce_startup_changes()
 app5f.update()
 check('a cleanup that DID something still reports it, in plain words',
-      len(_notices) == 1 and '1 empty note(s)' in _notices[0][1]
+      len(_notices) == 1
+      and '1 empty note and 2 exact duplicates were removed' in _notices[0][1]
+      and '2 of your 5 notes remain.' in _notices[0][1]
       and 'removed' in _notices[0][1]
       # the words the product review flagged as maintenance vocabulary
       # must be gone from a dialog that reports a permanent deletion

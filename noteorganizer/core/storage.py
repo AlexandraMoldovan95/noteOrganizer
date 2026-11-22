@@ -63,12 +63,20 @@ def trash_retention_days():
     return days
 
 
+def count_noun(count, noun, plural=None):
+    """"1 note", "2 notes": a count with its noun in the form the number
+    takes -- *plural* when it is not the noun and an "s" ("category",
+    "categories"). The one answer, held by check_one_definition: a "note(s)"
+    wrote both forms where the number was known."""
+    return f"{count} {noun if count == 1 else (plural or noun + 's')}"
+
+
 def trash_window_words(lead):
     """" within 30 days" -- *lead* and the window in force, for a promise a
     delete makes about the Trash -- or "" while the window is not known,
     when no number of days would be true."""
     days = trash_retention_days()
-    return "" if days is None else f" {lead} {days} days"
+    return "" if days is None else f" {lead} {count_noun(days, 'day')}"
 
 
 def choose_trash_window(days):

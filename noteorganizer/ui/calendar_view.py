@@ -36,6 +36,7 @@ from ..core.recurrence import (
     show_day,
 )
 from ..core.storage import (
+    count_noun,
     load_settings,
     save_setting,
     save_settings,
@@ -1135,7 +1136,7 @@ class CalendarViewMixin:
         day = parse_date(date_str)
         friendly = (show_day(day, year=False, short_month=True) if day
                     else date_str)
-        tk.Label(container, text=f"{friendly} — {len(day_notes)} note(s)",
+        tk.Label(container, text=f"{friendly} — {count_noun(len(day_notes), 'note')}",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
 

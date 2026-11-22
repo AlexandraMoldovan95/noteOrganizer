@@ -3499,8 +3499,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    return \"\" if days is None else f\" {lead} {days} days\"",
-        "replace": "    return f\" {lead} {days} days\""
+        "find": "    return \"\" if days is None else f\" {lead} {count_noun(days, 'day')}\"",
+        "replace": "    return f\" {lead} {count_noun(days, 'day')}\""
       }
     ],
     "must_fail": ["...and no promise names a number of days"],
@@ -17069,8 +17069,8 @@
     "id": "WS134",
     "about": "The files a backup's Skip left out are said without the note they were for",
     "edits": [{"file": "note_organizer.py",
-               "find": "for “{one_line(title.strip() or 'Untitled note', 40)}” ",
-               "replace": "for the note you went back to "}],
+               "find": "f\"“{one_line(title.strip() or 'Untitled note', 40)}” \"",
+               "replace": "\"the note you went back to \""}],
     "must_fail": ["...and the files left out are said"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -19309,7 +19309,7 @@
     "id": "SN181",
     "about": "Import complete says its categories in both forms, \"2 category/categories\", not in the one its number takes",
     "edits": [{"file": "note_organizer.py",
-               "find": "            parts.append(f\"{added_categories} categor{'y' if added_categories == 1 else 'ies'}\")\n",
+               "find": "            parts.append(count_noun(added_categories, \"category\", \"categories\"))\n",
                "replace": "            parts.append(f\"{added_categories} category/categories\")\n"}],
     "must_fail": ["a backup's categories the settings file refused are said not written",
                   "a backup's trashed note keeps a category only the Trash uses"],
@@ -19320,7 +19320,7 @@
     "id": "SN182",
     "about": "Import complete says the trashed notes it restored in both forms, \"1 trashed note(s)\"",
     "edits": [{"file": "note_organizer.py",
-               "find": "            parts.append(f\"{added_trash} trashed note{'' if added_trash == 1 else 's'}\")\n",
+               "find": "            parts.append(count_noun(added_trash, \"trashed note\"))\n",
                "replace": "            parts.append(f\"{added_trash} trashed note(s)\")\n"}],
     "note": "SN181's sibling in the same sentence. The day markings' and the templates' words, the same expression, are read by no check.",
     "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
@@ -19331,7 +19331,7 @@
     "id": "SN183",
     "about": "Import complete says one trashed note in the plural, \"1 trashed notes\"",
     "edits": [{"file": "note_organizer.py",
-               "find": "            parts.append(f\"{added_trash} trashed note{'' if added_trash == 1 else 's'}\")\n",
+               "find": "            parts.append(count_noun(added_trash, \"trashed note\"))\n",
                "replace": "            parts.append(f\"{added_trash} trashed notes\")\n"}],
     "note": "SN182's check brings several trashed notes, so the singular was read by none.",
     "must_fail": ["Import complete says the one trashed note it restored in the singular"],
@@ -20128,6 +20128,80 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW01",
+    "about": "Import complete counts its notes in both forms again, \"Added 1 note(s) from the backup.\", the sentence the 0.101.542 fix had left beside the one it mended",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                       f\"Added {count_noun(len(to_import) + len(copies), 'note')} from the backup.\"\n",
+        "replace": "                       f\"Added {len(to_import) + len(copies)} note(s) from the backup.\"\n"
+      }
+    ],
+    "must_fail": [
+      "\"Add copies anyway\" adds the note again as its own note",
+      "...and counts what it added in the form the number takes"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW02",
+    "about": "the Trash page's rows say \"7 day(s) left\" again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            sub += f\" · {count_noun(remaining, 'day')} left\"\n",
+        "replace": "            sub += f\" · {remaining} day(s) left\"\n"
+      }
+    ],
+    "must_fail": [
+      "retention: ...and a row's days left follow the new window at once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW03",
+    "about": "the one answer writes both forms itself: every count reads \"1 note(s)\"",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    return f\"{count} {noun if count == 1 else (plural or noun + 's')}\"\n",
+        "replace": "    return f\"{count} {noun}(s)\"\n"
+      }
+    ],
+    "must_fail": [
+      "a count's noun takes the form its number takes",
+      "a one-day window is promised as one day"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW04",
+    "about": "deleting a category asks \"has 1 note(s). What should happen to it?\": the question's count in both forms again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            f\"“{name}” has {count_noun(count, 'note')}. What should happen to \"\n",
+        "replace": "            f\"“{name}” has {count} note(s). What should happen to \"\n"
+      }
+    ],
+    "must_fail": [
+      "...and the question counts only that note, naming the day apart"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }

@@ -162,7 +162,7 @@ app.show_day_summary_tooltip(_D13)
 app.update()
 _lbls = _tip_labels()
 check('the day tooltip lists both titles under a 2-note header',
-      _lbls is not None and any('2 note(s)' in t for t in _lbls)
+      _lbls is not None and any('2 notes' in t for t in _lbls)
       and any('ZiNota0' in t for t in _lbls)
       and any('ZiNota1' in t for t in _lbls))
 app.hide_day_tooltip()
