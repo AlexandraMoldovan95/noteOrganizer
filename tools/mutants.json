@@ -20094,7 +20094,7 @@
   },
   {
     "id": "TX08",
-    "about": "Ctrl+T on a line's first or last two letters gives them only what their neighbours share, and the line jumps out of its indent until the key's release",
+    "about": "Ctrl+T on a line's first or last two letters gives them only what their neighbours share: the first two take the line's indent away for good (the release's resync reads it from the line's first letter), the last two until the release",
     "edits": [
       {
         "file": "note_organizer.py",
