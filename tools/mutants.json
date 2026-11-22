@@ -20879,8 +20879,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if core_tables.CELL in content:\n                # The table's own divider, kept as \"/\" -- and said, as it was not.\n                self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)\n",
-        "replace": ""
+        "find": "                editor[\"pipe_said\"] = True\n                self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)\n",
+        "replace": "                editor[\"pipe_said\"] = True\n"
       }
     ],
     "must_fail": [
@@ -20903,6 +20903,24 @@
     ],
     "must_fail": [
       "...and pasted, too"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW44",
+    "about": "a \"|\" in an open cell is said again at every autosave that commits the cell",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if core_tables.CELL in content and not editor.get(\"pipe_said\"):\n",
+        "replace": "            if core_tables.CELL in content:\n"
+      }
+    ],
+    "must_fail": [
+      "...said once while its cell stays open through autosaves"
     ],
     "suites": [
       "qa1"

@@ -4376,8 +4376,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # they are about to type into, not stray whitespace.
             lead = len(content) - len(content.lstrip(" \t"))
             trimmed = content.strip(" \t").replace(core_tables.CELL, "/")
-            if core_tables.CELL in content:
-                # The table's own divider, kept as "/" -- and said, as it was not.
+            if core_tables.CELL in content and not editor.get("pipe_said"):
+                # The table's own divider, kept as "/" -- said once a cell opened:
+                # every autosave commits an open cell, and said it again.
+                editor["pipe_said"] = True
                 self._say_by_the_box(self.body_text, self.CELL_PIPE_WORDS)
             display_styles = (display_styles or [])[lead:lead + len(trimmed)]
             while len(display_styles) < len(trimmed):

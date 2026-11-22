@@ -3854,6 +3854,20 @@ try:
             _pp_typed = (list(_pp_said), core_tables.split_row(lines_now()[2]))
             del _pp_said[:]
     _pp_plain = list(_pp_said)
+    # Open, the cell is committed at every autosave: said once all the same.
+    app._open_cell_editor(app._grid_at_line(1), 2, 1)
+    _e = app._cell_editor['entry']
+    _e.delete('1.0', 'end')
+    _e.insert('1.0', '1|2')
+    for _pp_flush in range(3):
+        app._commit_cell_editor(close=False); app.update()
+    app._commit_cell_editor(); app.update()
+    _pp_open = list(_pp_said[len(_pp_plain):])
+    app._open_cell_editor(app._grid_at_line(1), 2, 1)
+    _e = app._cell_editor['entry']
+    _e.delete('1.0', 'end')
+    _e.insert('1.0', '12')
+    app._commit_cell_editor(); app.update()
     set_body('| a | b |\n| c | d |')
     app._render_table_grids(); app.update()
     app._grid_cell_clip = None
@@ -3869,6 +3883,8 @@ finally:
 check(f'a "|" typed in a cell is kept as "/" and said ({_pp_typed}; then {_pp_plain})',
       _pp_typed == ([NO.NoteOrganizer.CELL_PIPE_WORDS], ['Eggs', '1/2'])
       and _pp_plain == [])
+check(f'...said once while its cell stays open through autosaves ({_pp_open})',
+      _pp_open == [NO.NoteOrganizer.CELL_PIPE_WORDS])
 check(f'...and pasted, too ({_pp_pasted})',
       _pp_pasted[0] == [NO.NoteOrganizer.CELL_PIPE_WORDS]
       and _pp_pasted[1][:2] == ['x/y', 'z'])
