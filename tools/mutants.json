@@ -20077,7 +20077,7 @@
   {
     "id": "TX07",
     "about": "Ctrl+T with the caret parked inside an emoji swaps its two halves apart, into text no file can hold",
-    "note": "TX06 is no gap by mistake: it went with the first emoji guard (025dfdb2), never kept.",
+    "note": "TX06 is no gap by mistake: it was an equivalent aimed at the first emoji guard (shipped in 04af5cd5, taken out in 025dfdb2), never kept.",
     "edits": [
       {
         "file": "note_organizer.py",
@@ -20114,7 +20114,7 @@
   },
   {
     "id": "TX09",
-    "about": "Ctrl+T refuses a whole emoji beside the caret as it refuses half of one, as the first emoji guard did",
+    "about": "Ctrl+T refuses a whole emoji beside the caret as it refuses half of one, much as the first emoji guard did",
     "edits": [
       {
         "file": "note_organizer.py",
