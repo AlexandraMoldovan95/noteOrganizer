@@ -20222,5 +20222,23 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW06",
+    "about": "a note's own Delete asks \"Are you sure you want to delete this note?\" again: read as gone for good, while the ticked delete beside it names the Trash and the days",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "             else \"Move this note to the Trash?\")\n            + f\" You can restore it{trash_window_words('within')}.\" + warning,\n",
+        "replace": "             else \"Are you sure you want to delete this note?\") + warning,\n"
+      }
+    ],
+    "must_fail": [
+      "...and a note's own Delete says it goes to the Trash and can be restored"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

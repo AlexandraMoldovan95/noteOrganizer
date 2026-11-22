@@ -4293,9 +4293,10 @@ app.notes = []; app.save_notes()
 # sits on Yes deletes on a reflexive Enter. The three that move notes to
 # the Trash put it on No. Answered No here, so nothing moves.
 _dn_asked = {}
+_dn_said = {}
 _dn_stub = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: (_dn_asked.__setitem__(a[0], k.get('default')),
-                                  False)[1]
+                                  _dn_said.__setitem__(a[0], a[1]), False)[2]
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Keep me', 'body': 'x'}),
              NO.normalize_note({'id': 2, 'title': 'Keep me', 'body': 'x'})]
 app.save_notes()
@@ -4323,6 +4324,12 @@ check('the confirmations that move notes to the Trash keep the keyboard on No (%
       _dn_asked == {'Delete note': 'no', 'Move to trash': 'no',
                     'Move duplicates to trash': 'no'}
       and len(app.notes) == 2 and not app.trash)
+# "Are you sure you want to delete this note?" read as gone for good, while
+# the ticked delete beside it named the Trash and the days (the review panel).
+check(f"...and a note's own Delete says it goes to the Trash and can be restored "
+      f"({_dn_said.get('Delete note')!r})",
+      (_dn_said.get('Delete note') or '').startswith('Move this note to the Trash? You can restore it')
+      and 'Move 1 selected note to the trash? You can restore it' in (_dn_said.get('Move to trash') or ''))
 app.notes = []; app.save_notes()
 
 # ---- A DAY'S EDIT SAVED THIS SESSION IS NOT "EDITED ELSEWHERE" ----

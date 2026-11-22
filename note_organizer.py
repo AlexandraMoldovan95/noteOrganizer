@@ -22022,12 +22022,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         attachment_count = len(note.get("attachments") or [])
         warning = ""
         if attachment_count:
-            plural = "s" if attachment_count != 1 else ""
-            warning = f"\n\n{attachment_count} attached file{plural} will go to trash with it."
+            warning = (f"\n\n{count_noun(attachment_count, 'attached file')} "
+                       "will go to the Trash with it.")
+        # Where it goes, and that it comes back: "Are you sure you want to
+        # delete this note?" read as gone for good, while the ticked delete
+        # beside it said the Trash and the days.
         confirm = self.ask_yes_no(
             "Delete note",
-            ("Delete this entire repeating series?" if is_recurring(note)
-             else "Are you sure you want to delete this note?") + warning,
+            ("Move this entire repeating series to the Trash?" if is_recurring(note)
+             else "Move this note to the Trash?")
+            + f" You can restore it{trash_window_words('within')}." + warning,
             # Enter answers a question now: a reflexive one keeps the note.
             default="no"
         )
