@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.101.540](#0101540--2026-11-19) | 2026-11-19 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
+| [0.101.542](#0101542--2026-11-22) | 2026-11-22 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
@@ -110,7 +110,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.101.540] — 2026-11-19
+## [0.101.542] — 2026-11-22
 
 *Highlights: the final audit before the stores. For nearly three weeks agents tried to break the
 app — lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a
@@ -327,8 +327,9 @@ of the app adds to it.*
 - **A long name leaves its row's buttons in the row.** An attachment's ✕, a template's pencil and
   bin, a category's buttons and a picture's Close were pushed out: a file could not be removed,
   a template neither edited nor deleted.
-- **A table too large to draw stays as its text,** with the status line saying why, and the
-  autosave's "Auto-saved" no longer writes over that line before it can be read. A 300 × 300
+- **A table too large to draw stays as its text,** with the status line saying why, and neither
+  the autosave's "Auto-saved" nor, when the note opens, its dates write over that line before
+  it can be read. A 300 × 300
   table froze the app 40 s at every opening, and a tall one, of many rows or of cells of many
   lines, ended it on Linux.
 - **Long lists scroll to their end.** A checklist of 1,000 items ended at item 785, the template
@@ -403,6 +404,9 @@ of the app adds to it.*
   writing the settings each time, and in selection mode it ticked and unticked a note.
 - **The shortcuts page names the way out of a note, Ctrl+Tab, and Escape,** and Text size says
   "in every note", not "everywhere", which it never was.
+- **Ctrl+T swaps two letters each keeping its own style,** in a note and in a table's cell. A
+  bold word's last letter swapped with the plain one after it came back plain, and a swap of a
+  line's first two letters took the line's indent away.
 
 #### Finding, sharing and importing
 
@@ -465,6 +469,8 @@ of the app adds to it.*
   attachment limit were cut at the next start and their files purged; cleaning up the app's own
   Duplicate gave the kept note every file twice; two series that differed only in their days
   were called duplicates.
+- **Import complete says each count in the form its number takes:** "Also restored 2
+  categories and 1 trashed note.", where it said "2 category/categories".
 
 #### Repeating notes and the calendar
 
@@ -537,7 +543,7 @@ of the app adds to it.*
 ### Testing
 
 - Every fix landed with a check that fails without it and a mutant that proves the check: the
-  catalogue grew from 422 mutants to 1,391.
+  catalogue grew from 422 mutants to 1,403.
 - `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
   share, backup and restore, after which no day's words are lost or doubled but those deleted or
   typed over.

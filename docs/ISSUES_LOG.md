@@ -184,60 +184,61 @@ is in the table below as well.
 | [The flicker that was a word count](#the-flicker-that-was-a-word-count) | A label whose text can come and go sizes its row by what it says; give it the height of its tallest state. | 0.97.405 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 | [A year read as a list number](#a-year-read-as-a-list-number) | A renderer of one's own agrees with the reader's other one until a line begins with something the two read differently: hold it to the cases where they can part. | the website |
-| [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | 0.101.540 |
-| [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | 0.101.540 |
-| [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | 0.101.540 |
-| [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | 0.101.540 |
-| [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | 0.101.540 |
-| [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | 0.101.540 |
-| [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | 0.101.540 |
-| [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | 0.101.540 |
-| [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | 0.101.540 |
-| [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | 0.101.540 |
-| [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | 0.101.540 |
-| [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | 0.101.540 |
-| [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | 0.101.540 |
-| [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | 0.101.540 |
-| [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | 0.101.540 |
-| [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | 0.101.540 |
-| [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | 0.101.540 |
-| [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | 0.101.540 |
-| [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | 0.101.540 |
-| [Round six: a restore on a run that saves nothing, and ceilings kept at the load](#round-six-a-restore-on-a-run-that-saves-nothing-and-ceilings-kept-at-the-load) | "A failed write leaves a duplicate at worst" promises a next write; a ceiling kept at the load is one the editor crosses; and two apps keep one thing in one place. | 0.101.540 |
-| [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | 0.101.540 |
-| [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. A rule only asked lasts until it is forgotten. | 0.101.540 |
-| [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | 0.101.540 |
-| [Round seven: a list's pieces measured once, and Enter held down](#round-seven-a-lists-pieces-measured-once-and-enter-held-down) | A measure taken once is a measure of that moment: what can change after it tells what read it, or is read again; and a key held down is many presses. | 0.101.540 |
-| [Round eight: a day reset that came back, and what one copy keeps](#round-eight-a-day-reset-that-came-back-and-what-one-copy-keeps) | A move into the note happens once: what a copy has given back, it holds no more; and of two texts competing for one slot, the one whose loss is larger stays. | 0.101.540 |
-| [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | 0.101.540 |
-| [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | 0.101.540 |
-| [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | 0.101.540 |
-| [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | 0.101.540 |
-| [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | 0.101.540 |
-| [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | 0.101.540 |
-| [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | 0.101.540 |
-| [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | 0.101.540 |
-| [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | 0.101.540 |
-| [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | 0.101.540 |
-| [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | 0.101.540 |
-| [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | 0.101.540 |
-| [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | 0.101.540 |
-| [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | 0.101.540 |
-| [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | 0.101.540 |
-| [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | 0.101.540 |
-| [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | 0.101.540 |
-| [The lows wave's last rounds: a paste meeting a list, one road at a time](#the-lows-waves-last-rounds-a-paste-meeting-a-list-one-road-at-a-time) | When each fix of a rule leaves the case beside it, write the rule down and test its whole matrix on both apps at once; a fix by road is a fix of one cell. | 0.101.540 |
-| [Wave 3: a promise about Enter, kept by one copy of the question](#wave-3-a-promise-about-enter-kept-by-one-copy-of-the-question) | A promise in the person's documents is a rule every copy of the code must keep; find the copies before trusting the one that was fixed. | 0.101.540 |
-| [Wave 2: the timers that ran inside a question](#wave-2-the-timers-that-ran-inside-a-question) | A question that waits is a window in which every timer runs: read what it decides about after it is answered, never before. | 0.101.540 |
-| [The comments that told every story twice](#the-comments-that-told-every-story-twice) | A comment says why; the story of how goes where stories are kept, with a pointer left behind. | 0.101.540 |
-| [Wave 2's lows: three checks that could not tell](#wave-2s-lows-three-checks-that-could-not-tell) | Before trusting a check, build the world without the fix, not a gentler one. | 0.101.540 |
-| [Wave 2's lows: Ctrl+Z read from a guess, then from the event](#wave-2s-lows-ctrlz-read-from-a-guess-then-from-the-event) | Record an event where it happens, for that event only, rather than inferring it from a state with other causes. | 0.101.540 |
-| [Wave 2's lows: a tab turned behind Settings](#wave-2s-lows-a-tab-turned-behind-settings) | When the same loss comes back by another road, fix the place every road passes, not the road. | 0.101.540 |
-| [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | 0.101.540 |
-| [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.101.540 |
-| [Wave 5: the desktop findings the phone's port had kept](#wave-5-the-desktop-findings-the-phones-port-had-kept) | A finding written down in one repository is invisible to the other's audit: before a release, read what the other app's logs still hold open about this one. | 0.101.540 |
-| [Wave 5: what a full reading found](#wave-5-what-a-full-reading-found) | A fix found on one road is a list of roads: the same shape waited on the next road, five times. | 0.101.540 |
-| [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | 0.101.540 |
+| [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | 0.101.542 |
+| [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | 0.101.542 |
+| [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | 0.101.542 |
+| [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | 0.101.542 |
+| [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | 0.101.542 |
+| [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | 0.101.542 |
+| [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | 0.101.542 |
+| [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | 0.101.542 |
+| [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | 0.101.542 |
+| [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | 0.101.542 |
+| [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | 0.101.542 |
+| [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | 0.101.542 |
+| [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | 0.101.542 |
+| [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | 0.101.542 |
+| [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | 0.101.542 |
+| [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | 0.101.542 |
+| [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | 0.101.542 |
+| [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | 0.101.542 |
+| [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | 0.101.542 |
+| [Round six: a restore on a run that saves nothing, and ceilings kept at the load](#round-six-a-restore-on-a-run-that-saves-nothing-and-ceilings-kept-at-the-load) | "A failed write leaves a duplicate at worst" promises a next write; a ceiling kept at the load is one the editor crosses; and two apps keep one thing in one place. | 0.101.542 |
+| [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | 0.101.542 |
+| [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. A rule only asked lasts until it is forgotten. | 0.101.542 |
+| [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | 0.101.542 |
+| [Round seven: a list's pieces measured once, and Enter held down](#round-seven-a-lists-pieces-measured-once-and-enter-held-down) | A measure taken once is a measure of that moment: what can change after it tells what read it, or is read again; and a key held down is many presses. | 0.101.542 |
+| [Round eight: a day reset that came back, and what one copy keeps](#round-eight-a-day-reset-that-came-back-and-what-one-copy-keeps) | A move into the note happens once: what a copy has given back, it holds no more; and of two texts competing for one slot, the one whose loss is larger stays. | 0.101.542 |
+| [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | 0.101.542 |
+| [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | 0.101.542 |
+| [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | 0.101.542 |
+| [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | 0.101.542 |
+| [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | 0.101.542 |
+| [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | 0.101.542 |
+| [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | 0.101.542 |
+| [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | 0.101.542 |
+| [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | 0.101.542 |
+| [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | 0.101.542 |
+| [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | 0.101.542 |
+| [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | 0.101.542 |
+| [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | 0.101.542 |
+| [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | 0.101.542 |
+| [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | 0.101.542 |
+| [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | 0.101.542 |
+| [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | 0.101.542 |
+| [The lows wave's last rounds: a paste meeting a list, one road at a time](#the-lows-waves-last-rounds-a-paste-meeting-a-list-one-road-at-a-time) | When each fix of a rule leaves the case beside it, write the rule down and test its whole matrix on both apps at once; a fix by road is a fix of one cell. | 0.101.542 |
+| [Wave 3: a promise about Enter, kept by one copy of the question](#wave-3-a-promise-about-enter-kept-by-one-copy-of-the-question) | A promise in the person's documents is a rule every copy of the code must keep; find the copies before trusting the one that was fixed. | 0.101.542 |
+| [Wave 2: the timers that ran inside a question](#wave-2-the-timers-that-ran-inside-a-question) | A question that waits is a window in which every timer runs: read what it decides about after it is answered, never before. | 0.101.542 |
+| [The comments that told every story twice](#the-comments-that-told-every-story-twice) | A comment says why; the story of how goes where stories are kept, with a pointer left behind. | 0.101.542 |
+| [Wave 2's lows: three checks that could not tell](#wave-2s-lows-three-checks-that-could-not-tell) | Before trusting a check, build the world without the fix, not a gentler one. | 0.101.542 |
+| [Wave 2's lows: Ctrl+Z read from a guess, then from the event](#wave-2s-lows-ctrlz-read-from-a-guess-then-from-the-event) | Record an event where it happens, for that event only, rather than inferring it from a state with other causes. | 0.101.542 |
+| [Wave 2's lows: a tab turned behind Settings](#wave-2s-lows-a-tab-turned-behind-settings) | When the same loss comes back by another road, fix the place every road passes, not the road. | 0.101.542 |
+| [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | 0.101.542 |
+| [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.101.542 |
+| [Wave 5: the desktop findings the phone's port had kept](#wave-5-the-desktop-findings-the-phones-port-had-kept) | A finding written down in one repository is invisible to the other's audit: before a release, read what the other app's logs still hold open about this one. | 0.101.542 |
+| [Wave 5: what a full reading found](#wave-5-what-a-full-reading-found) | A fix found on one road is a list of roads: the same shape waited on the next road, five times. | 0.101.542 |
+| [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | 0.101.542 |
+| [Ctrl+T and the tags Tk shares](#ctrlt-and-the-tags-tk-shares) | Measure the road the code takes, not one beside it; and a fix of a round's lows is code too, each line needing its own check. | 0.101.542 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4034,7 +4035,7 @@ not when the first is.
 
 ### Wave 5: the window that opened under the taskbar
 
-*([0.101.540](../CHANGELOG.md#0101540--2026-11-19) · 2026-11-09 · found in the release wave's
+*([0.101.542](../CHANGELOG.md#0101542--2026-11-22) · 2026-11-09 · found in the release wave's
 photographs of the Store package, taken inside Windows Sandbox)*
 
 **Symptom:** the package to ship was started eight times, once per theme, on a sandbox at 150%,
@@ -4059,7 +4060,7 @@ half placed until something checks where it landed.
 
 ### Wave 5: the desktop findings the phone's port had kept
 
-*([0.101.540](../CHANGELOG.md#0101540--2026-11-19) · 2026-11-11 · found reading what the
+*([0.101.542](../CHANGELOG.md#0101542--2026-11-22) · 2026-11-11 · found reading what the
 phone's issues log still held open about the desktop, before the audit's pull request)*
 
 **Symptom:** a page of two tables pasted from Word or a browser came in with the second table's
@@ -4098,7 +4099,7 @@ a release, read what the other app's logs still hold open about this one.
 
 ### Wave 5: what a full reading found
 
-*([0.101.540](../CHANGELOG.md#0101540--2026-11-19) · 2026-11-11 · ten read-only readers over
+*([0.101.542](../CHANGELOG.md#0101542--2026-11-22) · 2026-11-11 · ten read-only readers over
 both apps' code and documents, before the audit's pull request; every finding checked in the
 code before it was believed)*
 
@@ -4138,7 +4139,7 @@ what its checking is worth: every claim was read in the code before it went on t
 
 ### Wave 6: the lows, fixed before the stores
 
-*([0.101.540](../CHANGELOG.md#0101540--2026-11-19) · 2026-11-12 to 15 · the full reading's
+*([0.101.542](../CHANGELOG.md#0101542--2026-11-22) · 2026-11-12 to 15 · the full reading's
 findings of low severity, which the audit's rule leaves for a wave of their own; the owner chose
 to fix every one before the stores, or say why not)*
 
@@ -5299,6 +5300,37 @@ guard alone stands").
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
 once, by a scan, and the rounds after it read what the scan cannot judge.
+
+### Ctrl+T and the tags Tk shares
+
+*([0.101.542](../CHANGELOG.md#0101542--2026-11-22) · 2026-11-21 to 22 · a deferred low of the
+full reading (case 480), fixed in the lows wave by the owner's choice; twelve rounds of review
+on it)*
+
+**Symptom:** Ctrl+T with the caret just after a bold word swapped its last letter with the plain
+one after it, and the bold letter came back plain.
+
+**Root cause:** Tk's own swap (`tk::TextTranspose`) deletes the two characters and inserts them
+again with no tags given, so they wear only the tags both neighbours share. Every tag the
+neighbours do not share was lost on the pair: the letters' formatting, and at a line's start
+its paragraph tag, from which Tk reads the line's indent and the app's resync reads it again.
+
+**Fix:** `_transpose_keeping_styles` makes the swap, in the note and in a table's cell: each
+character keeps its own formatting, two of one line keep the line's indent and alignment, the
+selection and every other tag as Tk gives them, the caret after the pair, one undo step.
+
+**What the rounds found, each a check and a mutant:** the cell, the same Tk swap, missed by the
+first sweep; a cell's alignment on its first two letters; the selection kept; a line's first two
+letters losing its indent for good, as the resync reads it from the first letter alone. Two of
+the agent's own steps were wrong: a guard refusing a swap beside an emoji, measured on Tk's places read one by
+one, where the swap's own `-1c` and `-2c` step over an emoji whole (it shipped for a round, and
+went); and a reading of a mutant's survival as "the release mends both", where the runner had
+counted one check of two. The emoji guard that stays covers a caret parked inside an emoji,
+where a mark splits it and `-1c` lands on a half.
+
+**Takeaway:** measure the road the code takes, not one beside it: an index read directly is not
+an index reckoned by `-1c`. And a fix of a round's lows is code too: every line added to one
+without its own check was the next round's finding.
 
 ## Tk & platform gotchas
 

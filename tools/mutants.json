@@ -19333,7 +19333,7 @@
     "edits": [{"file": "note_organizer.py",
                "find": "            parts.append(f\"{added_trash} trashed note{'' if added_trash == 1 else 's'}\")\n",
                "replace": "            parts.append(f\"{added_trash} trashed notes\")\n"}],
-    "note": "The lows wave's review round: SN182's check brings several trashed notes, so the singular was read by none.",
+    "note": "SN182's check brings several trashed notes, so the singular was read by none.",
     "must_fail": ["Import complete says the one trashed note it restored in the singular"],
     "suites": ["qa3"],
     "expect": "killed"
