@@ -581,12 +581,9 @@ def _transpose_keeping_styles(text, pos):
 
         def worn(index):
             return tuple(shared | {t for t in text.tag_names(index) if is_format_tag(t)})
-        one, two = text.get(first), text.get(second)
-        # An emoji is two of Tk's places, the second reading as nothing: a
-        # swap beside one deleted half of it. Left as it is.
-        if len(one) != 1 or len(two) != 1 or max(ord(one), ord(two)) > 0xFFFF:
-            return "break"
-        pair = (two, worn(second), one, worn(first))
+        # -2c and -1c step over an emoji whole, though it takes two of Tk's
+        # places: an emoji beside the caret swaps whole, as in Tk's own swap.
+        pair = (text.get(second), worn(second), text.get(first), worn(first))
         auto = text.tk.getboolean(text.cget("autoseparators"))
         if auto:
             text.configure(autoseparators=False)
@@ -4135,7 +4132,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return None
             self._editor_flush_type_paint()
             at = "insert" if t.compare("insert", "==", "insert lineend") else "insert+1c"
-            return _transpose_keeping_styles(t, at)
+            aligned = bool(t.tag_ranges("cellalign"))
+            done = _transpose_keeping_styles(t, at)
+            # The cell's alignment covers all its words: the first two
+            # swapped had nothing before them to share it with, and jumped left.
+            if aligned:
+                t.tag_add("cellalign", "1.0", "end")
+            return done
         entry.bind("<Control-t>", swap_keeping_styles)
         # The cell's menu from the keyboard, as a drawn control's opens: every
         # row, column and merge command lived in a right-click alone. "App"

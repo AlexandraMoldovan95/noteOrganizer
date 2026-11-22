@@ -20040,17 +20040,17 @@
     "expect": "killed"
   },
   {
-    "id": "TX04",
-    "about": "Ctrl+T beside an emoji swaps anyway, deleting half of the emoji's two places",
+    "id": "TX05",
+    "about": "Ctrl+T on a cell's first two letters leaves them without the cell's alignment, and a centred cell's words jump left",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if len(one) != 1 or len(two) != 1 or max(ord(one), ord(two)) > 0xFFFF:\n            return \"break\"\n",
+        "find": "            if aligned:\n                t.tag_add(\"cellalign\", \"1.0\", \"end\")\n",
         "replace": ""
       }
     ],
     "must_fail": [
-      "...and Ctrl+T beside an emoji leaves the words as they were"
+      "...and Ctrl+T on a cell's first two letters keeps the cell's alignment on them"
     ],
     "suites": [
       "qa1"

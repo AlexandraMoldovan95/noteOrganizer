@@ -3852,6 +3852,23 @@ app._close_cell_editor()
 app.update()
 check(f"Ctrl+T in a table cell keeps each letter's own style ({_ct_said})",
       _ct_said == ('Mikl', ['1.0', '1.2', '1.3', '1.4']))
+# ...and a swap of its first two letters keeps the cell's alignment on them:
+# with nothing before them to share it, they jumped left in a centred cell.
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+_ct_e = app._cell_editor['entry']
+_ct_e.tag_remove('sel', '1.0', 'end')
+_ct_e.mark_set('insert', '1.1')
+_ct_said = None
+if take_focus(_ct_e):
+    _ct_e.event_generate('<Control-KeyPress-t>')
+    app.update()
+    _ct_said = (_ct_e.get('1.0', 'end-1c'),
+                all('cellalign' in _ct_e.tag_names(f'1.{i}') for i in range(4)))
+app._close_cell_editor()
+app.update()
+check(f"...and Ctrl+T on a cell's first two letters keeps the cell's alignment on them ({_ct_said})",
+      _ct_said == ('iMlk', True))
 
 # A cell's words are where its editor starts, not an edit: Ctrl+Z there took
 # them out, and leaving the cell saved it empty.
@@ -8673,15 +8690,32 @@ _tyCS = (_tyCS, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('sel')])
 _b.tag_remove('sel', '1.0', 'end')
 check(f"...and Ctrl+T inside a selection keeps the selection whole ({_tyCS})",
       _tyCS == (True, 'Priceasb here', ['1.4', '1.8']))
-# ...and beside an emoji it leaves the text alone: an emoji is two of Tk's
-# places, the second reading as nothing, and a swap beside one deleted half.
+# ...and beside an emoji it swaps the emoji whole: one takes two of Tk's
+# places, and -2c and -1c step over it as one character.
 set_body('ab\U0001F600 here' + chr(10) + 'second line')
 _b.mark_set('insert', '1.2')
 _tyCM = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
                  ('Control_L',))
 _tyCM = (_tyCM, _b.get('1.0', '1.end'))
-check(f"...and Ctrl+T beside an emoji leaves the words as they were ({_tyCM!r})",
-      _tyCM == (True, 'ab\U0001F600 here'))
+check(f"...and Ctrl+T beside an emoji swaps it whole ({_tyCM!r})",
+      _tyCM == (True, 'a\U0001F600b here'))
+# ...and with the caret right after one, raising nothing out of the key's handler.
+_tyCMe = []
+_tyCM_was = app.__dict__.get('report_callback_exception')
+app.report_callback_exception = lambda kind, *a: _tyCMe.append(kind.__name__)
+try:
+    set_body('a\U0001F600b here' + chr(10) + 'second line')
+    _b.mark_set('insert', '1.3')
+    _tyCM = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                     ('Control_L',))
+    _tyCM = (_tyCM, _b.get('1.0', '1.end'), _tyCMe)
+finally:
+    if _tyCM_was is None:
+        app.__dict__.pop('report_callback_exception', None)
+    else:
+        app.report_callback_exception = _tyCM_was
+check(f"...and Ctrl+T right after an emoji swaps it whole, raising nothing ({_tyCM!r})",
+      _tyCM == (True, 'ab\U0001F600 here', []))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----
