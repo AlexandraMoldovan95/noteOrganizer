@@ -20077,6 +20077,7 @@
   {
     "id": "TX07",
     "about": "Ctrl+T with the caret parked inside an emoji swaps its two halves apart, into text no file can hold",
+    "note": "TX06 is no gap by mistake: it went with the first emoji guard (025dfdb2), never kept.",
     "edits": [
       {
         "file": "note_organizer.py",
@@ -20105,6 +20106,25 @@
     "must_fail": [
       "...and Ctrl+T on a line's first two letters keeps the line's indent",
       "...and Ctrl+T on a line's last two letters keeps the line's indent"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "TX09",
+    "about": "Ctrl+T refuses a whole emoji beside the caret as it refuses half of one, as the first emoji guard did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if len(one) != 1 or len(two) != 1 or any(0xD800 <= ord(c) <= 0xDFFF for c in one + two):\n",
+        "replace": "        if len(one) != 1 or len(two) != 1 or any(0xD800 <= ord(c) <= 0xDFFF or ord(c) > 0xFFFF for c in one + two):\n"
+      }
+    ],
+    "must_fail": [
+      "...and Ctrl+T beside an emoji swaps it whole",
+      "...and Ctrl+T right after an emoji swaps it whole, raising nothing"
     ],
     "suites": [
       "qa1"
