@@ -23,10 +23,11 @@ name: QA Tests
 # CI rather than only on a developer's machine.
 # WHEN IT RUNS, AND WHY NOT MORE OFTEN
 #
-# This is a private repository, so every minute is billed against the
-# account's monthly allowance -- and this suite is the expensive one:
-# two platforms, and a Windows minute counts as two. Four measures keep
-# it inside the allowance without narrowing what gets checked:
+# Written while the repository was private and every minute was billed
+# against the account's monthly allowance (a Windows minute as two);
+# public now, GitHub runs it free, and this suite is still the long one:
+# two platforms. Four measures keep it short without narrowing what gets
+# checked:
 #
 #   * Once per change, not twice. Pushes are watched only on `main`;
 #     work on a branch is covered by its pull request. A branch with an
