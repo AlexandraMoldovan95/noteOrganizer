@@ -420,6 +420,11 @@ def copy_attachment_file(stored_as):
         shutil.copy2(src, dest)
         return new_name
     except (IOError, OSError):
+        # Half a copy, from a full disk, named by no note: not left behind.
+        try:
+            os.remove(dest)
+        except OSError:
+            pass
         return None
 
 

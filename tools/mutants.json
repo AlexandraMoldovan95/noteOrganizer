@@ -21070,5 +21070,23 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW53",
+    "about": "a duplicated note's file copy cut short by a full disk is left in the attachments folder, named by nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        # Half a copy, from a full disk, named by no note: not left behind.\n        try:\n            os.remove(dest)\n        except OSError:\n            pass\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and a copy a full disk cuts short is not left in the folder"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

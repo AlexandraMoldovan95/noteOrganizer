@@ -1955,6 +1955,25 @@ check("deleting the copy's attachment file leaves the original's intact",
 # A missing source yields None (caller keeps the old ref, no crash).
 check("copy_attachment_file returns None for a missing source",
       _storage.copy_attachment_file("does_not_exist.bin") is None)
+# A copy a full disk cuts short leaves no half file, named by no note, behind.
+_dup_before = set(os.listdir(_paths.ATTACHMENTS_DIR))
+_dup_real_copy = _storage.shutil.copy2
+
+
+def _dup_full(src, dst, *a, **k):
+    with open(dst, "wb") as half:
+        half.write(b"half")
+    raise OSError(28, "No space left on device")
+
+
+_storage.shutil.copy2 = _dup_full
+try:
+    _dup_none = _storage.copy_attachment_file("20260101_shared.bin")
+finally:
+    _storage.shutil.copy2 = _dup_real_copy
+_dup_left = set(os.listdir(_paths.ATTACHMENTS_DIR)) - _dup_before
+check("...and a copy a full disk cuts short is not left in the folder (%s)" % sorted(_dup_left),
+      _dup_none is None and not _dup_left)
 # Defensive: a mutant sharing the file deletes _dup_src above, so a bare
 # remove would crash the run before its footer. Verdicts already recorded.
 if os.path.exists(_dup_src):
