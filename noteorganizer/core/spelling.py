@@ -1,41 +1,16 @@
-"""Which misspellings to show, and which to leave alone.
-
-WHAT THIS MODULE IS FOR
------------------------
-The words themselves are judged by Windows' own spell checker
-(core/winspell.py). This module decides what the editor does with its
-answers, and it is plain strings and numbers in and out, so all of it is
-tested without Windows and without a window.
-
-A spell checker that underlines everything it does not know is worse than
-none: a note written in a language the computer has no dictionary for
-comes out red from end to end. So the rules here are about staying quiet:
-
-* **Another language is left alone.** When most of a sentence's words are
-  unknown, the sentence is in a language this computer cannot check, and
-  nothing in it is underlined -- while an English sentence beside it, in
-  the same paragraph, keeps its own underlines. A sentence too short to
-  tell ("Yes.") takes its paragraph's verdict, and the note as a whole is
-  asked too, so a note of short lines -- a shopping list in Romanian -- is
-  judged by all of its words, not by two at a time. A Romanian paragraph
-  read as English had 17 of its 21 words flagged; an English one with three
-  typos, 3 of 15. Within one sentence nothing finer can be done without
-  that language's own dictionary: its words are simply unknown.
-* **Every installed language counts.** A word is wrong only if every
-  dictionary Windows has calls it wrong (line_errors), one dictionary per
-  language (pick_languages): Windows offers nineteen kinds of English, and
-  asking all nineteen would only be slower.
-* **Not everything is a word.** A link, an address, a file name, a word
-  with digits in it, and an abbreviation written in capitals ("PDF") are
-  never underlined (worth_flagging); nor is a word its owner chose to
-  ignore.
-
-Positions are in UTF-16 units throughout, which is what Windows reports and
-what a Tk Text widget's columns count -- not Python characters, which differ
-by one for every emoji before the word.
+"""Which misspellings to show, and which to leave alone: Windows judges the
+words (core/winspell.py), this decides what the editor does with them --
+plain strings and numbers, tested without Windows or a window. It keeps
+quiet: a sentence mostly unknown is in a language with no dictionary here and
+shows nothing (a short one takes its paragraph's verdict, then the note's);
+a word is wrong only if every installed language says so, one dictionary per
+language; links, addresses, file names, words with digits and capitals
+("PDF") never are. Positions are UTF-16 units, as Windows and Tk's columns
+count them -- one apart from Python's for every emoji before the word.
 """
 
 import re
+from bisect import bisect_right
 
 # settings.json keys: Settings -> Appearance -> Spelling, on unless turned
 # off, and the words the person chose to ignore on this computer.
@@ -59,6 +34,11 @@ MIN_WORDS_IN_NOTE = 6
 # How many ignored words are kept: settings.json is read whole at every
 # start, and a list that only ever grows must stop somewhere.
 IGNORE_LIMIT = 5000
+# The underlines a line, and a box, may hold, as the find bar holds its hits.
+# Each is two toggles of a tag, and Tk's cost to read a line grows with their
+# square: the save reads it at every pause.
+MAX_UNDERLINES_PER_LINE = 500
+MAX_UNDERLINES = 2000
 
 # A run of letters, with an apostrophe or a hyphen allowed between two of
 # them ("don't", "well-known"). Digits and underscores are not letters.
@@ -81,32 +61,41 @@ def utf16_units(text):
 
 def utf16_slice(text, start, length):
     """The part of *text* from UTF-16 unit *start*, *length* units long."""
-    raw = text.encode("utf-16-le", "surrogatepass")
+    return _units_of(text.encode("utf-16-le", "surrogatepass"), start, length)
+
+
+def _units_of(raw, start, length):
+    """utf16_slice of a text already encoded: *raw* is its UTF-16 bytes, so
+    a caller slicing one line many times encodes it once."""
     return raw[2 * start:2 * (start + length)].decode("utf-16-le", "replace")
 
 
 def pieces(text, size=PIECE_UNITS):
     """*text* as (offset, piece) pairs no longer than *size* UTF-16 units,
     cut after a space where there is one, so no word is split in two.
-    *offset* is where the piece starts in *text*, in UTF-16 units."""
-    out, offset = [], 0
-    while text:
-        if utf16_units(text) <= size:
-            out.append((offset, text))
+    *offset* is where the piece starts in *text*, in UTF-16 units. Walked
+    by index, the line measured once: the rest of it, copied and measured
+    again for every piece, grew with its square."""
+    out, offset, at = [], 0, 0
+    left = utf16_units(text)
+    while at < len(text):
+        if left <= size:
+            out.append((offset, text[at:]))
             break
-        cut, units = 0, 0
-        for i, ch in enumerate(text):
-            units += 2 if ord(ch) > 0xFFFF else 1
+        cut, units = at, 0
+        for i in range(at, len(text)):
+            units += 2 if ord(text[i]) > 0xFFFF else 1
             if units > size:
                 break
             cut = i + 1
-        space = text.rfind(" ", 0, cut)
-        if space > 0:
+        space = text.rfind(" ", at, cut)
+        if space > at:
             cut = space + 1
-        cut = max(cut, 1)                  # always move on, even past one wide character
-        piece, text = text[:cut], text[cut:]
+        cut = max(cut, at + 1)             # always move on, even past one wide character
+        piece = text[at:cut]
         out.append((offset, piece))
-        offset += utf16_units(piece)
+        width = utf16_units(piece)
+        offset, left, at = offset + width, left - width, cut
     return out
 
 
@@ -173,21 +162,12 @@ def is_foreign(words, errors):
 
 
 def visible_errors(lines, results, ignored=()):
-    """What to underline, line by line.
-
-    *lines* are the texts that were checked; *results* holds, for each, the
-    ranges every dictionary called wrong (line_errors), or None for a line
-    that is not checked at all (a table row). Returns {line index: [(start,
-    length), ...]} in UTF-16 units, after the rules this module is for: a
-    sentence that reads as another language shows nothing, and neither does
-    anything worth_flagging turns down.
-
-    Each verdict is asked of the smallest text long enough to give one. A
-    sentence of MIN_WORDS_TO_JUDGE words or more is judged on its own, so an
-    English sentence beside one in another language keeps its underlines. A
-    shorter sentence ("Yes.") takes its paragraph's verdict, and a paragraph
-    too short to judge takes the whole note's: a shopping list of one word a
-    line is judged by all of its words, not by one at a time."""
+    """What to underline, line by line: {line index: [(start, length), ...]}
+    in UTF-16 units, from *results* (each line's ranges every dictionary
+    called wrong, None for a line not checked, a table row), less what reads
+    as another language and what worth_flagging turns down. Each verdict is
+    asked of the smallest text long enough to give one: a sentence of
+    MIN_WORDS_TO_JUDGE words, else its paragraph, else the whole note."""
     words = errors = 0
     counted = []
     for text, ranges in zip(lines, results):
@@ -207,39 +187,51 @@ def visible_errors(lines, results, ignored=()):
             paragraph_foreign = is_foreign(n, len(ranges))
         else:
             paragraph_foreign = note_foreign
+        # The line measured once, each range put in its sentence once: each
+        # sentence encoded the whole line and walked every range, and a long
+        # line of short sentences took seconds at every pause.
+        raw = text.encode("utf-16-le", "surrogatepass")
+        spans = sentence_spans(text)
+        starts = [start for start, _end in spans]
+        inside = [[] for _span in spans]
+        for r in ranges:
+            if 0 <= r[0] < spans[-1][1]:
+                inside[bisect_right(starts, r[0]) - 1].append(r)
         keep = []
-        for start, end in sentence_spans(text):
-            inside = [r for r in ranges if start <= r[0] < end]
-            if not inside:
+        for (start, end), found in zip(spans, inside):
+            if not found:
                 continue
-            sentence_words = word_count(utf16_slice(text, start, end - start))
+            sentence_words = word_count(_units_of(raw, start, end - start))
             if sentence_words >= MIN_WORDS_TO_JUDGE:
-                foreign = is_foreign(sentence_words, len(inside))
+                foreign = is_foreign(sentence_words, len(found))
             else:
                 foreign = paragraph_foreign
             if not foreign:
-                keep += [(s, length) for s, length in inside
-                         if worth_flagging(utf16_slice(text, s, length), ignored)]
+                keep += [(s, length) for s, length in found
+                         if worth_flagging(_units_of(raw, s, length), ignored)]
         if keep:
             shown[index] = keep
     return shown
 
 
 # A sentence ends at a full stop, a question or exclamation mark or an
-# ellipsis, with a space (or the end of the line) after it.
-_SENTENCE_END = re.compile(r"[.!?…]+(?=\s|$)")
+# ellipsis, with a space (or the end of the line) after it. Asked only where
+# a run starts: tried at each of 24,000 dots, a look took 4.5 s.
+_SENTENCE_END = re.compile(r"(?<![.!?…])[.!?…]+(?=\s|$)")
 
 
 def sentence_spans(text):
     """The sentences of a line, as (start, end) in UTF-16 units, covering
-    the whole of it: every position belongs to exactly one."""
-    spans, start = [], 0
+    the whole of it: every position belongs to exactly one. Each sentence is
+    measured on its own and added on, never the line again from its start."""
+    spans, start, at = [], 0, 0
     for m in _SENTENCE_END.finditer(text):
         end = m.end()
-        spans.append((utf16_units(text[:start]), utf16_units(text[:end])))
-        start = end
+        width = utf16_units(text[start:end])
+        spans.append((at, at + width))
+        start, at = end, at + width
     if start < len(text) or not spans:
-        spans.append((utf16_units(text[:start]), utf16_units(text)))
+        spans.append((at, at + utf16_units(text[start:])))
     return spans
 
 
@@ -252,15 +244,39 @@ def range_at(ranges, column):
     return None
 
 
-def pick_languages(supported, preferred=()):
-    """One dictionary per language, the person's own languages first.
+def nearest_underlines(shown, line, column, per_line=MAX_UNDERLINES_PER_LINE,
+                       total=MAX_UNDERLINES):
+    """*shown* (visible_errors' answer) cut to what a box may hold: at most
+    *per_line* ranges a line and *total* in all, those nearest the caret at
+    (*line*, *column*) kept -- where words are being written. A line above
+    the caret keeps its last ranges, a line below its first, the caret's own
+    line those around the column."""
+    out, room = {}, total
+    for index in sorted(shown, key=lambda i: (abs(i - line), i)):
+        keep = min(per_line, room)
+        if keep <= 0:
+            break
+        ranges = sorted(shown[index])
+        if len(ranges) > keep:
+            if index < line:
+                ranges = ranges[-keep:]
+            elif index > line:
+                ranges = ranges[:keep]
+            else:
+                at = bisect_right([start for start, _length in ranges], column)
+                first = max(0, min(at - keep // 2, len(ranges) - keep))
+                ranges = ranges[first:first + keep]
+        out[index] = ranges
+        room -= len(ranges)
+    return out
 
-    Windows lists a dictionary for every region of a language -- nineteen
-    for English on an ordinary English machine -- and asking each of them
-    gives the same answer slower. For each language the tag chosen is the
-    one the person uses (*preferred*: their Windows display and format
-    languages, best first), else that language's own country (de-DE,
-    ro-RO), else en-US for English, else the first Windows lists."""
+
+def pick_languages(supported, preferred=()):
+    """One dictionary per language, the person's own languages first:
+    Windows lists one per region (nineteen for English), and asking each
+    gives the same answer slower. The tag kept is the person's (*preferred*:
+    display and format languages, best first), else the language's own
+    country (de-DE, ro-RO), else en-US for English, else the first listed."""
     by_base = {}
     for tag in supported:
         if isinstance(tag, str) and tag:

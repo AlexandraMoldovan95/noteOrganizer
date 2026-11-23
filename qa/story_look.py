@@ -41,7 +41,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -97,16 +96,15 @@ app.refresh_note_list()
 # The box as the app opens it, hint and hint colour. Set to '' it waits for
 # a <FocusOut> to write the hint back, and every later scene photographed
 # an empty, unlabelled box (tools/doc_screenshots.py had the same bug).
-app.search_var.set(app.SEARCH_PLACEHOLDER)
-app.search_entry.config(fg=app.colors['subtext'])
+app.search_entry.show_hint()
 app.refresh_note_list()
 app.toggle_share_panel()
 # The EXISTING vars are set rather than replaced: the checkbuttons on screen
 # are bound to the ones the panel built, so a fresh BooleanVar would generate
 # a code for notes whose boxes still looked unticked -- a picture that lies
 # about what was asked for.
-app._share_vars[app.notes[0]['id']].set(True)
-app._share_vars[app.notes[1]['id']].set(True)
+app._share_vars[app._order_identity(app.notes[0])].set(True)
+app._share_vars[app._order_identity(app.notes[1])].set(True)
 app.notes[0]['attachments'] = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
 app._generate_inline_share()
 """),
@@ -208,8 +206,8 @@ _order = app._card_order()
 # Take the desktop foreground back BEFORE placing the focus, not after.
 # The ring is drawn by the app when the list's canvas hears <FocusIn>, and
 # Tk delivers that only while its toplevel really owns the foreground --
-# between scenes the shooter runs PowerShell to make the grab, a separate
-# process that can hold the foreground when this scene starts. With the
+# another process (the terminal; the PowerShell an older shutter ran
+# between scenes) can hold the foreground when this scene starts. With the
 # card widgets this flaked about one run in three: the reference had the
 # ring, the re-take did not, 0.6% apart, and "re-run it until it is green"
 # would have hidden exactly that. Seen by opening the two pictures side by
@@ -363,6 +361,11 @@ app.refresh_note_list()
 app.open_note_in_tab(_tn)
 app.update()
 app._grid_insert_row(app._grid_at_line(1), 0)
+# The row schedules an autosave, whose "Note updated" toast lands in the
+# picture or not by timing alone, as in the next scene.
+app._cancel_pending_autosave()
+app.update()
+app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
@@ -408,7 +411,7 @@ app.update()
 app.toggle_settings_panel('about')
 app.update()
 from noteorganizer.core import paths as _sl_paths
-_sl_shown = chr(92).join(['C:', 'Users', 'you', 'AppData', 'Roaming', 'NoteOrganizer'])
+_sl_shown = chr(92).join(['C:', 'Users', 'you', 'Note Organizer'])
 def _sl_no_names(widget):
     for child in widget.winfo_children():
         if isinstance(child, tk.Label) and str(child.cget('text')) == str(_sl_paths.APP_DIR):
@@ -435,6 +438,252 @@ for _sl_at in (_sl_policy, _sl_privacy):
         app.body_text.see(_sl_at)
 # Opening it saved the note scene 21 left edited, and that save's "Note
 # updated" would be in the picture or not by timing alone.
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
+    # The Show dropdown opened from the keyboard, the keyboard one row down:
+    # its ring is the thing to look at. The foreground first, as scene 15.
+    ("24-a-dropdown-walked-by-the-keyboard", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.update()
+app.focus_force()
+app.update()
+app.filter_menu.focus_set()
+app.update()
+app.filter_menu.event_generate('<space>')
+app.update()
+_held = app.focus_get()
+if _held is not None:
+    _held.event_generate('<Down>')
+app.update()
+app.update_idletasks()
+"""),
+    # The emoji picker from the toolbar's button, the keyboard one emoji
+    # along: the ring round a coloured chip is the thing to look at.
+    ("25-the-emoji-picker-walked-by-the-keyboard", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+app.update()
+app.focus_force()
+app.update()
+app.emoji_btn.focus_set()
+app.update()
+# Pressed as Space presses it, with the keyboard on the button; then the
+# keyboard is put on the second emoji, as Right puts it (qa1 walks the keys).
+app.emoji_btn.invoke()
+app.update()
+_cells = app._walk_choices(app._mini_popup)
+if len(_cells) > 1:
+    _cells[1].focus_force()
+app.update()
+app.update_idletasks()
+"""),
+    # The month with the keyboard on it, its ring on the 15th: drawn in the
+    # gap round the day, apart from the open day's outline inside it.
+    ("26-the-month-walked-by-the-keyboard", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
+app.cal_year, app.cal_month = 2026, 9
+app._cal_key_day = '2026-09-15'
+app.render_calendar()
+app.update()
+app.focus_force()
+app.update()
+app.cal_canvas.focus_set()
+app.update()
+app.update_idletasks()
+"""),
+    # The question an attachment of a kind the app does not know asks before
+    # it opens (the app's allow list). Photographed while it waits
+    # for its answer, in place of the wait; nothing is opened.
+    ("27-an-unknown-kind-of-file-asks-first", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+app.update()
+def _shoot_while_asking(_var):
+    app.update()
+    app.update_idletasks()
+    time.sleep(0.4)
+    app.lift()
+    app.attributes("-topmost", True)
+    app.update()
+    time.sleep(0.2)
+    _grab_window("27-an-unknown-kind-of-file-asks-first")
+app.wait_variable = _shoot_while_asking
+try:
+    app._open_externally('C:/attachments/20261028090000000000_Holiday plans.zip',
+                         'Holiday plans.zip')
+finally:
+    del app.wait_variable
+_scene_took_its_own = True
+"""),
+    # An attachment's row: a name too long for it gives way before its type,
+    # which always shows, and the name is a Tab stop with its ring. No other
+    # scene shows an attachment row.
+    ("28-an-attachment-row-with-a-long-name", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+# Fixed dates: the editor's foot shows them, and today's would differ each run.
+app.new_note()
+app.update()
+app.notes[0]['created'] = app.notes[0]['updated'] = '2026-09-01 09:00:00'
+app.open_note_in_tab(app.notes[0])
+app.update()
+_long = ('Minutes of the quarterly planning meeting with the whole team, '
+         * 3 + 'final.pdf')
+app.current_attachments = [
+    {'filename': _long, 'stored_as': '20261028090000000000_' + _long},
+    {'filename': 'photo.jpg', 'stored_as': '20261028090000000001_photo.jpg'}]
+app.refresh_attachments_list()
+app.update()
+app.update_idletasks()
+app.editor_canvas.yview_moveto(1.0)
+app.update()
+app.focus_force()
+app.update()
+_names = [w for row in app.attachments_frame.winfo_children()
+          for part in row.winfo_children() for w in part.winfo_children()
+          if isinstance(w, tk.Label) and 'Minutes' in str(w.cget('text'))]
+if _names:
+    _names[0].focus_set()
+# Opening the note schedules an autosave, and the files set above would be
+# saved by it: the toast, and today's stamp under the note, by timing alone.
+app._cancel_pending_autosave()
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
+    # A checklist of 1,000 items, every fifth a long one, scrolled to its end:
+    # its last items drawn at the bottom of the list, where one frame holding
+    # them all stopped some 50,000 px short.
+    ("29-a-long-checklist-at-its-end", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+app.update()
+_long = ('steady ' * 150)[:900]
+app._working_checklist = [
+    {'text': '%03d %s' % (i, _long if i % 5 == 0 else 'pack item number %d' % i),
+     'done': i % 3 == 0} for i in range(1000)]
+if app._checklist_open:
+    app._render_checklist_items()
+else:
+    app.toggle_checklist_section()
+app._cancel_pending_autosave()
+app.update()
+app.update_idletasks()
+app._bring_into_sight(app.checklist_expand_btn)
+app._checklist_canvas.yview_moveto(1.0)
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
+    # The picker with the 1,000 templates a notebook may hold, scrolled to
+    # the last of them.
+    ("30-the-template-picker-at-its-last", """
+app._dismiss_mini_popup()
+app._working_checklist = []
+app._render_checklist_items()
+app.templates = [NO.normalize_template({'name': 'Template %04d' % i, 'body': 'x'})
+                 for i in range(1000)]
+app.show_template_picker()
+app.update()
+app.update_idletasks()
+_views = [w for w in app._mini_popup.winfo_children()]
+while _views and getattr(_views[0], '_row_stack', None) is None:
+    _views = _views[1:] + list(_views[0].winfo_children())
+if _views:
+    _views[0].yview_moveto(1.0)
+app.update()
+app.update_idletasks()
+"""),
+    # The template editor, opened from Settings, saying under its heading that
+    # a paste into its name was shortened: the status line that said it stands
+    # hidden behind Settings.
+    ("31-the-template-editor-says-a-paste-was-shortened", """
+app._dismiss_mini_popup()
+app.templates = []
+app.show_settings_page()
+app.toggle_settings_panel('templates')
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+app.update_idletasks()
+_boxes = []
+def _entries(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Entry):
+            _boxes.append(c)
+        _entries(c)
+_entries(app._mini_popup)
+_real_read = NO.clipboard.read_text
+NO.clipboard.read_text = lambda: 'Weekly review ' * 25
+try:
+    _boxes[0].delete(0, 'end')
+    _boxes[0].event_generate('<<Paste>>')
+finally:
+    NO.clipboard.read_text = _real_read
+app.update()
+app.update_idletasks()
+"""),
+    # A checklist of sixteen items of 100 lines, at its top: item 00 is what is
+    # drawn there. Chunks taller than their parking place hung over the top of
+    # such a list at 150-300%.
+    ("32-a-checklist-of-long-items-at-its-top", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+app.update()
+_tall = '\\n'.join('line %d of a long item' % k for k in range(100))
+app._working_checklist = [{'text': '%02d %s' % (i, _tall), 'done': False}
+                          for i in range(16)]
+if app._checklist_open:
+    app._render_checklist_items()
+else:
+    app.toggle_checklist_section()
+app._cancel_pending_autosave()
+app.update()
+app.update_idletasks()
+app._bring_into_sight(app.checklist_expand_btn)
+app._checklist_canvas.yview_moveto(0)
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
+    # The Insert table grid, the keyboard on the second row's third square:
+    # the squares lit are the table it makes, 2 x 3. Drawn from its second
+    # column, it lit one square fewer than the caption said.
+    ("33-the-table-grid-lights-the-table-it-makes", """
+app._dismiss_mini_popup()
+app._working_checklist = []
+app._render_checklist_items()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[1])
+app.update()
+app._cancel_pending_autosave()
+app.focus_force()
+app.update()
+app._open_table_size_popup()
+app.update()
+_cells = app._walk_choices(app._mini_popup)
+if len(_cells) > 10:
+    _cells[10].focus_force()
+app.update()
 app._hide_toast()
 app.update()
 app.update_idletasks()
@@ -467,7 +716,7 @@ SHOOTER = '''
 import io, json, os, subprocess, sys, time
 sys.path.insert(0, ".")
 import note_organizer as NO, tkinter as tk
-from _qa_support import pin_popup_visibility
+from _qa_support import pin_popup_visibility, photograph
 pin_popup_visibility(NO)
 
 app = NO.NoteOrganizer()
@@ -509,18 +758,22 @@ def _days_ago(days):
     day = _dt.date.today() - _dt.timedelta(days=days)
     return day.isoformat() + " 09:00:00"
 
-# PowerShell's CopyFromScreen works in PHYSICAL pixels; Tk reports its
-# geometry in LOGICAL ones. On a display with any scaling the two differ,
-# and a box built from Tk's numbers lands up and to the left of the
-# window: the reference screens carried a strip of the developer's own
-# desktop down their left edge, and lost the right edge of the app.
-# Measured once, here, rather than assumed to be 1.
-from PIL import ImageGrab as _Grab
-SCALE = _Grab.grab().size[0] / float(app.winfo_screenwidth())
+# The one shutter (_qa_support.photograph): the window's box, cut to the
+# primary screen's work area, in the screen's own pixels, and no picture at
+# all when another program's window lies over it -- these are committed.
+def _grab_window(name):
+    taken, why = photograph(app, os.path.join("shots", name + ".png"))
+    if not taken:
+        print("NOT TAKEN %s: %s" % (name, why), flush=True)
 
 scenes = json.load(io.open("scenes.json", encoding="utf-8"))
 for name, script in scenes:
+    # A scene whose subject is a question photographs it itself, while the
+    # question waits: once answered, it is gone (scene 27).
+    _scene_took_its_own = False
     exec(script)
+    if _scene_took_its_own:
+        continue
     _no_reminder()          # belt and braces; see the note above
     app.update()
     app.update_idletasks()
@@ -543,32 +796,17 @@ for name, script in scenes:
     app.update()
     app.update_idletasks()
     time.sleep(0.2)
-    x = int(round(app.winfo_rootx() * SCALE))
-    y = int(round(app.winfo_rooty() * SCALE))
-    w = int(round(app.winfo_width() * SCALE))
-    h = int(round(app.winfo_height() * SCALE))
-    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", "grab.ps1", "-Out", os.path.join("shots", name + ".png"),
-                    "-X", str(x), "-Y", str(y), "-W", str(w), "-H", str(h)],
-                   capture_output=True)
+    _grab_window(name)
 app.destroy()
 '''
 
-GRAB = """param([string]$Out, [int]$X, [int]$Y, [int]$W, [int]$H)
-Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-$bmp = New-Object System.Drawing.Bitmap($W, $H)
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen((New-Object System.Drawing.Point($X, $Y)),
-                  [System.Drawing.Point]::Empty,
-                  (New-Object System.Drawing.Size($W, $H)))
-$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
-$g.Dispose(); $bmp.Dispose()
-"""
+# How long the whole set of scenes may take: about two minutes when it works.
+SHOOT_TIMEOUT = 600
 
 
-def take_the_pictures():
-    """Run the app in a scratch copy and photograph each scene."""
-    work = tempfile.mkdtemp(prefix="look-")
+def take_the_pictures(work):
+    """Run the app in a scratch copy and photograph each scene; returns what
+    the shooter printed, or None when it did not finish in time."""
     os.makedirs(os.path.join(work, "shots"))
     shutil.copy2(os.path.join(ROOT, "note_organizer.py"), work)
     shutil.copytree(os.path.join(ROOT, "noteorganizer"),
@@ -582,11 +820,13 @@ def take_the_pictures():
     io.open(os.path.join(work, "scenes.json"), "w", encoding="utf-8").write(
         json.dumps(SCENES))
     io.open(os.path.join(work, "shoot.py"), "w", encoding="utf-8").write(SHOOTER)
-    io.open(os.path.join(work, "grab.ps1"), "w", encoding="utf-8").write(GRAB)
-    run = subprocess.run([sys.executable, "shoot.py"], cwd=work,
-                         capture_output=True, text=True,
-                         encoding="utf-8", errors="replace", timeout=600)
-    return work, run
+    try:
+        run = subprocess.run([sys.executable, "shoot.py"], cwd=work,
+                             capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=SHOOT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None
+    return (run.stdout or "") + (run.stderr or "")
 
 
 # Below this share of the picture, a difference is rendering noise
@@ -634,14 +874,51 @@ def compare(new_dir):
 
 def main():
     accept = "--accept" in sys.argv
-    work, run = take_the_pictures()
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import guest  # this machine's turn and the memory ceiling (tools/guest.py)
+    for line in guest.settle(label="story_look" + (" --accept" if accept else "")):
+        print(line)
+    # Marked as this run's, and removed on every way out: by this run, or by
+    # the next one if this one is killed.
+    work = guest.scratch("look-")
+    kept = False
+    try:
+        code, kept = _look(work, accept)
+        return code
+    finally:
+        if kept:
+            # The changed pictures stay to be looked at; the app's copy goes,
+            # and a later run removes the rest after guest.KEPT_DAYS.
+            for name in os.listdir(work):
+                path = os.path.join(work, name)
+                if name in ("shots", guest.MARKER):
+                    continue
+                if os.path.isdir(path):
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    os.remove(path)
+            guest.keep(work, "story_look: screens that changed")
+        else:
+            guest.remove(work)
+
+
+def _look(work, accept):
+    """Take the pictures and judge them: (exit code, keep the pictures)."""
+    said = take_the_pictures(work)
+    if said is None:
+        print("HANG: the scenes did not finish within %d s." % SHOOT_TIMEOUT)
+        return 2, False
+    # A picture the shutter refused is said, with why: something that is not
+    # the app was over the window, and it is never accepted into qa/screens.
+    for line in said.splitlines():
+        if line.startswith("NOT TAKEN "):
+            print(line)
     shots = os.path.join(work, "shots")
     taken = sorted(os.listdir(shots)) if os.path.isdir(shots) else []
     if not taken:
-        print("NO PICTURES. Either the app did not start or PowerShell wrote none.")
-        print((run.stdout + run.stderr)[-800:])
-        shutil.rmtree(work, ignore_errors=True)
-        return 2
+        print("NO PICTURES. Either the app did not start or the shutter refused them all.")
+        print(said[-800:])
+        return 2, False
 
     if accept:
         # Blessed by the SAME judgement the report prints, so "accepted"
@@ -654,8 +931,7 @@ def main():
         # bytes instead would not fix it, for the same reason.
         results = compare(shots)
         if results is None:
-            shutil.rmtree(work, ignore_errors=True)
-            return 2
+            return 2, False
         if not os.path.isdir(STORE):
             os.makedirs(STORE)
         blessed, left = [], []
@@ -676,13 +952,11 @@ def main():
             print("nothing to accept -- no screen has changed its shape.")
         if left:
             print("left alone: %d unchanged picture(s)." % len(left))
-        shutil.rmtree(work, ignore_errors=True)
-        return 0
+        return 0, False
 
     results = compare(shots)
     if results is None:
-        shutil.rmtree(work, ignore_errors=True)
-        return 2
+        return 2, False
 
     changed = []
     for name, pct, note in results:
@@ -700,10 +974,9 @@ def main():
         print("SCREENS CHANGED: %s" % ", ".join(changed))
         print("The new pictures are in: %s" % shots)
         print("If the change was wanted, accept it with:  py qa/story_look.py --accept")
-        return 1
+        return 1, True
     print("No screen has changed its shape.")
-    shutil.rmtree(work, ignore_errors=True)
-    return 0
+    return 0, False
 
 
 if __name__ == "__main__":

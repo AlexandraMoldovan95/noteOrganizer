@@ -1,0 +1,15 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **the Android repository's documentation and tools, D:\Projects\androidVersion**.
+Read IN FULL: CLAUDE.md, README.md, docs\ARCHITECTURE.md, docs\DATA_FORMAT.md, docs\STATUS.md, qa\README.md, qa\WALK_RUNS.md, tools\emulator\README.md, docs\screenshots\README.md. History files: docs\ISSUES_LOG.md — its opening index and its "Still open" part plus the newest two stories; CHANGELOG.md — top and the 0.14.0 section. Tools: read IN FULL tools\desktop_guest.py, tools\mutate.py, and tools\emulator\walk.py's top-level helpers that start/stop the emulator and bound adb calls (search for emu, kill, timeout); everything else in tools\ as a MAP (top docstring + function names). Unit tests: a MAP only (file names under app\src\test and what each covers, from their first lines).
+
+Your job: is every document TRUE today, and do they agree with each other and with the code? Check claims with Grep against app\src\main and tools. Current state: 0.14.0 / versionCode 17, branch audit/a-val5, full walk 628/628 on 9 Nov, test plan 481 cases. Desktop is at 0.100.513 (0.100.518 proposed).
+
+Hard rules: read only. Never edit, write, or run anything (no gradle, no adb, no python). Never open real data (C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer, D:\Projects\NoteOrganizer\notebook_location.txt).
+
+Already known, do NOT report: STATUS.md still lists Z–A, Find row by row, the size grid and a pasted second table as differences (the desktop fixed them 10–11 Nov); CLAUDE.md names the desktop as 0.97.405; ISSUES_LOG "Still open" still holds the Phase 2/3 desktop items and the calculator; Pasting.kt's align KDoc and NoteEditor.kt's TablePicker comment name the desktop's old behaviour; insertTable's double blank line. Find what ELSE is out of date.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what each document and tool is for, and the unit-test map in 2–3 lines.
+2. MISMATCHES — a claim untrue against the code, or two documents that disagree. Each: file:line — what it says — what is true (evidence file:line). Mark USER-FACING (README, store-facing text) or INTERNAL. Concrete only.
+3. SUSPECTED BUGS — a tool that could leave the emulator/Gradle running, touch real data, or a doc revealing wrong app behaviour; mechanism + road; "suspected, not run".
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

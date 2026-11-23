@@ -23,7 +23,8 @@ anything runs.
 
 USAGE
 -----
-    py tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py
+    py tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py \
+        noteorganizer/ui/*.py qa/*.py test_*.py tools/*.py      (as CI runs it)
 
 Exits non-zero if anything is missing, so CI can use it as a gate.
 

@@ -1,0 +1,14 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **the desktop repository's documentation, D:\Projects\NoteOrganizer**. Read IN FULL: README.md, CLAUDE.md, docs\USER_GUIDE.md, docs\ROADMAP.md, docs\AI_WORKFLOW.md, docs\IN_MY_WORDS.md, docs\PRIVACY.md, docs\RELEASE_WINDOWS.md, docs\RELEASE_ANDROID.md, docs\GIT_WORKFLOW.md, docs\BUG_REPORTS.md, docs\TEST_PLAN_EXCERPT.md, qa\README.md, site\README.md, docs\audit\README.md, docs\screenshots\README.md. For the two history files read only the index/top tables and the newest parts: docs\ISSUES_LOG.md (its index, and stories from "Wave 5" on) and CHANGELOG.md (top table and the [0.100.513] section). Skip ARCHITECTURE.md and CODE_TOUR.md (another reader has them). Also list the test suites as a map only: the banner docstring at the top of each qa\qa1.py–qa9.py, qa\story_*.py and test_*.py (first ~40 lines each), not their bodies.
+
+Your job: is every document TRUE today and do the documents agree with each other? Check numbers and claims against the code with Grep (e.g. counts of themes, cases, suites, versions, file names, settings names, menu words the USER_GUIDE quotes — grep the quoted words in note_organizer.py and noteorganizer\). Current state: APP_VERSION 0.100.513 (0.100.518 proposed, not cut), branch audit/d-val5, test plan 935 cases, mutant catalogue 1,167 entries, the final audit closed.
+
+Hard rules: read only. Never edit, write, or run anything. Never open the real data: notebook_location.txt, any notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments/, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer.
+
+Already known, do NOT report: ISSUES_LOG index says "next" for the newest story until the version is cut; CHANGELOG lacks the 5 Fixed of 10–11 Nov until the cut; the phone repo's docs lag behind.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what each document is for, and the test-suite map in 3–4 lines.
+2. MISMATCHES — a claim that is untrue against the code, or two documents that disagree. Each: file:line — what it says — what is true (evidence file:line). Mark USER-FACING (USER_GUIDE, PRIVACY, README) or INTERNAL. Concrete only; no style or wording taste.
+3. SUSPECTED BUGS — only if a document reveals app behaviour that looks wrong; else "none found".
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

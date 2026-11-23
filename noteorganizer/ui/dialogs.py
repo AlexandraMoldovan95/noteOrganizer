@@ -1,39 +1,443 @@
-"""In-app dialogs, dropdowns and popups.
+"""In-app dialogs, dropdowns and popups: everything the app puts *over*
+itself, drawn from scratch -- the system's own dialogs only choose files
+and report a start that failed. Grouped by the call graph (60% of these
+methods' calls are to each other), and the most called code in the app, so
+one place decides how an overlay looks and where it goes.
 
-WHAT THIS IS FOR
-----------------
-Everything the app puts *over* itself: the message and confirmation
-dialogs, the themed dropdowns, and the small floating popups. No native
-OS dialog appears anywhere in the app except the last-resort startup
-crash box, so all of this is drawn from scratch.
-
-WHY THESE BELONG TOGETHER
--------------------------
-This group was chosen from the call graph rather than from a heading:
-roughly 60% of the calls these methods make are to each other, which is
-the highest of any group in the class. They are also the most *called*
-code in the app -- show_info alone has eleven callers -- so having one
-place that decides how an overlay looks and where it goes matters more
-here than almost anywhere else.
-
-THE POSITIONING RULE WORTH KNOWING
-----------------------------------
-:meth:`_place_dropdown_popup` measures against the app window's own
-bounds, never the screen's. Measuring against the screen looks equivalent
-until someone has two monitors, at which point a popup can open on a
-display the app is not on. Every popup goes through this one function for
-that reason -- see ``docs/ISSUES_LOG.md``, "The dropdown that opened on
-the wrong monitor".
-
-See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
-keep them working.
+:meth:`_place_dropdown_popup` measures against the app window, never the
+screen, or a popup opened on another monitor (ISSUES_LOG: "The dropdown
+that opened on the wrong monitor"). What a mixin is, and the two rules that
+keep them working: :mod:`noteorganizer.ui`.
 """
 
+import time
 import tkinter as tk
 from tkinter import ttk
 from types import SimpleNamespace
 
-from ..core.themes import letters_on
+from ..core.model import _truncate
+from ..core.themes import letters_on, palette_value
+
+
+def one_line(text, limit):
+    """*text* drawn as one line of at most *limit* characters, with "…"
+    where it was cut -- and exactly as it is when it already is one. For a
+    name a file keeps whole: drawn whole, 3,000 lines or 60,000 letters
+    asked Tk for a label past the 32,767 pixels X can draw."""
+    text = str(text)
+    if len(text) > limit or "\n" in text or "\r" in text:
+        return _truncate(text, limit)
+    return text
+
+
+# The most of a message a dialog lays out: its label is as tall as its text,
+# and a name quoted whole -- a backup's title of 300,000 letters, or 3,000
+# lines -- passed the 32,767 pixels X can draw, even at 225%.
+MESSAGE_SHOWN_CHARS = 12_000
+MESSAGE_SHOWN_LINES = 300
+
+
+def message_shown(message):
+    """*message* as a dialog draws it: whole when it fits the limits above,
+    else its start and its end -- where the question is -- with "…" for
+    what lies between."""
+    message = str(message)
+    lines = message.split("\n")
+    if (len(message) <= MESSAGE_SHOWN_CHARS
+            and len(lines) <= MESSAGE_SHOWN_LINES):
+        return message
+    half_c, half_l = MESSAGE_SHOWN_CHARS // 2, MESSAGE_SHOWN_LINES // 2
+    head = "\n".join(lines[:half_l])[:half_c]
+    tail = "\n".join(lines[-half_l:])[-half_c:]
+    return head + "\n…\n" + tail
+
+
+def _natural_height(widget):
+    """How tall *widget* stands once laid out: Tk's own height, or, for a
+    frame whose children pack has not yet arranged, theirs -- the tallest of
+    those packed side by side, and those one above the other added. A row is
+    measured as it is made, before an idle round lays it out, when its own
+    requested height still reads 1."""
+    kids = widget.winfo_children()
+    if not kids:
+        return widget.winfo_reqheight()
+    across = above = 0
+    for kid in kids:
+        height = _natural_height(kid)
+        try:
+            info = [str(v) for v in kid.tk.splitlist(
+                kid.tk.call("pack", "info", kid))]
+            side = info[info.index("-side") + 1]
+        except (tk.TclError, ValueError, IndexError):
+            side = "top"            # not packed: counted in full
+        if side in ("left", "right"):
+            across = max(across, height)
+        else:
+            above += height
+    try:
+        edge = 2 * (int(str(widget.cget("bd")))
+                    + int(str(widget.cget("highlightthickness"))))
+    except (tk.TclError, ValueError):
+        edge = 0
+    return max(widget.winfo_reqheight(), edge + above + across)
+
+
+class RowStack:
+    """A scrolled list's rows, in chunk frames of a few rows that the stack
+    places on *canvas* itself: one frame for all stopped at 32,767 px, as
+    places are kept in 16 bits (ISSUES_LOG: "The list that ended in the
+    middle"). A chunk in view stands at its true place, every other parked
+    beside it -- placed, never unmapped, so Tab reaches it."""
+
+    # A chunk out of sight is parked this far left of the view and above it:
+    # only above, a tall one hung over the rows in sight; and inside 16 bits,
+    # where X and Windows keep a window's place.
+    PARK = 20_000
+    # Rows to a chunk unless a list says otherwise...
+    EVERY = 8
+    # ...and no row more once a chunk is this tall (_RowGroup.height): four
+    # long checklist items stood 42,656 px at 300%. Rows that grow later are
+    # chunked again (_RowGroup.too_tall).
+    TALLEST = 4_000
+    # The farthest from its parent's corner X keeps a window's place, in 16
+    # bits; Windows pins a row there. No chunk is placed past it.
+    REACH = 32_767
+
+    def __init__(self, app, canvas, scrolled=None, on_chunk=None,
+                 on_change=None, own_width=False):
+        self.app, self.canvas = app, canvas
+        self.scrolled, self.on_chunk, self.on_change = (scrolled, on_chunk,
+                                                        on_change)
+        # Given its width by its popup (set_width), as wide as the widest row,
+        # as one frame was -- the picker's heading is wider; else the canvas's.
+        self.own_width = own_width
+        self.groups = []
+        self.total = self.widest = 0
+        self._box = {}          # chunk -> (x0, y0, x1, y1) on the canvas
+        self._placed = {}       # chunk -> the (x, y) it stands at now
+        self._width = None      # the width the chunks are given, once known
+        self._job = None
+        canvas._row_stack = self
+        canvas.configure(yscrollcommand=self._scrolled)
+        canvas.bind("<Configure>", self._resized, add="+")
+
+    def group(self, bg="card", padx=0, pady=(0, 0), every=EVERY):
+        """Rows that read as one block, below those already asked for: *bg*
+        is a palette key, *padx* and *pady* its margins."""
+        group = _RowGroup(self, bg, padx, pady, every)
+        self.groups.append(group)
+        return group
+
+    def drop(self, group):
+        """*group* gone, and its rows with it."""
+        group.clear()
+        self.groups.remove(group)
+
+    def rows(self):
+        return [row for group in self.groups for row in group.rows()]
+
+    def group_of(self, chunk):
+        """The block *chunk* belongs to, or None when it is none of ours."""
+        return next((g for g in self.groups if chunk in g.chunks), None)
+
+    def place_of_row(self, row):
+        """(block, row) for *row*: which block it stands in, and where among
+        that block's rows, counted across its chunks -- or None. Its place in
+        its chunk named a frame the next redraw may not make again: sent
+        there after a press, the keyboard went to another chunk's first row."""
+        group = self.group_of(row.master)
+        if group is None:
+            return None
+        count = 0
+        for chunk in group.chunks:
+            names = self.canvas.tk.splitlist(
+                self.canvas.tk.call("winfo", "children", chunk))
+            if chunk is row.master:
+                return (self.groups.index(group),
+                        count + [str(n) for n in names].index(str(row)))
+            count += len(names)
+        return None
+
+    def box(self, chunk):
+        """Where *chunk* stands on the canvas, as a window item's bbox."""
+        return self._box.get(chunk)
+
+    def y_of(self, widget):
+        """The canvas y of *widget*'s top, wherever its chunk is placed."""
+        y, w = 0, widget
+        while w is not None and w.master is not self.canvas:
+            y, w = y + w.winfo_y(), w.master
+        box = self._box.get(w)
+        return None if box is None else box[1] + y
+
+    def size(self):
+        """(widest, total) as the rows stand now, laid out first."""
+        if self._job is not None:
+            try:
+                self.app.after_cancel(self._job)
+            except tk.TclError:
+                pass
+        self._restack(notify=False)
+        return self.widest, self.total
+
+    def changed(self):
+        """Stack the chunks again once the moment has passed. Asked of the
+        app: a canvas destroyed first took the waiting call's command with
+        it, and Tk reported "invalid command name"."""
+        if self._job is None:
+            try:
+                self._job = self.app.after_idle(self._restack)
+            except tk.TclError:
+                pass
+
+    def remeasure(self):
+        """Measured again by its popup, once all is laid out: a row grown
+        only wider resizes no chunk, and a restack asked for at once read its
+        width before the frames around it had heard."""
+        (self.on_change or self.changed)()
+
+    def _new_chunk(self, group, before=None):
+        """A new chunk at the end of *group*, or in its middle, just ahead of
+        its chunk *before*."""
+        chunk = tk.Frame(self.canvas, bg=self.app.colors[group.bg])
+        later = before if before is not None else (
+            None if group is self.groups[-1] else next(
+                (g.chunks[0] for g in self.groups[self.groups.index(group) + 1:]
+                 if g.chunks), None))
+        if later is not None:
+            chunk.lower(later)      # Tab follows the stacking order
+        width = {"width": max(1, self._width - 2 * group.padx)} if self._width else {}
+        chunk.place(x=-self.PARK, y=-self.PARK, **width)
+        self._placed[chunk] = (-self.PARK, -self.PARK)
+        chunk.bind("<Configure>", self._chunk_resized)
+        if before is not None:
+            group.chunks.insert(group.chunks.index(before), chunk)
+        else:
+            group.chunks.append(chunk)
+        if self.on_chunk is not None:
+            self.on_chunk(chunk)
+        self.changed()
+        return chunk
+
+    def _forget(self, chunk):
+        self._box.pop(chunk, None)
+        self._placed.pop(chunk, None)
+
+    def _chunk_resized(self, event):
+        box = self._box.get(event.widget)
+        if box is None or box[3] - box[1] != event.height:
+            self.changed()
+
+    def _resized(self, event):
+        if not self.own_width:
+            self.set_width(event.width)
+        self._follow()
+
+    def set_width(self, width):
+        """Every chunk *width* wide. Measured where the rows were laid out
+        first: read mid-layout, a wrapped row's width swung for good."""
+        if width > 1 and width != self._width:
+            self._width = width
+            for group in self.groups:
+                # Its rows wrap again at this width: chunked again if they
+                # now stand too tall, once for each width (_restack).
+                group.rechunked = False
+                for chunk in group.chunks:
+                    chunk.place_configure(width=max(1, width - 2 * group.padx))
+            self.changed()
+
+    def _scrolled(self, first, last):
+        if self.scrolled is not None:
+            self.scrolled(first, last)
+        self._follow()
+
+    def _restack(self, notify=True):
+        self._job = None
+        boxes, y, widest = {}, 0, 0
+        try:
+            if not self.canvas.winfo_exists():
+                return
+            for group in self.groups:
+                if not group.chunks:
+                    continue
+                y += group.pady[0]
+                for chunk in group.chunks:
+                    # An emptied frame keeps the size it had; it takes none.
+                    held = self.canvas.tk.call("winfo", "children", chunk)
+                    h = chunk.winfo_reqheight() if held else 0
+                    w = chunk.winfo_reqwidth()
+                    boxes[chunk] = (group.padx, y, (self._width or w) - group.padx, y + h)
+                    widest = max(widest, w + 2 * group.padx)
+                    y += h
+                y += group.pady[1]
+        except tk.TclError:
+            return
+        grew = (y, widest) != (self.total, self.widest)
+        self._box, self.total, self.widest = boxes, y, widest
+        try:
+            self.canvas.configure(
+                scrollregion=(0, 0, max(1, self._width or widest), y))
+        except tk.TclError:
+            return
+        self._follow()
+        self._rechunk_too_tall()
+        if notify and grew and self.on_change is not None:
+            self.on_change()
+
+    def _rechunk_too_tall(self):
+        """A block whose rows grew past what its chunks can hold -- a
+        narrower window wraps a checklist's long items again, and a chunk of
+        them measured at 13,740 px stood 41,684 -- is chunked again by its
+        owner (*rebuild*), once for each width, so a block that cannot be
+        helped is never drawn over and over."""
+        tall = 4 * self.TALLEST
+        for group in self.groups:
+            if group.rebuild is None or group.rechunked:
+                continue
+            # Laid out, as a restack reads them: only a chunk that stands
+            # past the bound has its rows looked at.
+            if not any(c in self._box and self._box[c][3] - self._box[c][1] > tall
+                       and group.too_tall(c) for c in group.chunks):
+                continue
+            group.rechunked = True
+            try:
+                self.app.after_idle(group.rebuild)
+            except tk.TclError:
+                pass
+
+    def _follow(self):
+        """Each chunk in the view to its true place, the rest parked beside
+        it: only what moved is placed again. A chunk out of the view stays
+        parked as the list scrolls -- one stood at its true place for a view
+        above and two below, and each scroll step moved them all, three to
+        ten times what drawing the step cost."""
+        try:
+            top = self.canvas.canvasy(0)
+            view = max(1, self.canvas.winfo_height())
+            parked = (-self.PARK, -self.PARK)
+            for chunk, (x0, y0, _x1, y1) in self._box.items():
+                if y1 <= y0 or y1 <= top or y0 >= top + view:
+                    want = parked
+                else:
+                    # Its true place, however far above: clamped to the
+                    # parking place, a chunk scrolled 20,000 px into stood
+                    # short of it, and its last rows were never drawn.
+                    want = (x0, int(round(y0 - top)))
+                    if want[1] < -self.REACH:
+                        # Never past 16 bits, whatever its rows did: placed
+                        # there, X drew it nowhere and the view was blank.
+                        # Its block is chunked again (_rechunk_too_tall).
+                        want = (x0, -self.REACH)
+                if self._placed.get(chunk) != want:
+                    self._placed[chunk] = want
+                    chunk.place_configure(x=want[0], y=want[1])
+        except tk.TclError:
+            pass
+
+
+class _RowGroup:
+    """One block of a RowStack, built a chunk at a time."""
+
+    def __init__(self, stack, bg, padx, pady, every):
+        self.stack, self.bg, self.padx, self.pady = stack, bg, padx, pady
+        self.every = every
+        self.chunks = []
+        self._heights = {}      # chunk -> {row: height}, as room() measured it
+        # The wraplength its rows' long text was last given: a row made later
+        # is made at it, and measured as it will stand.
+        self.wrap = None
+        # Its owner's way to draw its rows again, chunked as they now stand,
+        # when rows grown since they were chunked make a chunk too tall
+        # (RowStack._rechunk_too_tall); asked once for each width.
+        self.rebuild = None
+        self.rechunked = False
+
+    def add(self):
+        """The frame the next row is made in and packed into."""
+        if self.chunks and self.room(self.chunks[-1]):
+            return self.chunks[-1]
+        return self.stack._new_chunk(self)
+
+    def room(self, chunk):
+        """Whether *chunk* may take one row more: it holds fewer than its
+        count, and stands shorter than the stack's TALLEST."""
+        if len(chunk.winfo_children()) >= self.every:
+            return False
+        return self.height(chunk) < self.stack.TALLEST
+
+    def _row_heights(self, chunk):
+        """Each of *chunk*'s rows' heights: measured when first asked
+        (_natural_height), and again once the row is said to have been
+        wrapped again (rewrapped)."""
+        known = self._heights.get(chunk, {})
+        heights = {}
+        for row in chunk.winfo_children():
+            if row in known:
+                heights[row] = known[row]
+            else:
+                heights[row] = _natural_height(row)
+        # Only the rows it holds: one traded away or destroyed is forgotten.
+        self._heights[chunk] = heights
+        return heights
+
+    def height(self, chunk):
+        """How tall *chunk* stands: its rows' heights (_row_heights), or the
+        height it is laid out at, if that is more. Measured once and never
+        again, a checklist chunk made at its labels' first wrap and narrowed
+        stood 2.7 times what it was taken for."""
+        heights = self._row_heights(chunk)
+        if not heights:
+            return 0
+        return max(sum(heights.values()), chunk.winfo_reqheight())
+
+    def too_tall(self, chunk):
+        """Whether *chunk* must be chunked again: past four times TALLEST,
+        with more than twice it in rows beside its tallest. A chunk made from
+        rows as they stand holds less than TALLEST beside its last, so one
+        chunked again is never asked of again; and a single row that tall is
+        no fault of the chunking."""
+        if self.height(chunk) <= 4 * self.stack.TALLEST:
+            return False
+        rows = [max(h, row.winfo_reqheight())
+                for row, h in self._row_heights(chunk).items()]
+        return sum(rows) - max(rows) > 2 * self.stack.TALLEST
+
+    def rewrapped(self, row):
+        """*row*'s text was wrapped again since it was measured: it is
+        measured again when next asked."""
+        self._heights.get(row.master, {}).pop(row, None)
+
+    def chunk_before(self, chunk):
+        """A new, empty chunk in this block, standing just above *chunk*."""
+        return self.stack._new_chunk(self, before=chunk)
+
+    def rows(self):
+        return [row for chunk in self.chunks for row in chunk.winfo_children()]
+
+    def winfo_children(self):
+        """Its rows, as the frame it stands for listed them: a walk down the
+        widget tree from where that frame stood still reaches every row."""
+        return self.rows()
+
+    def clear(self):
+        for chunk in self.chunks:
+            self.stack._forget(chunk)
+            chunk.destroy()
+        self.chunks = []
+        self._heights = {}
+        self.stack.changed()
+
+    def discard(self, row):
+        """Destroy *row*, and its chunk with it once that holds nothing."""
+        chunk = row.master
+        row.destroy()
+        self._heights.get(chunk, {}).pop(row, None)
+        if chunk in self.chunks and not chunk.winfo_children():
+            self.chunks.remove(chunk)
+            self._heights.pop(chunk, None)
+            self.stack._forget(chunk)
+            chunk.destroy()
+        self.stack.changed()
 
 
 class DialogsMixin:
@@ -79,31 +483,18 @@ class DialogsMixin:
 
     def _themed_dialog(self, title, message, kind="info", buttons=None,
                        default=None):
-        """A modal, in-theme replacement for tkinter's messagebox. Renders as an
-        overlay INSIDE the app window (not a separate OS window), so it can't be
-        dragged off-screen and moves/minimizes with the app. Blocks until the
-        user picks a button, then returns that button's value.
-
-        `default` is the LABEL (case-insensitive) of the button that should
-        take keyboard focus, i.e. the one Enter triggers. Without it the
-        last (primary) button is focused — which is wrong for a
-        destructive confirm, where Enter would fire "Yes": pass
-        default="No" so a reflexive Enter is safe. Escape still returns
-        the first button's value (the safe/cancel choice) regardless.
-
-        Both keys answer only the innermost question when one is asked
-        over another, and Enter takes the button holding the keyboard --
-        the default, unless the person moved it (Tab)."""
+        """A modal, in-theme messagebox drawn INSIDE the app window, moving
+        with it; blocks until a button is picked and returns its value.
+        `default` is the label of the button holding the keyboard (else the
+        last): pass "No" for a destructive question. Enter presses the
+        button holding the keyboard, Escape answers the first (the safe
+        one) -- both only for the innermost question."""
         if buttons is None:
             buttons = [("OK", True)]
         focus_index = self._dialog_focus_index(buttons, default)
-        # Where the keyboard was, so it goes back there when the question
-        # is answered. The dialog takes the focus onto its own button and
-        # is then destroyed, and Tk handed the keyboard to the bare window:
-        # someone typing a note, interrupted by a question, answered it and
-        # kept typing into nothing until they clicked back in. focus_get()
-        # answers None while another program holds the desktop foreground
-        # (qa/README), so the window's own record is the fallback.
+        # Where the keyboard was, for it to go back once answered -- typing
+        # went into nothing after a question. focus_get() is None while
+        # another program is in front, so the window's record backs it up.
         returns_to = None
         try:
             returns_to = self.focus_get()
@@ -116,10 +507,8 @@ class DialogsMixin:
             except (KeyError, tk.TclError):
                 returns_to = None
 
-        # The overlay lives INSIDE the main window, and a -topmost
-        # popup floats above that -- so a question ABOUT the popup (save
-        # your changes?) rendered underneath it, unreachable. The popups
-        # step back for the dialog's duration and return after.
+        # A -topmost popup floats over the window, and a question about it
+        # sat underneath: the popups step back while it asks.
         stepped_back = self._popups_step_back()
         icon = {"info": "ℹ", "warning": "⚠", "error": "⛔",
                 "question": "❓", "success": "✅"}.get(kind, "ℹ")
@@ -129,25 +518,16 @@ class DialogsMixin:
         result = {"value": None, "answered": False}
         done = tk.IntVar(value=0)
 
-        # A thin transparent-ish "click catcher" that keeps the background
-        # VISIBLE but swallows clicks/keys so the app underneath can't be used
-        # while the dialog is open. It's a 1x1-anchored full-size frame drawn
-        # only where the card isn't — but since tk frames are opaque, we instead
-        # place the card directly and block interaction via an event grab on a
-        # tiny transparent overlay strip. Simpler and flicker-free: place the
-        # card over the window (background stays visible) and intercept clicks
-        # through a global binding while the dialog is up.
+        # The card is placed over the window, the app still VISIBLE under it;
+        # a grab keeps the clicks for the dialog (below).
         border = tk.Frame(self, bg=accent, highlightthickness=0)
         border.place(relx=0.5, rely=0.42, anchor="center")
         card = tk.Frame(border, bg=self.colors["card"])
         card.pack(padx=2, pady=2, fill="both", expand=True)
 
-        # The answers first, against the bottom. When the card is given less
-        # height than it asks for, pack takes the shortfall from what was
-        # packed LAST -- the message, which then scrolls (fit, below) -- so
-        # no length of message can push a button out of the window. A
-        # startup notice joining four messages drew its only button below a
-        # 600px window, with the X refused while it asked.
+        # The answers first, against the bottom: short of height, pack takes
+        # it from the message, packed last, which scrolls -- four startup
+        # messages drew the one button below a 600px window.
         btn_row = tk.Frame(card, bg=self.colors["card"])
         btn_row.pack(side="bottom", fill="x", padx=20, pady=(0, 16))
 
@@ -163,7 +543,8 @@ class DialogsMixin:
         msg_box.pack(side="top", fill="both", expand=True, padx=20, pady=(0, 16))
         msg_view = tk.Canvas(msg_box, bg=self.colors["card"],
                              highlightthickness=0, bd=0)
-        msg_lbl = tk.Label(msg_view, text=message, bg=self.colors["card"],
+        msg_lbl = tk.Label(msg_view, text=message_shown(message),
+                           bg=self.colors["card"],
                            fg=self.colors["subtext"], font=("Segoe UI", 10),
                            wraplength=self.px(380), justify="left", anchor="w")
         msg_view.create_window(0, 0, window=msg_lbl, anchor="nw")
@@ -226,12 +607,9 @@ class DialogsMixin:
             if i == focus_index:
                 b.focus_set()
 
-        # Tab walks the question's own answers and comes back round, as a
-        # Windows message box does. The grab holds the pointer only, and
-        # Tab walked on out of the card: into the note under the question,
-        # where typing landed, and onto the note list, whose Shift+F10 menu
-        # holds Delete. The order is the one Tab always took. Shift+Tab is
-        # <<PrevWindow>> too: on X11 it arrives as ISO_Left_Tab.
+        # Tab walks the answers round, as a Windows message box does: the grab
+        # holds the pointer only, and Tab walked into the note under it.
+        # Shift+Tab is <<PrevWindow>> too (X11's ISO_Left_Tab).
         def cycle(button, step):
             i = dialog_buttons.index(button)
             dialog_buttons[(i + step) % len(dialog_buttons)].focus_set()
@@ -258,13 +636,11 @@ class DialogsMixin:
                 choose(safe_val)
 
         def enter(event):
-            # The docstring above and ARCHITECTURE always said Enter takes
-            # the default, and it did nothing at all: a tk.Button answers
-            # Space and the mouse, and nothing bound Return. The button
-            # holding the keyboard is what Enter presses. A key typed into
-            # some other field (Tab stays in the card now, but a timer can
-            # still move the keyboard) is that field's own business.
-            if not innermost():
+            # Enter presses the button holding the keyboard -- a tk.Button
+            # answers only Space. Pressed, not held: held, it answered the
+            # question and asked it again (_enter_repeats).
+            held = self._enter_repeats(event)
+            if held or not innermost():
                 return
             w = getattr(event, "widget", None)
             if w in dialog_buttons:
@@ -275,20 +651,14 @@ class DialogsMixin:
         esc_bind = self.bind("<Escape>", escape, add="+")
         enter_binds = [(seq, self.bind(seq, enter, add="+"))
                        for seq in ("<Return>", "<KP_Enter>")]
-        # No wait may outlive its window. Closing the app under a question
-        # destroyed the window while this still waited for `done`, which
-        # nothing would ever set again: the process lived on with no
-        # window, holding the notebook lock, and every later launch was
-        # refused as "already open". on_app_close refuses the close while
-        # a question asks; this is the net under every other route.
+        # No wait outlives its window: closed under a question, the process
+        # lived on windowless, holding the lock, and every launch was refused.
+        # on_app_close refuses that close; this is the net under the rest.
         border.bind("<Destroy>", lambda e: choose(safe_val), add="+")
 
-        # The card inside the window, its answers on screen, whatever the
-        # message's length and the window's size: placed at 0.42 of the
-        # height as it always was when it fits; otherwise the message's
-        # viewport gives way, and a row of buttons wider than the window
-        # stands one under another. Asked again when the window is resized
-        # while the question waits.
+        # The card inside the window, its answers on screen: at 0.42 of the
+        # height when it fits, else the message gives way and wide buttons
+        # stack. Asked again at every resize while it waits.
         margin = 12
         layout = {"natural_w": None, "stacked": False, "job": None,
                   "size": None}
@@ -369,22 +739,16 @@ class DialogsMixin:
         fit()
         self._bind_window_for_popup(border, "<Configure>", refit_later)
 
-        # Modal, but the background stays fully visible (we don't cover it). A
-        # local grab on the dialog frame routes input to the dialog only; because
-        # this is an ordinary in-window Frame (not a borderless Toplevel), the
-        # grab is safe and won't freeze the app.
+        # A local grab on an in-window Frame (not a borderless Toplevel, which
+        # could freeze the app) routes input to the dialog only.
         self.update_idletasks()
         try:
             border.grab_set()
         except tk.TclError:
             pass
-        # While this waits for an answer, the app's global shortcuts stand
-        # still (_a_dialog_is_asking). A grab confines the POINTER only;
-        # keys bound with bind_all still ran underneath -- Ctrl+S twice
-        # stacked the same question on itself, and Ctrl+N under the
-        # repeating-day question cleared the editor so the answer wrote
-        # the edit under a day of None. Raised here, right beside the
-        # finally that lowers it, so no failure can leave it raised.
+        # The global shortcuts stand still while it waits (_a_dialog_is_asking):
+        # under a grab, Ctrl+N cleared the editor the answer wrote into.
+        # Raised beside the finally that lowers it.
         self._modal_depth = getattr(self, "_modal_depth", 0) + 1
         # Innermost last: what the keys answer, and what a close of the
         # window brings to the front (_bring_question_forward).
@@ -402,12 +766,9 @@ class DialogsMixin:
                 border.grab_release()
             except tk.TclError:
                 pass
-            # Tk has ONE grab. A question asked inside this one's wait -- a
-            # timer's "Export complete" over a waiting "Move to trash?" --
-            # took it, and its release above left none: the question still
-            # on screen, and the app under it taking clicks (a note ticked
-            # there was removed with no Trash copy). The question asked
-            # before it, still waiting, gets the grab back.
+            # Tk has ONE grab: a question asked inside this wait took it, and
+            # its release left none, the app under a question taking clicks.
+            # The question still waiting gets it back.
             still_asking = getattr(self, "_asking_dialogs", None) or []
             if still_asking:
                 try:
@@ -438,6 +799,17 @@ class DialogsMixin:
         bound with bind_all asks this first and does nothing if so."""
         return getattr(self, "_modal_depth", 0) > 0
 
+    def _while_native(self, show):
+        """Run *show* -- a file chooser or a posted menu, whose own loop runs
+        every timer -- counted in `_natives_open`, so a backup's merge waits
+        for it as for a question: under it, its questions opened behind the
+        chooser."""
+        self._natives_open = getattr(self, "_natives_open", 0) + 1
+        try:
+            return show()
+        finally:
+            self._natives_open -= 1
+
     def _bring_question_forward(self):
         """The window was asked to close while a question waits: show the
         question instead, as Windows does for a modal one. The window comes
@@ -464,23 +836,11 @@ class DialogsMixin:
             pass
 
     def _toggles_its_popup(self, btn, open_popup):
-        """Make a button open its popup on one click and close it on the next.
-
-        A tk.Button acts on the RELEASE, and the app-wide click-outside
-        handler closes the open popup on the PRESS -- so a second click on
-        the button that opened a popup closed it and then opened a fresh
-        one: a blink instead of a toggle. The themed dropdowns were fixed
-        for exactly this after a field report (their guard, in
-        _build_themed_dropdown, is the same idea); eleven other openers --
-        the text colour, the highlight, the emoji, both date pickers, the
-        note's colour, the table size, the template picker, the calendar's
-        month, and the selection bar's Category and Export -- never were.
-
-        The decision is taken on the press, in the button's own binding,
-        which runs before the window's: at that moment the popup is still
-        open and it is knowable whether it is this button's. It is taken
-        afresh on every press, so a press dragged off the button leaves
-        nothing behind to swallow the next click.
+        """Make a button open its popup on one click and close it on the
+        next: a button acts on the release, click-outside on the press, so a
+        second click closed the popup and opened it again -- a blink. Decided
+        on each press, in the button's binding, which runs before the
+        window's, while it is knowable whether the open popup is this one's.
         """
         state = {"closing": False}
 
@@ -513,19 +873,9 @@ class DialogsMixin:
                     return i
         return len(buttons) - 1
 
-    # These five took **kw and forwarded a subset of it, so anything a
-    # caller sent that they did not understand was dropped without a word.
-    # That has cost this project twice: first a `default="no"` on a
-    # destructive confirm that never reached the dialog (ISSUES_LOG, "the
-    # safety request the dialog never read"), then seven `parent=`
-    # arguments that read like they anchored the dialog somewhere and did
-    # nothing at all — this is an overlay inside the app window, and
-    # _themed_dialog has never had such a parameter.
-    #
-    # Named parameters instead, keyword-only, so Python itself refuses
-    # anything else at the call rather than swallowing it. A stray keyword
-    # is now a TypeError the first time that path runs, which is the whole
-    # point: the failure this class produces is silence.
+    # Keyword-only, named parameters: taking **kw, these dropped what they
+    # did not understand -- a destructive confirm's default="no" among it
+    # (ISSUES_LOG: "The safety request the dialog never read").
 
     @staticmethod
     def _kind_from(icon, kind, fallback):
@@ -568,31 +918,17 @@ class DialogsMixin:
                                    default=default)
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
-                               dot_color_fn=None, width_chars=14, nested=False):
-        # width_chars=0 means "as wide as whatever is showing" -- Tk's own
-        # content sizing. Use it for a dropdown that shares a row and is
-        # packed to flex: a width fixed in CHARACTERS makes the control
-        # ask for more than the row has, and pack takes the difference off
-        # its right edge (arrow first, then letters) instead of the label
-        # simply shrinking. No fixed number can be right for both
-        # platforms anyway -- the same count that fits Segoe UI on Windows
-        # is 19px over-full in DejaVu Sans on the Linux CI image.
-        """Build a small themed dropdown button (replaces ttk.Combobox for
-        simple single-choice selectors like sort/filter). Returns the button
-        Frame; pack it into the caller's layout. `dot_color_fn(value)` — if
-        given — returns a hex color to show a bullet next to each option (used
-        for the category filter); return None/falsy to skip the bullet for
-        that option (e.g. "All").
-
-        `nested=True` — use when this dropdown lives INSIDE another popup
-        (e.g. the category picker inside the template editor). The default
-        path calls self._dismiss_mini_popup() to close whatever popup was
-        open before opening a new, unrelated one — but a dropdown nested
-        inside another popup IS that popup's content, not something separate
-        to replace; calling the shared dismiss would destroy the very editor
-        this dropdown is sitting inside, before its own list even opens.
-        Nested mode tracks its own small popup instead, leaving whatever the
-        app's main self._mini_popup is completely alone."""
+                               dot_color_fn=None, width_chars=14, nested=False,
+                               listed_as=None):
+        # width_chars=0 sizes to what shows, for a dropdown flexing in a
+        # shared row: a width in characters asked more than the row had,
+        # and pack cut its arrow off (fonts differ on Linux).
+        """A small themed dropdown button for single-choice selectors; pack
+        the Frame it returns. `dot_color_fn(value)` gives a bullet's colour
+        per option (falsy: none). `nested=True` for one INSIDE another popup:
+        it keeps its own list rather than closing the shared popup -- which
+        is the editor it sits in. `listed_as` names an option differently in
+        the list than on the button ("Font" shows, "Default font" is listed)."""
         btn = tk.Frame(parent, bg=self.colors["sidebar"],
                       highlightthickness=1, highlightbackground=self.colors["card"])
         lbl = tk.Label(btn, textvariable=var, bg=self.colors["sidebar"],
@@ -604,19 +940,16 @@ class DialogsMixin:
         caret.pack(side="left", padx=(0, 6))
         # The border too, not just the fill: a long-lived widget tracks EVERY
         # colour option it sets, or a theme switch leaves that one frozen on
-        # the build-time palette.
-        self.track_theme(btn, bg="sidebar", highlightbackground="card")
+        # the build-time palette. Its focus colour is the keyboard's ring.
+        self.track_theme(btn, bg="sidebar", highlightbackground="card",
+                         highlightcolor="focus_ring")
         self.track_theme(lbl, bg="sidebar", fg="text")
         self.track_theme(caret, bg="sidebar", fg="subtext")
 
         def open_list():
             if nested:
-                # Close only THIS dropdown's own previous popup, if any —
-                # never touch self._mini_popup, which belongs to whatever
-                # popup this dropdown is living inside. (No toggle here,
-                # deliberately: adding one destabilized qa9's template
-                # flows intermittently, and the nested blink was never
-                # field-reported — tracked in the triage list instead.)
+                # Only THIS dropdown's previous list closes, never the host's
+                # popup. No toggle: one made qa9's template flows flaky.
                 existing = getattr(btn, "_nested_popup", None)
                 if existing is not None:
                     try:
@@ -632,17 +965,12 @@ class DialogsMixin:
                 self._close_nested_popup()
                 pop = tk.Toplevel(self)
                 btn._nested_popup = pop
-                # Also remembered app-wide, so the app-window Escape can
-                # close THIS list rather than the popup it lives inside.
-                # btn._nested_popup alone is not enough: the handler runs on
-                # the window, and has no button to ask.
+                # Remembered app-wide too, for the window's Escape -- which
+                # has no button to ask -- to close THIS list, not its host.
                 self._nested_dropdown = pop
             else:
-                # Clicking the button while its OWN list is open closes
-                # it and stops. Without this, the shared dismiss below
-                # closed the list and the reopen brought it straight
-                # back — a blink instead of a toggle (field report:
-                # the only way to close it was clicking elsewhere).
+                # A click while its OWN list is open closes it and stops --
+                # else a blink, not a toggle (field report).
                 if (getattr(btn, "_dd_popup", None) is not None
                         and self._mini_popup is btn._dd_popup):
                     self._dismiss_mini_popup()
@@ -658,7 +986,9 @@ class DialogsMixin:
                 btn._dd_popup = pop
             pop.wm_overrideredirect(True)
             pop.configure(bg=self.colors["accent"])
-            frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+            # A pixel less padding: each row's border (the keyboard's ring)
+            # takes it back, so the list is drawn as it always was.
+            frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
             frame.pack(padx=1, pady=1)
             current = var.get()
             # `options` may be a static list or a callable returning the
@@ -670,7 +1000,10 @@ class DialogsMixin:
                 is_cur = (opt == current)
                 row_bg = self.colors["sidebar"] if is_cur else self.colors["card"]
                 row = tk.Frame(frame, bg=row_bg, cursor="hand2")
-                row.pack(fill="x", pady=1)
+                self._ring_round(row, self.colors["card"])
+                row.pack(fill="x")
+                self._pressable(row, lambda v=opt: pick(v), walk=True,
+                                current=is_cur)
                 widgets = [row]
                 color = dot_color_fn(opt) if dot_color_fn else None
                 if color:
@@ -678,7 +1011,7 @@ class DialogsMixin:
                                    font=("Segoe UI", 11), cursor="hand2")
                     dot.pack(side="left", padx=(10, 6), pady=4)
                     widgets.append(dot)
-                lbl2 = tk.Label(row, text=opt, bg=row_bg,
+                lbl2 = tk.Label(row, text=(listed_as or {}).get(opt, opt), bg=row_bg,
                                fg=self.colors["accent_text"] if is_cur else self.colors["text"],
                                font=("Segoe UI", 9, "bold" if is_cur else "normal"),
                                anchor="w")
@@ -700,10 +1033,8 @@ class DialogsMixin:
                     on_change(v)
 
                 for w in widgets:
-                    # "break": the pick destroys the popup this row lives
-                    # in, and Tk has already read every script of this
-                    # click -- a later one naming the popup's commands
-                    # would call them dead (the rename box's Escape did).
+                    # "break": the pick destroys this popup, and a later
+                    # script of the same click would call its dead commands.
                     w.bind("<Button-1>", lambda e, v=opt: (pick(v), "break")[1])
                     if not is_cur:
                         w.bind("<Enter>", lambda e, r=row, ws=widgets:
@@ -712,17 +1043,24 @@ class DialogsMixin:
                                [x.configure(bg=self.colors["card"]) for x in ws])
 
             if nested:
-                # Escape is this dropdown's own way to back out without
-                # picking anything, since it can't rely on the shared
-                # click-outside-dismiss (that's scoped to self._mini_popup,
-                # which nested mode deliberately never touches).
+                # Its own Escape: the shared click-outside belongs to the
+                # host popup, which nested mode never touches.
                 pop.bind("<Escape>", lambda e: pop.destroy())
             self._place_dropdown_popup(pop, btn)
 
         for w in (btn, lbl, caret):
             w.configure(cursor="hand2")
             w.bind("<Button-1>", lambda e: open_list())
+        self._opens_list_from_keyboard(btn, open_list)
         return btn
+
+    def _opens_list_from_keyboard(self, opener, open_list):
+        """A dropdown's opener, from the keyboard: Tab stops on it; Space,
+        Return, Down and Alt+Down open its list, which takes the keyboard
+        while it is open (_keyboard_into_popup)."""
+        self._pressable(opener, open_list)
+        for seq in ("<KeyPress-Down>", "<Alt-KeyPress-Down>"):
+            opener.bind(seq, lambda e: (open_list(), "break")[1])
 
     def _close_nested_popup(self):
         """Close the popup open INSIDE the open popup (a dropdown's list,
@@ -745,25 +1083,9 @@ class DialogsMixin:
         path, root = str(widget), str(pop)
         return path == root or path.startswith(root + ".")
 
-    # ---- Window-level bindings that belong to one popup ----
-    #
-    # A popup listens on the app window for two things while it is open: a
-    # click outside it (to close) and the window moving (to follow). These
-    # used to be kept in ONE attribute per kind, overwritten by every
-    # placement -- and a dropdown nested inside a popup is placed while its
-    # host is still open, so the host's ids were lost and its handlers
-    # stayed bound for good. From then on every click ran a stale
-    # click-outside that closed the dropdown the same click had just
-    # opened: after one nested list, no dropdown in the app would open.
-    #
-    # So each popup keeps its own, and they go when IT goes, by whatever
-    # route. And they are lines that NAME their popup and call one command
-    # that is never deleted: Tk expands every script for a click before it
-    # runs any of them, so unbinding a handler from a widget's own
-    # <Button-1> deleted a command the same click was still about to call
-    # -- a silent background error on every such click. A line removed
-    # after Tk read it now just calls with a popup that is no longer
-    # registered, and does nothing.
+    # ---- Window-level bindings that belong to one popup: its own, gone when
+    # IT goes, lines naming it to one command never deleted (ARCHITECTURE,
+    # "The window-level lines a popup adds") ----
 
     def _bind_window_for_popup(self, pop, sequence, handler):
         """Run handler(widget_path) for `sequence` on the app window for as
@@ -836,39 +1158,18 @@ class DialogsMixin:
                 self._close_nested_popup()
 
     def _place_dropdown_popup(self, pop, anchor_widget=None, anchor_xy=None,
-                              enable_click_outside=True):
-        """Position a popup like a dropdown anchored to a button: directly below
-        it if there's room, otherwise flipped above so it never runs off-screen.
-        Horizontally aligned to the button's left edge (nudged in if needed).
-
-        Pass either `anchor_widget` (a button/label to dock under) or
-        `anchor_xy` (an (x, y) root-coordinate pair, e.g. from a right-click
-        event) when there's no persistent widget to anchor to — a calendar day
-        cell reached via a context menu, for instance.
-
-        Clamped to the APP WINDOW's own bounds, not the system screen. On a
-        multi-monitor setup, winfo_screenwidth/height() reports the primary
-        display's size even when the app sits on a different monitor, which
-        used to yank the dropdown back onto the wrong screen entirely. The
-        app window's own root x/y/width/height are always correct for
-        whichever monitor it's actually on, so anchoring to those keeps the
-        dropdown next to the button regardless of monitor arrangement.
-
-        Also re-anchors LIVE while the popup is open: if the user drags or
-        resizes the app window, the popup used to stay put at its original
-        screen position — visibly detached from the app. Binding this to the
-        app's own <Configure> event keeps it docked the whole time.
-
-        Marked -topmost so it can't get pushed behind the main window when
-        focus shifts elsewhere in the app (e.g. inserting an emoji sets focus
-        on the text field being edited) — without this, a borderless Toplevel
-        with no owner/topmost relationship can silently drop behind its
-        parent window on focus changes, which looks exactly like the popup
-        having closed even though it's technically still open."""
+                              enable_click_outside=True, keyboard_from=None):
+        """Place a popup as a dropdown: under `anchor_widget`, or at
+        `anchor_xy` (root coordinates, as a right-click gives), flipped above
+        when there is no room. Clamped to the APP WINDOW, not the screen,
+        which names the primary monitor wherever the app is; re-placed as
+        the window moves; -topmost, or a borderless popup dropped behind the
+        window when an emoji's insert moved the focus."""
         try:
             pop.attributes("-topmost", True)
         except tk.TclError:
             pass
+        placed = {}
 
         def reposition(event=None):
             try:
@@ -883,10 +1184,8 @@ class DialogsMixin:
                     ax, ay = anchor_xy
                     ah = 0
                 else:
-                    # The anchor is gone. Asking it for its place raised,
-                    # the error was swallowed, and the popup was never
-                    # placed at all -- it sat at the screen's corner,
-                    # detached from the app. The window's middle instead.
+                    # The anchor is gone: unplaced, the popup sat at the
+                    # screen's corner. The window's middle instead.
                     ax = self.winfo_rootx() + self.winfo_width() // 3
                     ay = self.winfo_rooty() + self.winfo_height() // 3
                     ah = 0
@@ -907,24 +1206,27 @@ class DialogsMixin:
                     above_y = ay - ph - 2
                     # If it also doesn't fit above, clamp within the app window.
                     y = above_y if above_y >= win_top + 8 else max(win_top + 8, win_bottom - ph - 8)
+                # And never past the bottom: "above" an anchor scrolled below
+                # the fold (the editor's Use template) ran past it.
+                y = max(win_top + 8, min(y, win_bottom - ph - 8))
 
                 # Horizontal: align left edges, nudge in if it would run past
                 # the app window's own right edge.
                 x = ax
                 if x + pw > win_right - 8:
                     x = max(win_left + 8, win_right - pw - 8)
-                pop.wm_geometry(f"+{int(x)}+{int(y)}")
+                # Only a move that moves it: placing it where it stands
+                # tells its <Configure> again, which would place it again.
+                if placed.get("at") != (int(x), int(y)):
+                    placed["at"] = (int(x), int(y))
+                    pop.wm_geometry(f"+{int(x)}+{int(y)}")
             except tk.TclError:
                 pass
 
         reposition()
 
-        # Configure fires a LOT — not just window move/resize, but also
-        # cascading from things like text insertion changing a Text widget's
-        # geometry. Coalescing rapid bursts into one actual reposition (via
-        # after_idle) keeps the popup docked without redoing the work on
-        # every single event, which was contributing to visible stutter
-        # while quickly inserting several emojis in a row.
+        # Configure fires a LOT (a Text growing as emoji go in): a burst is
+        # one reposition, after_idle -- each one stuttered.
         pending = {"job": None}
 
         def throttled_reposition(event=None):
@@ -938,37 +1240,104 @@ class DialogsMixin:
         # Live-track the app window while this popup is open (move + resize).
         # Taken off again when this popup goes, whichever way it goes.
         self._bind_window_for_popup(pop, "<Configure>", throttled_reposition)
-        # Never clobber a popup's OWN Escape: a nested dropdown binds
-        # Escape→close-just-this-list before being placed, and replacing
-        # that here made Escape tear down the HOST editor the list sits
-        # inside instead of the list itself. Innermost first, like the
-        # window's own Escape below, and asking where there is work.
+        # ...and the popup's own size: one that grows -- a row added, a part
+        # shown -- was placed for its old height and ran past the window.
+        pop.bind("<Configure>", lambda e: (throttled_reposition()
+                                           if e.widget is pop else None), add="+")
+        # Once more when the moment has passed: it can grow during the first
+        # placing itself, before that binding was there to hear it.
+        throttled_reposition()
+        # A popup's OWN Escape is kept: a nested list binds one, and replaced
+        # it closed the host editor instead. Innermost first, asking first.
         if not pop.bind("<Escape>"):
             pop.bind("<Escape>", lambda e: self._escape_backs_out())
-        # ...and that binding could never fire. These popups are borderless
-        # and take no keyboard focus, so Tk delivers a keypress to whatever
-        # DOES hold it — the app window, which had no Escape binding at all
-        # while a popup was open. Measured: with the focus forced inside the
-        # popup the binding above closes it at once, so the handler was
-        # always sound and the key simply went elsewhere.
-        #
-        # Bound here the way _themed_dialog binds its own, and bound ONCE:
-        # a nested dropdown is placed through this same method while the
-        # host's binding is still live, and a second one would mean a
-        # single Escape closing both levels.
+        # ...which never fires: these popups take no focus, so the key goes
+        # to the window. Bound there too, ONCE -- a nested list placed here
+        # again would have one Escape close both levels.
         if getattr(self, "_mini_popup_escape_bind", None) is None:
             self._mini_popup_escape_bind = self.bind(
                 "<Escape>", self._escape_backs_out, add="+")
         if enable_click_outside:
             self._bind_click_outside(pop)
+        # *keyboard_from* is the opener of a popup placed at a point, not on
+        # a widget: the calendar's day, its menu opened from the keyboard.
+        for opener in (anchor_widget, keyboard_from,
+                       getattr(self, "_key_pressing", None)):
+            if self._opened_from_keyboard(opener):
+                self._keyboard_into_popup(pop, opener)
+                break
 
-    def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None):
+    def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None,
+                          keyboard_from=None):
         """Position a mini popup (inline rename, color palette, etc.) just
         below the anchor, flipping above and clamping within the app window's
         own bounds when needed — same safe logic as _place_dropdown_popup, so
         these popups can't run off a different monitor or off the window edge
         on a multi-monitor setup either."""
-        self._place_dropdown_popup(pop, anchor_widget, anchor_xy=anchor_xy)
+        self._place_dropdown_popup(pop, anchor_widget, anchor_xy=anchor_xy,
+                                   keyboard_from=keyboard_from)
+
+    def _row_stack(self, canvas, **options):
+        """A RowStack drawing a list's rows on *canvas*."""
+        return RowStack(self, canvas, **options)
+
+    def _scrolling_rows(self, parent, bg_key, pop):
+        """A RowStack packed into *parent* for the part of *pop* that grows
+        with what it holds, shown in a viewport that scrolls once the popup
+        would be taller than the app window: the template editor with 25
+        checklist items, and the picker with as many templates, ran off the
+        screen, Save and the last templates with them. Tab and the arrows
+        bring what they land on into sight, the wheel scrolls it."""
+        bg = self.colors[bg_key]
+        holder = tk.Frame(parent, bg=bg)
+        holder.pack(side="top", fill="both", expand=True)
+        view = tk.Canvas(holder, bg=bg, highlightthickness=0, bd=0,
+                         width=1, height=1)
+        bar = ttk.Scrollbar(holder, orient="vertical", command=view.yview)
+        view.pack(side="left", fill="both", expand=True)
+        pending = {"job": None}
+
+        def fit():
+            pending["job"] = None
+            try:
+                pop.update_idletasks()
+                w, h = stack.size()
+                others = pop.winfo_reqheight() - view.winfo_reqheight()
+                shown = min(h, max(self.px(80), self.winfo_height() - 16 - others))
+                stack.set_width(w)
+                view.configure(width=max(1, w), height=max(1, shown))
+                if h > shown:
+                    bar.pack(side="right", fill="y", before=view)
+                else:
+                    bar.pack_forget()
+            except tk.TclError:
+                pass
+
+        def fit_later(_e=None):
+            if pending["job"] is None:
+                pending["job"] = self.after_idle(fit)
+
+        stack = self._row_stack(view, scrolled=bar.set, on_change=fit_later,
+                                own_width=True)
+
+        def wheel(event):
+            w = event.widget
+            if (isinstance(w, (str, tk.Text))
+                    or not str(w).startswith(str(holder) + ".")
+                    or not self._is_placed(bar)):
+                return None
+            up = getattr(event, "delta", 0) > 0 or getattr(event, "num", 0) == 4
+            view.yview_scroll(-2 if up else 2, "units")
+            return "break"
+
+        self._bind_window_for_popup(pop, "<Configure>", fit_later)
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            pop.bind(seq, wheel, add="+")
+        # Not fitted now: its update_idletasks would map the popup before it
+        # is placed, and -topmost set after that does not stick (ISSUES_LOG:
+        # "The template editor that "did nothing" when clicked").
+        fit_later()
+        return stack
 
     def _maybe_dismiss_mini_popup(self, event):
         pop = getattr(self, "_mini_popup", None)
@@ -980,25 +1349,12 @@ class DialogsMixin:
         self._dismiss_mini_popup_asking()
 
     def _dismiss_mini_popup_asking(self, holding_work_only=False):
-        """Close the open popup the way a person closing it means it: one
-        holding typed work -- the template editor -- asks first, through its
-        _confirm_dismiss. Every close a PERSON makes comes through here: a
-        click outside, Escape, a widget that opens something in its place,
-        leaving the page it sits on, closing the window. Programmatic closes
-        (after a save, an explicit Cancel) call _dismiss_mini_popup.
-
-        Returns True when no popup is left open, False when it stays: the
-        person chose to keep editing, or the save they asked for could not
-        happen. With `holding_work_only`, a popup with nothing to lose is
-        left alone rather than closed -- for callers that are not about
-        popups at all (a shortcut, a Settings section, the window closing).
-
-        A widget's own <Button-1> runs before the window's click-outside,
-        so a widget opening something in the popup's place closed it
-        without the question -- the template half written, gone. Such a
-        widget calls this first, and on False returns "break": otherwise
-        the window's click-outside, still to run for the same click, asks
-        the same question a second time.
+        """Close the open popup as a PERSON closing it means it -- a click
+        outside, Escape, a widget opening something in its place, the page
+        or window leaving: one holding typed work asks first
+        (_confirm_dismiss); programmatic closes call _dismiss_mini_popup.
+        True when no popup is left open. `holding_work_only` leaves one with
+        nothing to lose alone. A widget's caller returns "break" on False.
         """
         pop = getattr(self, "_mini_popup", None)
         confirm = getattr(pop, "_confirm_dismiss", None) if pop is not None else None
@@ -1014,6 +1370,8 @@ class DialogsMixin:
                 # Only a popup still on screen is someone's unfinished work.
                 try:
                     if pop.winfo_exists():
+                        # Kept: the press that asked asks no more (_run_toast_action_by_click).
+                        self._popup_kept = True
                         return False
                 except tk.TclError:
                     pass
@@ -1023,13 +1381,9 @@ class DialogsMixin:
         return True
 
     def _foreground_is_ours(self):
-        """Is the OS foreground window one of this app's windows?
-
-        The only honest witness: override-redirect popups can hold the
-        activation without ever receiving <Activate>/<Deactivate>, so
-        event-based detection missed exactly the case where the user had
-        typed into a popup and then switched away. Off Windows there is
-        no GetForegroundWindow; answer "ours" so nothing ever hides.
+        """Is the OS foreground window one of this app's windows? The only
+        honest witness: a borderless popup holds activation without
+        <Activate>/<Deactivate>. Off Windows, "ours", so nothing hides.
         """
         try:
             import ctypes
@@ -1117,28 +1471,10 @@ class DialogsMixin:
         self.after_idle(self._popup_watch_step)
 
     def _escape_backs_out(self, event=None):
-        """Escape, arriving at the app window, closes the innermost popup.
-
-        It has to be the innermost, and that is the whole difficulty. A
-        nested dropdown — a category list inside the template editor, say —
-        is deliberately NOT `self._mini_popup`; the host popup is. So a
-        handler that simply called `_dismiss_mini_popup()` would tear down
-        the editor the list is sitting in, which is exactly the breakage
-        recorded beside the per-popup binding in `_place_dropdown_popup`.
-        One level at a time: the list first, its host only once the list is
-        gone.
-
-        No "break" returned, deliberately. `_themed_dialog` binds its own
-        Escape on this same window, and breaking here would leave a modal
-        dialog open while the popup underneath it closed — the wrong one
-        answered. Widget-level Escapes (the find bar, an inline rename
-        entry) already return "break" of their own, so they never reach
-        this at all.
-
-        And nothing at all while a question is on screen: its own Escape
-        answers it. Closing the popup here too meant Escape on the template
-        editor's "Save changes?" threw away the template it was asking
-        about.
+        """Escape, arriving at the app window, closes the INNERMOST popup:
+        a nested list (not `_mini_popup`) before its host. No "break", as
+        `_themed_dialog` binds Escape here too; and nothing while a question
+        asks -- Escape on "Save changes?" threw the template away.
         """
         if self._a_dialog_is_asking():
             return
@@ -1162,17 +1498,16 @@ class DialogsMixin:
             except (tk.TclError, ValueError):
                 pass
             self._gif_anim_job = None
-        # An image preview may still be reading its animation's frames.
+        # An image preview may still be reading its animation's frames, and
+        # its frames were kept alive after it closed (only the cache keeps any).
         self._release_preview_source()
+        self._image_preview_ref = None
         pop = getattr(self, "_mini_popup", None)
         if pop is not None:
             try:
                 pop.destroy()
-                # Force Tk to fully finish processing the destroy (and its
-                # own OS-level repaint) right now, synchronously, instead of
-                # letting it overlap with whatever runs next. A fixed-length
-                # timer alone was a guess at "enough time" that didn't always
-                # hold; this actually waits for the pending work to drain.
+                # The destroy and its repaint finished now, not overlapping
+                # what runs next (a fixed timer only guessed).
                 self.update_idletasks()
             except tk.TclError:
                 pass
@@ -1192,18 +1527,9 @@ class DialogsMixin:
         # and goes WITH it: it is a window of its own, not a child of the
         # host, so forgetting it left it floating over the app.
         self._close_nested_popup()
-        # Run any deferred work now that the popup is actually closing — e.g.
-        # a full note-list/calendar rebuild, which is heavy enough to cause a
-        # visible flicker if it runs WHILE a popup is open on top of it (this
-        # is a list, not a single slot, so several independent features can
-        # each defer their own work without overwriting one another).
-        #
-        # Scheduled via after() — on top of the update_idletasks() above —
-        # rather than called immediately: running a heavy rebuild in the very
-        # same call stack as destroying the popup Toplevel still caused a
-        # visible tear even after settling the destroy first. Giving the
-        # event loop one more full cycle before the rebuild starts keeps the
-        # two from ever overlapping into a single glitchy frame.
+        # Work deferred while the popup was open (a rebuild under it
+        # flickered) runs now -- a list, so features never overwrite each
+        # other's -- one event-loop cycle on, or it tore the frame.
         callbacks = getattr(self, "_mini_popup_on_close", None) or []
         self._mini_popup_on_close = []
 
@@ -1216,3 +1542,774 @@ class DialogsMixin:
         for cb in callbacks:
             if callable(cb):
                 self.after(150, lambda cb=cb: _run_safely(cb))
+
+    # ---- Where the keyboard is, and keeping it in sight ----
+
+    def _focus_ring(self):
+        """The colour of the ring round whatever holds the keyboard."""
+        return palette_value(self.colors, "focus_ring")
+
+    # Tk's own buttons take Tab and Space. A control the app draws -- a
+    # canvas, a label, a frame of labels -- took neither. Two bind tags,
+    # bound once at start, give it both, and arrow keys in a popup's list.
+    KEY_PRESS_TAG = "NoteOrganizerKeyPress"
+    KEY_WALK_TAG = "NoteOrganizerKeyWalk"
+
+    def _bind_keyboard_tags(self):
+        """What the two tags do, for every widget that carries them."""
+        for seq in ("<KeyPress-space>", "<KeyPress-Return>", "<KeyPress-KP_Enter>"):
+            self.bind_class(self.KEY_PRESS_TAG, seq, self._key_press)
+        # The menu key is "App" on Windows and "Menu" on X11, and Tk raises
+        # on a keysym it does not know (as the note list found).
+        for seq in ("<Shift-KeyPress-F10>", "<KeyPress-App>", "<KeyPress-Menu>"):
+            try:
+                self.bind_class(self.KEY_PRESS_TAG, seq, self._key_menu)
+            except tk.TclError:
+                pass
+        self.bind_class(self.KEY_PRESS_TAG, "<FocusIn>",
+                        lambda e: self._ring_shown(e.widget, True))
+        self.bind_class(self.KEY_PRESS_TAG, "<FocusOut>",
+                        lambda e: self._ring_shown(e.widget, False))
+        for seq, step in (("<KeyPress-Up>", "up"), ("<KeyPress-Down>", "down"),
+                          ("<KeyPress-Left>", "left"), ("<KeyPress-Right>", "right"),
+                          ("<KeyPress-Home>", "first"), ("<KeyPress-End>", "last")):
+            self.bind_class(self.KEY_WALK_TAG, seq,
+                            lambda e, s=step: self._key_walk(e.widget, s))
+        # Counted for _keyboard_back to tell a click's focus from Windows'.
+        # Per button: "all" holds <ButtonPress-1>, which a bare one missed.
+        self._pointer_presses = 0
+        for button in (1, 2, 3):
+            self.bind_all(f"<ButtonPress-{button}>", self._count_pointer_press,
+                          add="+")
+        # Enter let go of, wherever the keyboard is: a press after it is a
+        # press of its own, not the key held down (_enter_repeats).
+        self._enter_seen = {}
+        for seq in ("<KeyRelease-Return>", "<KeyRelease-KP_Enter>"):
+            self.bind_all(seq, self._enter_released, add="+")
+        # Space on a Tk button skips _key_press, and runs the command 100 ms
+        # later: looked at by a timer made just after Tk's. A tick box runs
+        # at once, and is looked at at once.
+        self._tk_presses = {}
+        starts = self.register(self._tk_press_starts)
+        ends = self.register(self._tk_press_ends)
+        for cls in ("Button", "Checkbutton", "Radiobutton"):
+            try:
+                script = str(self.tk.call("bind", cls, "<Key-space>"))
+                if script.strip():
+                    after = ("after 100 [list {} %W]" if cls == "Button"
+                             else "{} %W").format(ends)
+                    self.tk.call("bind", cls, "<Key-space>",
+                                 f"{starts} %W\n{script}\n{after}")
+            except tk.TclError:
+                pass
+
+    # A press of Enter this soon after the last, no release between (X11
+    # sends one at the same stamp), is the key held: Windows' slowest repeat
+    # comes within a second.
+    KEY_REPEAT_MS = 1_100
+
+    def _enter_repeats(self, event):
+        """Whether *event*, a press, is Enter held down repeating rather than
+        pressed again -- False for any other key. A control Enter's press gave
+        the keyboard to took each repeat as a press of its own: held on an
+        attachment, the picture's preview opened, its Close took the keyboard
+        and the next repeat, the name got it back and the next, over and over.
+        A press Tk is asked to make carries no time, and is never a repeat."""
+        key = getattr(event, "keysym", "")
+        if key not in ("Return", "KP_Enter"):
+            return False
+        when = getattr(event, "time", 0)
+        when = when if isinstance(when, int) else 0
+        seen = getattr(self, "_enter_seen", None)
+        if seen is None:
+            seen = self._enter_seen = {}
+        last = seen.get(key)
+        if not when or last is None:
+            held = False
+        elif last[0] == "press" and last[1] == when:
+            held = last[2]          # the same press, heard twice: one answer
+        elif last[0] == "release":
+            held = last[1] == when
+        else:
+            held = 0 < when - last[1] <= self.KEY_REPEAT_MS
+        seen[key] = ("press", when, held)
+        return held
+
+    def _enter_released(self, event):
+        """Enter let go of: its next press is a press again (_enter_repeats)."""
+        when = getattr(event, "time", 0)
+        if getattr(self, "_enter_seen", None) is None:
+            self._enter_seen = {}
+        self._enter_seen[getattr(event, "keysym", "")] = (
+            "release", when if isinstance(when, int) else 0, False)
+
+    def _count_pointer_press(self, event=None):
+        self._pointer_presses = getattr(self, "_pointer_presses", 0) + 1
+        # What was pressed, and when: where the keyboard goes when the
+        # click puts away the part holding it (_keyboard_off_part).
+        self._last_press = (getattr(event, "widget", None), time.monotonic())
+
+    def _tk_press_starts(self, path):
+        """Space on one of Tk's own buttons, before its command runs: where
+        it stands, and the clicks so far, for _tk_press_ends."""
+        try:
+            widget = self.nametowidget(path)
+            self._tk_presses[path] = (widget, self._place_of(widget),
+                                      getattr(self, "_pointer_presses", 0))
+        except (KeyError, AttributeError, tk.TclError):
+            pass
+
+    def _tk_press_ends(self, path):
+        """...and after: a button the press destroyed, or hid with its panel
+        (a Close, the Trash's bulk delete), hands the keyboard to what stands
+        in its place, as a drawn control's press does -- inside a part of its
+        window that lived on, not a question or a popup that went, and not
+        after a click put the keyboard somewhere."""
+        pressed = getattr(self, "_tk_presses", {}).pop(path, None)
+        if pressed is None:
+            return
+        widget, place, clicks = pressed
+
+        def settle():
+            try:
+                if self._a_dialog_is_asking():
+                    self.after(100, settle)    # its answer may draw the list
+                    return
+                # Still in sight, or its whole window put away (a popup
+                # hidden while another program is in front): left alone.
+                if ((widget.winfo_exists() and (
+                        widget.winfo_viewable()
+                        or not widget.winfo_toplevel().winfo_viewable()))
+                        or getattr(self, "_pointer_presses", 0) != clicks):
+                    return
+            except tk.TclError:
+                return
+            living = next((p for p, _i in place if self._still_there(p)), None)
+            if living is not None and living != place[-1][0]:
+                self._keyboard_stays(widget, place)
+        try:
+            self.after_idle(settle)
+        except tk.TclError:
+            pass
+
+    def _still_there(self, path):
+        try:
+            return bool(self.nametowidget(path).winfo_exists())
+        except (KeyError, tk.TclError):
+            return False
+
+    def _pressable(self, widget, command, walk=False, current=False, menu=None):
+        """Let Tab stop on *widget*, and Space or Return press it as a click
+        does. With *walk* the arrows move between it and the other choices
+        of its popup; *current* marks the one the keyboard starts on; *menu*
+        is what its right-click opens, for Shift+F10 and the menu key."""
+        widget._key_press = command
+        widget._key_current = current
+        widget._key_menu = menu
+        tags = widget.bindtags()
+        extra = (self.KEY_PRESS_TAG,) + ((self.KEY_WALK_TAG,) if walk else ())
+        widget.bindtags(tags[:1] + extra + tags[1:])
+        widget.configure(takefocus=1)
+        return widget
+
+    def _ring_round(self, widget, rest=None, on=None, width=1):
+        """The keyboard's ring as *widget*'s border, drawn in *rest* -- the
+        colour around it, or with None its own fill -- while the keyboard is
+        elsewhere, and in *on* (the theme's ring if None) while it is there."""
+        widget._ring_rest = rest
+        widget._ring_on = on
+        widget.configure(highlightthickness=width,
+                         highlightbackground=(rest if rest is not None
+                                              else widget.cget("bg")),
+                         highlightcolor=on or self._focus_ring())
+        return widget
+
+    def _ring_shown(self, widget, on):
+        """Both border colours, as the keyboard comes and goes: Windows draws
+        no focus colour round a label, only its resting one."""
+        if not hasattr(widget, "_ring_rest"):
+            return
+        try:
+            if on:
+                colour = widget._ring_on or self._focus_ring()
+            else:
+                colour = (widget._ring_rest if widget._ring_rest is not None
+                          else widget.cget("bg"))
+            widget.configure(highlightbackground=colour, highlightcolor=colour)
+        except tk.TclError:
+            pass
+
+    def _fill(self, widget, colour):
+        """A new fill for a control whose ring rests in its own fill (a
+        hover, a pressed look): the ring follows, unless it is showing."""
+        widget.configure(bg=colour)
+        if getattr(widget, "_ring_rest", "") is None:
+            try:
+                held = str(self.tk.call("focus")) == str(widget)
+            except tk.TclError:
+                held = False
+            self._ring_shown(widget, held)     # a new theme's ring, if held
+
+    def _button_choice(self, button, current=False):
+        """A Tk button that is one choice of a popup -- a swatch, a day, a
+        template: the arrows walk to it, Return presses it as Space does,
+        and its ring rests in its own colour, so it is drawn as before."""
+        self._ring_round(button, button.cget("bg"))
+        return self._pressable(button, button.invoke, walk=True, current=current)
+
+    def _key_press(self, event):
+        widget = event.widget
+        press = getattr(widget, "_key_press", None)
+        if press is None:
+            return None
+        if self._enter_repeats(event):
+            return "break"              # Enter held down: pressed once
+        place = self._place_of(widget)
+        # A popup this press opens -- wherever it is anchored -- was asked
+        # for from the keyboard (_place_dropdown_popup).
+        self._key_pressing = widget
+        try:
+            press()
+        finally:
+            self._key_pressing = None
+        self.after_idle(lambda: self._keyboard_stays(widget, place))
+        return "break"
+
+    def _key_menu(self, event):
+        """Shift+F10 or the menu key: the widget's right-click menu, opened
+        at the widget as a click would open it at the pointer."""
+        widget = event.widget
+        menu = getattr(widget, "_key_menu", None)
+        if menu is None:
+            return None
+        try:
+            at = SimpleNamespace(
+                widget=widget, x=8, y=widget.winfo_height() // 2,
+                x_root=widget.winfo_rootx() + 8,
+                y_root=widget.winfo_rooty() + widget.winfo_height() // 2)
+        except tk.TclError:
+            return "break"
+        menu(at)
+        return "break"
+
+    @staticmethod
+    def _block_of(row):
+        """The rows *row* stands among: its block of a RowStack, across the
+        chunks a redraw makes again, or else its own parent."""
+        stack = getattr(row.master.master, "_row_stack", None)
+        group = stack.group_of(row.master) if stack is not None else None
+        return group if group is not None else row.master
+
+    @staticmethod
+    def _place_of(widget):
+        """Where *widget* stands: its path and its place among its siblings,
+        then its parent's, up to its window -- enough to find what stands
+        there once a list or a page has been drawn again."""
+        place = []
+        w = widget
+        try:
+            while w is not None and not isinstance(w, (tk.Tk, tk.Toplevel)):
+                # A RowStack row: its place among its block's rows, not its
+                # chunk's, which a redraw may not make again.
+                stack = getattr(getattr(w.master, "master", None),
+                                "_row_stack", None)
+                at = stack.place_of_row(w) if stack is not None else None
+                if at is not None:
+                    place.append((str(w), at))
+                    w = w.master.master
+                    continue
+                kids = [k for k in w.master.winfo_children()
+                        if not isinstance(k, tk.Toplevel)]
+                place.append((str(w), kids.index(w)))
+                w = w.master
+        except (tk.TclError, ValueError, AttributeError):
+            pass
+        if w is not None:
+            place.append((str(w), 0))
+        return place
+
+    def _found_at(self, place):
+        """What stands at *place* now: the widget itself if it lives, else
+        the one at the same places below its nearest ancestor still alive,
+        or the first control after that point if none takes the keyboard."""
+        for depth, (path, _index) in enumerate(place):
+            try:
+                w = self.nametowidget(path)
+                if w.winfo_exists():
+                    break
+            except (KeyError, tk.TclError):
+                continue
+        else:
+            return None
+        if depth:
+            for _path, index in reversed(place[:depth]):
+                if isinstance(index, tuple):
+                    # (block, row) on a RowStack: the row there now, or the
+                    # block's last when it has fewer.
+                    stack = getattr(w, "_row_stack", None)
+                    groups = stack.groups if stack is not None else []
+                    kids = (groups[min(index[0], len(groups) - 1)].rows()
+                            if groups else [])
+                    index = index[1]
+                else:
+                    kids = [k for k in w.winfo_children()
+                            if not isinstance(k, tk.Toplevel)]
+                if not kids:
+                    break
+                w = kids[min(index, len(kids) - 1)]
+        try:
+            if str(self.tk.call("tk::FocusOK", w)) == "1":
+                return w
+            return w.tk_focusNext()
+        except (tk.TclError, KeyError):
+            return None
+
+    def _keyboard_nowhere(self, gone=""):
+        """Whether the keyboard is on nothing -- or on *gone*, a window
+        being taken down -- rather than somewhere a person put it. A popup
+        holding it itself is nothing too, as the main window is: Tk puts it
+        there when the control that held it is destroyed."""
+        try:
+            now = str(self.tk.call("focus"))
+            if now not in ("", ".") and not (
+                    gone and (now == gone or now.startswith(gone + "."))):
+                held = self.nametowidget(now)
+                if isinstance(held, tk.Toplevel):
+                    return True
+                return not (held.winfo_exists() and held.winfo_viewable())
+        except KeyError:
+            return True
+        except tk.TclError:
+            return False
+        return True
+
+    def _keyboard_stays(self, widget, place):
+        """After a press from the keyboard: a press that drew its list or
+        page again took the control with it, or hid it (a bar it closed),
+        and the keyboard fell to nothing. It goes to what stands in that
+        control's place now, or to the next control on."""
+        try:
+            if widget.winfo_exists() and widget.winfo_viewable():
+                return
+        except tk.TclError:
+            pass
+        if not self._keyboard_nowhere():
+            return
+        # What was just drawn, mapped: a new row's controls are mapped an
+        # idle round after the row, and Tab's own test skips them until then.
+        self.update_idletasks()
+        target = self._found_at(place)
+        if target is not None:
+            target.focus_set()
+            self._bring_into_sight(target)
+
+    def _walk_choices(self, top, drawn=True):
+        """The choices the arrows walk in *top*, in reading order -- or, for
+        a popup not yet drawn (*drawn* False), all of them as they were made."""
+        found = []
+
+        def gather(w):
+            for child in w.winfo_children():
+                if isinstance(child, tk.Toplevel):
+                    continue
+                if (self.KEY_WALK_TAG in child.bindtags()
+                        and (not drawn or child.winfo_viewable())):
+                    found.append(child)
+                gather(child)
+        gather(top)
+        if not drawn:
+            return found
+        return sorted(found, key=lambda w: (self._root_y(w), self._root_x(w)))
+
+    def _centre_of(self, w):
+        # Where the choice stands in its list, not its parked chunk's place:
+        # Left in a one-column picker went to a template 30 rows down.
+        return (self._root_x(w) + w.winfo_width() / 2,
+                self._root_y(w) + w.winfo_height() / 2)
+
+    def _root_x(self, w):
+        """*w*'s rootx where it stands in its list, as _root_y reads its y:
+        a chunk in the view stands at its box's left (RowStack._follow)."""
+        x, child = w.winfo_rootx(), w
+        while child.master is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+            canvas = child.master
+            stack = getattr(canvas, "_row_stack", None)
+            box = stack.box(child) if stack is not None else None
+            if box is not None:
+                x += int(box[0]) - child.winfo_x()
+            child = canvas
+        return x
+
+    def _root_y(self, w):
+        """*w*'s rooty where it stands in its list, though a row stack has
+        its chunk placed out of sight (RowStack): sorted by that place, the
+        picker's last templates came first."""
+        y, child = w.winfo_rooty(), w
+        while child.master is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+            canvas = child.master
+            stack = getattr(canvas, "_row_stack", None)
+            box = stack.box(child) if stack is not None else None
+            if box is not None:
+                y += int(round(box[1] - canvas.canvasy(0))) - child.winfo_y()
+            child = canvas
+        return y
+
+    def _key_walk(self, widget, step):
+        """Up, Down, Left and Right go to the nearest choice that way, Home
+        and End to the first and the last: one rule for a list, a grid of
+        swatches and the emoji picker's groups alike."""
+        try:
+            choices = self._walk_choices(widget.winfo_toplevel())
+            if not choices:
+                return "break"
+            if step in ("first", "last"):
+                target = choices[0] if step == "first" else choices[-1]
+            else:
+                hx, hy = self._centre_of(widget)
+                best = None
+                for c in choices:
+                    if c is widget:
+                        continue
+                    cx, cy = self._centre_of(c)
+                    ahead, aside = {"down": (cy - hy, cx - hx),
+                                    "up": (hy - cy, cx - hx),
+                                    "right": (cx - hx, cy - hy),
+                                    "left": (hx - cx, cy - hy)}[step]
+                    if ahead <= 1:
+                        continue
+                    score = ahead + 3 * abs(aside)
+                    if best is None or score < best[0]:
+                        best = (score, c)
+                target = best[1] if best else None
+        except tk.TclError:
+            return "break"
+        if target is not None:
+            target.focus_set()
+            self._bring_into_sight(target)
+        return "break"
+
+    def _opened_from_keyboard(self, opener):
+        """Whether the popup about to open on *opener* was asked for from
+        the keyboard. A box being typed in keeps the keyboard: a popup it
+        anchors (the emoji picker of a field) is the mouse's to use."""
+        return (opener is not None and self._holds_keyboard(opener)
+                and opener.winfo_class() not in self._TYPING_CLASSES)
+
+    def _keyboard_into_popup(self, pop, opener):
+        """A popup opened from the keyboard takes it -- its current choice,
+        else its first, else its first box, else its first control, unless
+        it placed it itself -- and hands it back to *opener* on closing.
+        The box before the control: the first control is the header's ✕,
+        and a space typed into the template's name closed the editor."""
+        try:
+            if str(self.tk.call("focus", "-lastfor", pop)) == str(pop):
+                choices = self._walk_choices(pop, drawn=False)
+                current = [c for c in choices if getattr(c, "_key_current", False)]
+                box = self._first_box_in(pop)
+                target = (current or choices or [box or pop.tk_focusNext()])[0]
+                if target is not None:
+                    target.focus_set()
+                    if target is box:
+                        self._arrive_as_tab_does(box)
+        except (tk.TclError, KeyError):
+            return
+        path, place = str(pop), self._place_of(opener)
+        clicks = getattr(self, "_pointer_presses", 0)
+        pop.bind("<Destroy>", lambda e: (self._keyboard_back(path, place, clicks)
+                                         if str(e.widget) == path else None),
+                 add="+")
+
+    def _first_box_in(self, pop):
+        """The first box to type in, in the order Tab takes through *pop*
+        (the order its widgets stack in), or None. Asked of the tree, not of
+        Tk's traversal, which skips everything until the popup is drawn."""
+        def placed(w):
+            while w is not pop:
+                if not w.winfo_manager():
+                    return False
+                w = w.master
+            return True
+
+        def walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Toplevel):
+                    continue
+                if (c.winfo_class() in self._TYPING_CLASSES
+                        and str(c.cget("takefocus")) != "0"
+                        and str(c.cget("state")) != "disabled" and placed(c)):
+                    return c
+                found = walk(c)
+                if found is not None:
+                    return found
+            return None
+        try:
+            return walk(pop)
+        except (tk.TclError, AttributeError):
+            return None
+
+    @staticmethod
+    def _arrive_as_tab_does(box):
+        """In a one-line box, what it holds selected and the caret after it,
+        as Tk's own Tab arrives there: the first key typed replaces a new
+        template's "Untitled template", or the month jump's year. A box of
+        many lines is left as it is, as Tab leaves it."""
+        try:
+            if not isinstance(box, tk.Text):
+                box.selection_range(0, "end")
+                box.icursor("end")
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _keyboard_back(self, path, place, clicks):
+        """Back to the opener once its popup has gone, by any road -- or to
+        what stands in its place, when the choice drew its page again. Not
+        while a question is asking, and not where a click put it since."""
+        def back():
+            if self._a_dialog_is_asking():
+                try:
+                    self.after(100, back)
+                except tk.TclError:
+                    pass
+                return
+            target = self._found_at(place)
+            if target is None:
+                return
+            clicked = getattr(self, "_pointer_presses", 0) != clicks
+            # Without a click, a keyboard in another window was put there by
+            # Windows, activating whatever was under the closed popup.
+            if not self._keyboard_nowhere(gone=path) and (
+                    clicked or self._keyboard_in_window_of(target)):
+                return
+            try:
+                if target.winfo_viewable():
+                    target.focus_set()
+                    self._bring_into_sight(target)
+            except tk.TclError:
+                pass
+        self.after_idle(back)
+
+    def _keyboard_in_window_of(self, widget):
+        """Whether the keyboard is somewhere in *widget*'s own window."""
+        try:
+            now = self.nametowidget(str(self.tk.call("focus")))
+            return now.winfo_toplevel() is widget.winfo_toplevel()
+        except (KeyError, tk.TclError):
+            return False
+
+    def _holds_keyboard(self, widget):
+        """Whether the keyboard is on *widget* in its window, by Tk's own
+        record (focus -lastfor): it holds while another program has the
+        foreground, and a click on a button or a drawn control never sets it."""
+        try:
+            return str(self.tk.call("focus", "-lastfor", widget)) == str(widget)
+        except tk.TclError:
+            return False
+
+    def _keyboard_inside(self, container):
+        """The widget holding the keyboard, by Tk's own record, when it is
+        *container* or inside it; else None."""
+        try:
+            held = str(self.tk.call("focus", "-lastfor", self))
+            if held == str(container) or held.startswith(str(container) + "."):
+                return self.nametowidget(held)
+        except (KeyError, tk.TclError):
+            pass
+        return None
+
+    def _keyboard_to(self, target):
+        """Put the keyboard on *target*, laid out first. Tk holds a request
+        for a window not mapped yet -- a note inside a canvas, a moment after
+        its page came back -- until it is, the keys meanwhile going where
+        they went: so the window takes them first, and types nothing."""
+        if target is None:
+            return
+        try:
+            self.update_idletasks()
+            if not target.winfo_viewable():
+                self.focus_set()
+            target.focus_set()
+        except tk.TclError:
+            pass
+
+    def _watch_parts_put_away(self):
+        """Bound once at start. A part of the window put away while the
+        keyboard is in it -- the checklist folded, the calculator, a panel
+        closed, a Settings section left -- kept it: a click takes no
+        keyboard, and keys went on into what nobody could see, and were
+        saved. One watcher for every such part, made now or later."""
+        self.bind_all("<Unmap>", self._part_put_away, add="+")
+
+    def _part_put_away(self, event):
+        """An unmapped widget its manager has forgotten (pack, grid or place
+        forget), with the keyboard inside it, is looked at again once the
+        moment has passed: a row laid out again is forgotten and packed back
+        in one go. Scrolled out of a canvas, or a tab left, it stays managed."""
+        part = event.widget
+        if isinstance(part, (str, tk.Tk, tk.Toplevel)):
+            return
+        try:
+            if part.winfo_manager():
+                return
+            held = str(self.tk.call("focus", "-lastfor", part))
+            if not (held == str(part) or held.startswith(str(part) + ".")):
+                return
+            held = self.nametowidget(held)
+        except (KeyError, tk.TclError):
+            return
+        self.after_idle(lambda: self.after_idle(
+            lambda: self._keyboard_off_part(held)))
+
+    def _keyboard_off_part(self, held):
+        """The keyboard off *held*, put away with its part: to the control
+        just clicked, when it is in sight and takes it (the checklist's own
+        bar, a Settings entry), else to the next control on, as a press
+        that hid its own button hands it on (_keyboard_stays)."""
+        try:
+            if not held.winfo_exists():
+                return
+            top = held.winfo_toplevel()
+            # Laid out again, it maps once its row's new size settles: pack
+            # asks the parent first, so a toolbar re-dealt by a resize read as
+            # put away, and the keyboard went on into the note.
+            part, laid_out = held, True
+            while laid_out and part is not None and part is not top:
+                laid_out, part = bool(part.winfo_manager()), part.master
+            now = str(self.tk.call("focus"))
+            if (laid_out or str(self.tk.call("focus", "-lastfor", top)) != str(held)
+                    or (now and self.nametowidget(now).winfo_toplevel() is not top)
+                    or held.winfo_viewable() or not top.winfo_viewable()):
+                return      # laid out again, moved since, in sight, or the window away
+            target, at = getattr(self, "_last_press", (None, 0.0))
+            if not (target is not None and time.monotonic() - at < 1.0
+                    and not isinstance(target, str) and target.winfo_exists()
+                    and target.winfo_toplevel() is top
+                    and str(self.tk.call("tk::FocusOK", target)) == "1"):
+                target = held.tk_focusNext()
+        except (KeyError, tk.TclError):
+            return
+        self._keyboard_to(target if target is not None else top)
+
+    def _tab_target_into_sight(self, event, backwards=False):
+        """Tab moves the keyboard and never the view, so what it lands on is
+        brought into sight. Runs after Tk's own traversal (bound with "+")."""
+        try:
+            here = event.widget
+            target = here.tk_focusPrev() if backwards else here.tk_focusNext()
+        except (tk.TclError, KeyError, AttributeError):
+            return
+        if target is not None:
+            self._bring_into_sight(target)
+
+    def _bring_into_sight(self, widget, part=None):
+        """Scroll each canvas holding *widget* on a page just far enough to
+        show it -- or *part*, a (top, bottom) span of it -- innermost first:
+        the editor, Settings, the calendar and the Trash, Share and emoji
+        lists are frames drawn on canvases."""
+        try:
+            child = widget
+            while child is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+                parent = child.master
+                if (isinstance(parent, tk.Canvas) and isinstance(child, tk.Frame)
+                        and self._drawn_box(parent, child) is not None):
+                    self._show_on_canvas(parent, child, widget, part)
+                child = parent
+        except (tk.TclError, AttributeError, ValueError, TypeError):
+            pass
+
+    def _in_sight(self, widget):
+        """Whether *widget* stands where the person can see it: mapped, and
+        wholly inside the view of every canvas it is scrolled on, as
+        _bring_into_sight would leave it. winfo_viewable() alone means mapped:
+        the note page's status line, at the foot of the scrolled editor, is
+        mapped while far below the view at the window's own sizes."""
+        try:
+            if not widget.winfo_viewable():
+                return False
+            child = widget
+            while child is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+                parent = child.master
+                box = (self._drawn_box(parent, child)
+                       if isinstance(parent, tk.Canvas) and isinstance(child, tk.Frame)
+                       else None)
+                if box is not None:
+                    top = box[1] + self._offset_within(widget, child, "y")
+                    shown = parent.canvasy(0)
+                    if (top < shown or top + widget.winfo_height()
+                            > shown + parent.winfo_height()):
+                        return False
+                child = parent
+            return True
+        except (tk.TclError, AttributeError, ValueError, TypeError):
+            return False
+
+    @staticmethod
+    def _canvas_window_item(canvas, child):
+        for item in canvas.find_all():
+            if (canvas.type(item) == "window"
+                    and str(canvas.itemcget(item, "window")) == str(child)):
+                return item
+        return None
+
+    def _drawn_box(self, canvas, child):
+        """Where *canvas* draws *child*, in its own coordinates: a window
+        item's box, or a row stack's chunk's (RowStack); else None."""
+        stack = getattr(canvas, "_row_stack", None)
+        if stack is not None and stack.box(child) is not None:
+            return stack.box(child)
+        if child.winfo_manager() != "canvas":
+            return None
+        item = self._canvas_window_item(canvas, child)
+        return canvas.bbox(item) if item is not None else None
+
+    def _offset_within(self, widget, page, axis):
+        """How far *widget* lies from *page*'s top (axis "y") or left edge.
+        A canvas on the way is crossed by its scroll, which it updates at
+        once; the windows on it move only when it next draws."""
+        total, w = 0.0, widget
+        while w is not None and w is not page:
+            parent = w.master
+            box = (self._drawn_box(parent, w)
+                   if isinstance(parent, tk.Canvas) else None)
+            if box is not None:
+                shown = parent.canvasy(0) if axis == "y" else parent.canvasx(0)
+                total += box[1 if axis == "y" else 0] - shown
+            else:
+                total += w.winfo_y() if axis == "y" else w.winfo_x()
+            w = parent
+        return total
+
+    def _show_on_canvas(self, canvas, page, widget, part=None):
+        """Scroll *canvas*, which draws *page*, until *widget* (or *part* of
+        it) is inside its view with a small margin -- the least movement."""
+        box = self._drawn_box(canvas, page)
+        if box is None:
+            return
+        region = str(canvas.cget("scrollregion")).split() or canvas.bbox("all")
+        if not box or not region or len(region) != 4:
+            return
+        region = [float(v) for v in region]
+        margin = self.px(6)
+        for axis, i in (("y", 1), ("x", 0)):
+            view = canvas.winfo_height() if axis == "y" else canvas.winfo_width()
+            span = region[i + 2] - region[i]
+            if view <= 1 or span <= view:
+                continue
+            near = box[i] + self._offset_within(widget, page, axis)
+            if axis == "y" and part is not None:
+                near, far = near + part[0], near + part[1]
+            else:
+                far = near + (widget.winfo_height() if axis == "y"
+                              else widget.winfo_width())
+            shown = canvas.canvasy(0) if axis == "y" else canvas.canvasx(0)
+            if near - margin < shown:
+                start = near - margin
+            elif far + margin > shown + view:
+                start = min(near - margin, far + margin - view)
+            else:
+                continue
+            fraction = max(0.0, min((start - region[i]) / span, 1.0))
+            (canvas.yview_moveto if axis == "y" else canvas.xview_moveto)(fraction)
+            # A move the person made, as the scrollbar's is: it beats a
+            # table rebuild's restore still in force (_editor_scrollbar_moved).
+            if canvas is getattr(self, "editor_canvas", None):
+                self._grid_view_restore = None

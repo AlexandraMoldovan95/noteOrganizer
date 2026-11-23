@@ -1,1 +1,3 @@
-Pillow
+# Pinned: the .exe ships this Pillow, so CI tests this one. NoteOrganizer.spec
+# stops a build with any other; docs/RELEASE_WINDOWS.md, "Updating Pillow".
+Pillow==13.0.0

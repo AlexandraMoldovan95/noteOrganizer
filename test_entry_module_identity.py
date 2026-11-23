@@ -35,7 +35,7 @@ Two ways, from opposite directions:
 
 Run it like the other standalone suites::
 
-    py test_entry_module_identity.py
+    py tools/run_tests.py test_entry_module_identity
 """
 
 import io
@@ -45,6 +45,12 @@ import shutil
 import sys
 import tempfile
 import tkinter as tk
+
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
 
 fails = []
 

@@ -29,7 +29,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 
 RESULTS = "audit_results.json"
 
@@ -51,11 +50,17 @@ CHAPTERS = [
 def drive():
     sys.stdout.reconfigure(encoding="utf-8")
     root = _root()
-    work = tempfile.mkdtemp(prefix="audit-")
+    sys.path.insert(0, os.path.join(root, "tools"))
+    import guest  # this machine's turn and the memory ceiling (tools/guest.py)
+    for line in guest.settle(label="story_audit"):
+        print(line)
+    # Marked as this run's: an audit killed halfway is removed by the next run.
+    work = guest.scratch("audit-")
     shutil.copy2(os.path.join(root, "note_organizer.py"), work)
     shutil.copytree(os.path.join(root, "noteorganizer"),
                     os.path.join(work, "noteorganizer"))
-    shutil.copy2(os.path.join(root, "qa", "_qa_support.py"), work)
+    for name in (os.path.join("qa", "_qa_support.py"), os.path.join("tools", "guest.py")):
+        shutil.copy2(os.path.join(root, name), work)
     shutil.copy2(os.path.abspath(__file__), os.path.join(work, "story_audit.py"))
     io.open(os.path.join(work, "notes_data.json"), "w", encoding="utf-8").write("[]")
     io.open(os.path.join(work, "settings.json"), "w", encoding="utf-8").write(
@@ -76,10 +81,22 @@ def drive():
         io.open(os.path.join(work, "settings.json"), "w",
                 encoding="utf-8").write(json.dumps(
                     {"cleanup_done": True, "reclaimed_from_appdata": True}))
-        run = subprocess.run(
-            [sys.executable, "story_audit.py", "--chapter", str(number)],
-            cwd=work, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=600)
+        try:
+            run = subprocess.run(
+                [sys.executable, "story_audit.py", "--chapter", str(number)],
+                cwd=work, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=600)
+            said = (run.stdout or "") + (run.stderr or "")
+        except subprocess.TimeoutExpired as hung:
+            # A hang is this chapter's finding, named, and the audit goes on.
+            said = "".join(v.decode("utf-8", "replace") if isinstance(v, bytes) else (v or "")
+                           for v in (hung.stdout, hung.stderr))
+            rows.append(("chapter %d finished within 600 s" % number, False, "HANG"))
+            print("    HANG: chapter %d did not finish within 600 s" % number)
+            for line in said.strip().splitlines()[-8:]:
+                print("      | %s" % line)
+            _clear(work)
+            continue
         found = _read(work)
         rows.extend(found)
         for name, ok, detail in found:
@@ -87,7 +104,7 @@ def drive():
                                    "" if ok else "\n         <- %s" % detail))
         if not found:
             print("    THE CHAPTER SAID NOTHING (did it crash?)")
-            for line in (run.stdout + run.stderr).strip().splitlines()[-8:]:
+            for line in said.strip().splitlines()[-8:]:
                 print("      | %s" % line)
             rows.append(("chapter %d ran" % number, False, "no results"))
         _clear(work)
@@ -98,9 +115,19 @@ def drive():
     if failed:
         for name in failed:
             print("   * %s" % name)
+        # The notebook it walked stays to be read; the app's copy goes, and
+        # a later run removes the rest after guest.KEPT_DAYS.
+        for name in ("note_organizer.py", "noteorganizer", "_qa_support.py", "guest.py",
+                     "story_audit.py", "__pycache__"):
+            path = os.path.join(work, name)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+            elif os.path.exists(path):
+                os.remove(path)
+        guest.keep(work, "story_audit: the notebook of a failed audit")
         print("The directory was left in place: %s" % work)
         return 1
-    shutil.rmtree(work, ignore_errors=True)
+    guest.remove(work)
     print("Nothing new. That does not mean correct -- it means nothing is here.")
     return 0
 
@@ -275,9 +302,9 @@ def chapter_3():
     story = Chapter()
     _seed(NO, app, 3)
     NO.CATEGORY_COLORS["OldFiling"] = "#993333"
-    app.save_templates([{"name": "An old template", "title": "T", "body": "b",
-                         "comments": "", "category": "General", "checklist": []}]) \
-        if hasattr(app, "save_templates") else None
+    NO.save_templates([{"name": "An old template", "title": "T", "body": "b",
+                        "comments": "", "category": "General", "checklist": []}])
+    app.templates = NO.load_templates()
 
     def texts(widget, out=None):
         if out is None:
@@ -305,6 +332,9 @@ def chapter_3():
                                         "body": "idem", "category": "General"}))
     app._delete_note(app.notes[0], None)
     app.save_notes()
+    app.templates.append(NO.normalize_template({"name": "A template added since",
+                                                "title": "T2", "body": "b2"}))
+    NO.save_templates(app.templates)
     app.update()
 
     app.show_settings_page()
@@ -320,6 +350,13 @@ def chapter_3():
                 "on screen: %s" % [t[:20] for t in seen if t][:6])
     story.check("...and no longer shows the deleted one",
                 not any("OldFiling" in t for t in seen))
+    app.toggle_settings_panel("templates")
+    app.update()
+    shown = texts(app.settings_templates_panel)
+    story.check("Templates, on a second visit, shows the template added in the meantime",
+                any("A template added since" in t for t in shown)
+                and any("An old template" in t for t in shown),
+                "on screen: %s" % [t[:24] for t in shown if t][:6])
     app.toggle_settings_panel("trash")
     app.update()
     story.check("Recently deleted shows the note deleted in the meantime",
@@ -445,11 +482,10 @@ def chapter_6():
     story.check("after a restart, the moment of deletion is the same",
                 back.get("deleted_at") == stamp,
                 "%r -> %r" % (stamp, back.get("deleted_at")))
-    left = NO2.days_left_in_trash(back) if hasattr(NO2, "days_left_in_trash") else None
-    if left is not None:
-        story.check("...and the days left are counted from it",
-                    isinstance(left, int) and 0 < left <= NO2.trash_retention_days(),
-                    repr(left))
+    left = NO2.core_days_left_in_trash(back.get("deleted_at"))
+    story.check("...and the days left are counted from it",
+                isinstance(left, int) and 0 < left <= NO2.trash_retention_days(),
+                repr(left))
     again.destroy()
     story.save()
 
@@ -461,6 +497,11 @@ CHAPTER_FNS = {1: chapter_1, 2: chapter_2, 3: chapter_3,
 if __name__ == "__main__":
     if "--chapter" in sys.argv:
         number = int(sys.argv[sys.argv.index("--chapter") + 1])
+        # A ceiling of its own before the app is built, inside the driver's
+        # turn (guest.py, copied beside this file into the scratch).
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import guest
+        guest.settle(label="story_audit chapter %d" % number)
         try:
             CHAPTER_FNS[number]()
         except Exception:

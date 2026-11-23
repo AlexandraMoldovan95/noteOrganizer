@@ -1,16 +1,19 @@
 """Reading and writing the app's data files.
 
-Everything that touches settings.json, templates.json and trash.json, and
-the copy of the notes file made before it is rewritten. The locations are
-read from :mod:`.paths` when a function runs, never copied at import time,
-when they are not yet known. Every loader returns something usable
-whatever it finds -- a missing, unreadable or wrongly shaped file gives an
-empty default, after the unreadable bytes are kept aside -- and every
-writer goes through one atomic helper. docs/CODE_TOUR.md walks through it.
+Everything that reads or writes notes_data.json, settings.json,
+templates.json and trash.json, the Trash's purge among it, and the copy of
+the notes file made before it is rewritten. Locations are read from
+:mod:`.paths` when a function runs, never at import. Every loader returns
+something usable whatever it finds -- an unreadable file gives an empty
+default, its bytes kept aside -- and every writer goes through one atomic
+helper. docs/CODE_TOUR.md walks through it.
 """
 
+import copy
+import filecmp
 import json
 import os
+import re
 import shutil
 import time
 from datetime import datetime
@@ -20,6 +23,17 @@ from . import diagnostics, paths
 # paragraph formatting, so the storage layer needs both validators.
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line)
+
+# The stamp a note's created and updated and a Trash entry's deleted_at
+# wear, seconds included, as DATA_FORMAT fixes it: written and read here
+# once, where fifteen sites once spelled it each by hand.
+STAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def now_stamp():
+    """Now, as a note's stamps are written."""
+    return datetime.now().strftime(STAMP_FORMAT)
+
 
 # Deleted notes live in the trash this many days, then auto-purge on
 # startup. This is the DEFAULT; the actual window is a setting, read
@@ -49,12 +63,20 @@ def trash_retention_days():
     return days
 
 
+def count_noun(count, noun, plural=None):
+    """"1 note", "2 notes": a count with its noun in the form the number
+    takes -- *plural* when it is not the noun and an "s" ("category",
+    "categories"). The one answer, held by check_one_definition: a "note(s)"
+    wrote both forms where the number was known."""
+    return f"{count} {noun if count == 1 else (plural or noun + 's')}"
+
+
 def trash_window_words(lead):
     """" within 30 days" -- *lead* and the window in force, for a promise a
     delete makes about the Trash -- or "" while the window is not known,
     when no number of days would be true."""
     days = trash_retention_days()
-    return "" if days is None else f" {lead} {days} days"
+    return "" if days is None else f" {lead} {count_noun(days, 'day')}"
 
 
 def choose_trash_window(days):
@@ -63,21 +85,69 @@ def choose_trash_window(days):
     alone. Returns what save_settings returns."""
     settings = load_settings()
     settings["trash_retention_days"] = days
-    settings.pop(TRASH_WINDOW_UNKNOWN, None)
+    # The mark also kept the one-time cleanup waiting (load_notes): its "done",
+    # lost with the file, is no "never", or it ran again on months of notes.
+    if settings.pop(TRASH_WINDOW_UNKNOWN, None) is not None:
+        settings.setdefault("cleanup_done", True)
     return save_settings(settings)
+
+
+# A JSON escape can spell half an emoji, a lone surrogate, which Tk will not
+# draw: one in a note's title stopped the app starting, at every launch.
+_ESCAPED_SURROGATE = re.compile(r"\\u[dD][89a-fA-F]")
+
+
+def json_from_text(text):
+    """*text* read as JSON, every lone surrogate an escape spells mended
+    (mend_surrogates). Every data file and every import reads through here.
+    Looked for in the text first: mending rebuilds every value, and a file
+    the app wrote never needs it."""
+    data = json.loads(text)
+    return mend_surrogates(data) if _ESCAPED_SURROGATE.search(text) else data
 
 
 # ---- Settings file (read/modify/write, so keys never clobber each other) ----
 
+#: The settings' text as last read or written whole this run, and its file,
+#: for a read refused later (load_settings). Text, not the dict handed out: a
+#: refused change stood in that, and the next write that landed kept it.
+_settings_read = (None, None)
+#: The settings file whose first read this run was made, with its retries.
+_settings_tried = None
+
+
 def load_settings():
+    """The settings, read fresh: callers change a key and write it all back.
+    A read the system refuses (another program holding the file) is not
+    damage: the run's first read is tried as the notes are, and a file never
+    read is not written that run; later the last good read stands in, or one
+    try. Retried at every read, a hold kept the start 19 s."""
+    global _settings_read, _settings_tried
+    known = _settings_read[1] if _settings_read[0] == paths.SETTINGS_FILE else None
+    first = _settings_tried != paths.SETTINGS_FILE
+    _settings_tried = paths.SETTINGS_FILE
+    # Held, the defaults stand for the whole run, as its notice says: read
+    # once the hold ended, the real window purged a Trash said to keep all.
+    if known is None and paths.writes_held(paths.SETTINGS_FILE):
+        return {TRASH_WINDOW_UNKNOWN: True}
     if os.path.exists(paths.SETTINGS_FILE):
         try:
-            with open(paths.SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            if known is None and first:
+                text = _read_data_file(paths.SETTINGS_FILE)
+            else:
+                with open(paths.SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    text = f.read()
+            data = json_from_text(text)
             if isinstance(data, dict):
+                _settings_read = (paths.SETTINGS_FILE, text)
                 return data
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, ValueError):
             pass
+        except OSError:
+            if known is not None:
+                return json_from_text(known)
+            paths.hold_writes(paths.SETTINGS_FILE)
+            return {TRASH_WINDOW_UNKNOWN: True}
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
         _preserve_corrupt(paths.SETTINGS_FILE)
@@ -94,26 +164,40 @@ def save_settings(settings):
 
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``."""
-    return _write_json_atomic(paths.SETTINGS_FILE, settings)
+    global _settings_read
+    ok, exc = _write_json_atomic(paths.SETTINGS_FILE, settings)
+    if ok:
+        _settings_read = (paths.SETTINGS_FILE, json_text(settings))
+    return ok, exc
 
 
+
+
+# Far past anyone's use: 20,000 templates in a 49 KB backup took fourteen
+# seconds to import and five for the picker to open.
+MAX_TEMPLATES = 1_000
+
+
+KNOWN_TEMPLATE_FIELDS = frozenset({
+    "name", "title", "body", "formatting", "paragraphs", "comments", "category", "checklist"})
 
 
 def normalize_template(tpl):
     """Coerce a template dict into a known shape so bad/old data can't crash the
     manager or the 'use template' flow. A template holds a name plus the note
-    fields it fills in: title, body, comments, category."""
+    fields it fills in: title, body, comments, category. A field a newer
+    version wrote rides along, bounded as a note's (unknown_fields)."""
     if not isinstance(tpl, dict):
         tpl = {}
     # Lazy, like this module's other model imports: model -> categories ->
     # storage at import time, so a top-level import here closes the loop.
-    from .model import MAX_CHECKLIST_ITEMS
+    from .model import MAX_CHECKLIST_ITEMS, unknown_fields
 
     def _s(key, default=""):
         v = tpl.get(key, default)
         return v if isinstance(v, str) else default
 
-    return {
+    shaped = {
         "name": _s("name") or "Untitled template",
         "title": _s("title"),
         "body": _s("body"),
@@ -130,8 +214,10 @@ def normalize_template(tpl):
         # template: 20,000 items in templates.json froze the app the moment
         # the template was applied.
         "checklist": [
+            # An item's length kept whole, as a note's (checklist_shown);
+            # ticked by true alone, as a note's (normalize_checklist).
             {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
-             "done": bool(it.get("done"))}
+             "done": it.get("done") is True}
             # isinstance first: the cap's slice raises on a dict-shaped
             # value, and templates.json is hand-editable -- what used to
             # degrade to an empty checklist would have crashed startup.
@@ -141,26 +227,67 @@ def normalize_template(tpl):
             if isinstance(it, dict)
         ],
     }
+    # Kept as they came: rebuilt from the known fields alone, a newer version's
+    # field was gone at the next template saved or imported.
+    shaped.update(unknown_fields(tpl, KNOWN_TEMPLATE_FIELDS))
+    return shaped
+
+
+#: What Settings → Templates and Use template say over a templates file held
+#: this run, read as none: "You don't have any" over templates the file keeps.
+TEMPLATES_HELD_WORDS = (
+    "Your templates couldn't be read this time, so none are shown. Nothing is "
+    "lost: close Note Organizer and open it again.")
+
+# A rename or delete over held settings or notes moved one and not the other: the old name
+# came back empty at the next start, a deleted one too.
+CATEGORIES_HELD_WORDS = (
+    "Your settings or your notes couldn't be read this time, so a category can't be "
+    "renamed or deleted until Note Organizer is closed and opened again. Nothing was "
+    "changed.")
+CATEGORIES_UNSAVED_WORDS = (
+    "The list of categories couldn't be saved just now, so nothing was changed. Try "
+    "again in a moment.")
 
 
 def load_templates():
     if os.path.exists(paths.TEMPLATES_FILE):
         try:
-            with open(paths.TEMPLATES_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = json_from_text(_read_data_file(paths.TEMPLATES_FILE))
             if isinstance(data, list):
-                kept = [normalize_template(t) for t in data if isinstance(t, dict)]
+                kept = []
+                for t in data:
+                    if isinstance(t, dict):
+                        kept.append(normalize_template(t))
+                        if len(kept) >= MAX_TEMPLATES:
+                            break
                 if data and not kept:
                     # List-shaped but all junk: same as unreadable —
                     # keep the bytes before a save replaces them.
                     _preserve_corrupt(paths.TEMPLATES_FILE)
                 return kept
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except OSError:
+            # Refused, not damaged: held, never copied aside (as load_notes).
+            paths.hold_writes(paths.TEMPLATES_FILE)
+            return []
+        except paths.JSON_UNREADABLE:
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
         _preserve_corrupt(paths.TEMPLATES_FILE)
     return []
+
+
+def read_list_now(path):
+    """The entries a data file holds, read once now, or None when it will not
+    open or holds no list: for a backup of a file the start could not read,
+    whose entries the app therefore does not hold."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json_from_text(f.read())
+    except (*paths.JSON_UNREADABLE, ValueError, OSError):
+        return None
+    return [e for e in data if isinstance(e, dict)] if isinstance(data, list) else None
 
 
 def save_templates(templates):
@@ -178,20 +305,26 @@ def load_trash():
     file is preserved aside. Only dict entries come in, kept as the file held
     them: a string or null beside them kept Recently deleted from opening,
     and the real notes could not be restored."""
+    _UNREAD_AT_LOAD.discard(paths.TRASH_FILE)
     if os.path.exists(paths.TRASH_FILE):
         try:
-            with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = json_from_text(_read_data_file(paths.TRASH_FILE))
             if isinstance(data, list):
                 kept = [e for e in data if isinstance(e, dict)]
                 if len(kept) != len(data):
                     _preserve_corrupt(paths.TRASH_FILE)
                 return kept
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except OSError:
+            # Refused, not damaged: held, never copied aside (as load_notes).
+            paths.hold_writes(paths.TRASH_FILE)
+            return []
+        except paths.JSON_UNREADABLE:
             pass
         # Reached only when the file exists but held nothing usable —
-        # keep its bytes before the next save replaces them.
+        # keep its bytes before the next save replaces them; its entries'
+        # files kept all run (attached_files_kept), as an unread notes file's.
         _preserve_corrupt(paths.TRASH_FILE)
+        _UNREAD_AT_LOAD.add(paths.TRASH_FILE)
     return []
 
 
@@ -218,19 +351,51 @@ def _attachment_path_within(stored_as):
         # later remove or startfile raises ValueError, which the sinks'
         # "except OSError" would not catch.
         return None
+    if (os.path.basename(stored_as.replace("\\", "/")) != stored_as
+            or stored_as in (".", "..")):
+        # One bare file name, as the app stores it: "zz/../x" and "./x" came
+        # back to a file once tidied, past every exact comparison of names.
+        return None
+    if ":" in stored_as:
+        # No Windows file name holds a colon: "x.docx:Zone.Identifier" is a
+        # stream of x.docx, its Mark of the Web, which realpath hands back as
+        # it is. Refused on every system. ISSUES_LOG: "A file with two names".
+        return None
     try:
         base = os.path.realpath(paths.ATTACHMENTS_DIR)
-        candidate = os.path.realpath(os.path.join(base, stored_as))
+        named = os.path.join(base, stored_as)
+        candidate = os.path.realpath(named)
         if candidate == base:
             return None  # the folder itself, not a file in it
         if os.path.commonpath([base, candidate]) != base:
             return None  # escaped the attachments folder
+        # The file reached must be the file named, case and all: NTFS
+        # aliases (a short name, "::$DATA", capitals) reached another note's
+        # file. ISSUES_LOG: "A file with two names".
+        if (os.path.normcase(candidate) != os.path.normcase(named)
+                or os.path.basename(candidate) != stored_as):
+            return None
     except (ValueError, OSError):
         # commonpath raises across drives and UNC roots, realpath on a NUL:
         # "cannot resolve safely" means refuse, never crash the delete loop,
         # which runs unguarded in the startup purge.
         return None
     return candidate
+
+
+def same_attached_file(one, other):
+    """Whether two attachments are one file twice -- the same name shown and
+    the same bytes under two stored names, as Duplicate makes them."""
+    if (one.get("filename") or "") != (other.get("filename") or ""):
+        return False
+    first = _attachment_path_within(one.get("stored_as"))
+    second = _attachment_path_within(other.get("stored_as"))
+    if first is None or second is None:
+        return False
+    try:
+        return filecmp.cmp(first, second, shallow=False)
+    except OSError:
+        return False
 
 
 def copy_attachment_file(stored_as):
@@ -255,16 +420,39 @@ def copy_attachment_file(stored_as):
         shutil.copy2(src, dest)
         return new_name
     except (IOError, OSError):
+        # Half a copy, from a full disk, named by no note: not left behind.
+        try:
+            os.remove(dest)
+        except OSError:
+            pass
         return None
+
+
+def attachments_of(note):
+    """The attachments of a note or Trash entry that name a file: dicts with
+    a non-empty string stored_as. Trash entries come in as the file held
+    them, and a 7, a true or a list there stopped the app at every start."""
+    atts = note.get("attachments") if isinstance(note, dict) else None
+    if not isinstance(atts, list):
+        return []
+    return [a for a in atts if isinstance(a, dict)
+            and isinstance(a.get("stored_as"), str) and a["stored_as"]]
 
 
 def attachment_names_in(notes_or_entries):
     """The stored file name of every attachment these notes (or trash
     entries) use."""
-    return {att.get("stored_as")
-            for note in notes_or_entries if isinstance(note, dict)
-            for att in (note.get("attachments") or [])
-            if isinstance(att, dict) and att.get("stored_as")}
+    return {att["stored_as"] for note in notes_or_entries
+            for att in attachments_of(note)}
+
+
+def attached_files_kept():
+    """Whether deleting for good keeps every attached file this run: a run
+    that could not read the notes file or the Trash -- held, or set aside
+    unreadable -- holds notes it never saw, and a file may be theirs, until a
+    run that has read them. The questions that name the files go with it."""
+    return any(paths.writes_held(path) or path in _UNREAD_AT_LOAD
+               for path in (paths.DATA_FILE, paths.TRASH_FILE))
 
 
 def _delete_attachment_files(notes_or_entries, spare=()):
@@ -273,14 +461,12 @@ def _delete_attachment_files(notes_or_entries, spare=()):
     note moved to the Trash may still come back. *spare* names files that
     must survive, those the notes in the app still use, in case a stale row
     acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
+    if attached_files_kept():
+        return
     for note in notes_or_entries:
-        if not isinstance(note, dict):
-            continue
-        for att in note.get("attachments") or []:
-            if not isinstance(att, dict):
-                continue
-            stored_as = att.get("stored_as")
-            if not stored_as or stored_as in spare:
+        for att in attachments_of(note):
+            stored_as = att["stored_as"]
+            if stored_as in spare:
                 continue
             path = _attachment_path_within(stored_as)
             if path is None:
@@ -331,7 +517,7 @@ def _deleted_epoch(stamp):
     spring the purge took notes an hour before the window was up. Counted
     in real time, as the Android app counts (2026-10-26)."""
     try:
-        when = datetime.strptime(stamp or "", "%Y-%m-%d %H:%M:%S")
+        when = datetime.strptime(stamp or "", STAMP_FORMAT)
     except (ValueError, TypeError):
         return None
     try:
@@ -368,13 +554,13 @@ def trash_entries_past_window(trash, days=None):
             if _trash_entry_is_past(entry, cutoff)]
 
 
-def purge_expired_trash(trash, notes):
+def purge_expired_trash(trash, notes, write=None):
     """Remove entries older than the retention window. Returns (kept, purged
     count). An entry with a missing/invalid deleted_at is kept: better too
-    long than early. The purged notes' attached files go too -- the one
-    deletion nobody asks for must not leave orphans -- except a file *notes*
-    or a kept entry still uses, as Delete and Empty trash spare it
-    (ISSUES_LOG: "The Trash that forgot its window")."""
+    long than early. The purged notes' files go too, except one *notes* or a
+    kept entry uses (ISSUES_LOG: "The Trash that forgot its window"). Given
+    *write* (save_trash), the kept list is written first and the files go
+    only if it landed; refused, nothing is purged."""
     cutoff = _trash_cutoff()
     kept = []
     purged_entries = []
@@ -383,6 +569,8 @@ def purge_expired_trash(trash, notes):
             purged_entries.append(entry)
         else:
             kept.append(entry)
+    if purged_entries and write is not None and not write(kept)[0]:
+        return list(trash or []), 0
     _delete_attachment_files(
         purged_entries, spare=attachment_names_in(list(notes or []) + kept))
     return kept, len(purged_entries)
@@ -397,9 +585,32 @@ from noteorganizer.core.duplicates import (
 )
 
 
-# One implementation, shared with the pre-configure migration code in
-# paths.py (which cannot import this module back without a cycle).
-_preserve_corrupt = paths.preserve_corrupt_file
+def _preserve_corrupt(path):
+    """Keep an unreadable data file's bytes aside (paths.preserve_corrupt_file,
+    shared with the pre-configure migration). When even that fails, nothing
+    may write over the file this run (paths.hold_writes): its bytes are in no
+    other copy."""
+    kept = paths.preserve_corrupt_file(path)
+    if kept is None:
+        paths.hold_writes(path)
+    return kept
+
+
+def _read_data_file(path):
+    """The text of a data file read once at the start, tried three times half
+    a second apart when the system refuses it: a scanner or a sync tool holds
+    a file for a moment, and that moment read as an empty notebook."""
+    for attempt in range(3):
+        if attempt:
+            time.sleep(0.5)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except UnicodeDecodeError:
+            raise
+        except OSError:
+            if attempt == 2:
+                raise
 
 
 def backup_notes_file():
@@ -408,12 +619,27 @@ def backup_notes_file():
     if not os.path.exists(paths.DATA_FILE):
         return None
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(os.path.dirname(paths.DATA_FILE), f"notes_data_backup_{stamp}.json")
-    try:
-        shutil.copy2(paths.DATA_FILE, backup_path)
-        return backup_path
-    except (IOError, OSError):
-        return None
+    backup_path = paths.unused_path(os.path.dirname(paths.DATA_FILE), f"notes_data_backup_{stamp}", ".json")
+    # Whole or not at all: on a full disk copy2 left a cut-off copy, unreadable,
+    # under the name the update's notice was about to give as the safety net.
+    part = backup_path + ".part"
+    # Tried three times, as the read after it (_read_data_file): a scanner
+    # holding the file a moment left an update with no copy, said as a full disk.
+    for attempt in range(3):
+        if attempt:
+            time.sleep(0.5)
+        try:
+            shutil.copy2(paths.DATA_FILE, part)
+            with open(part, "ab") as f:
+                os.fsync(f.fileno())
+            os.replace(part, backup_path)
+            return backup_path
+        except (IOError, OSError):
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+    return None
 
 
 # ---- Notes file ----
@@ -455,12 +681,13 @@ def load_notes(version_change=None):
     """
     # Imported here: storage -> model -> categories -> storage is a real
     # cycle, and at module level the import fails half-initialised.
-    from .model import normalize_note, clean_notes, repair_note_ids
+    from .model import normalize_note, clean_notes, repair_note_ids, settle_set_aside
     from .categories import adopt_categories_of, persist_categories
 
-    report = {"version_backup_path": None, "cleanup_report": None,
+    report = {"version_backup_path": None, "version_backup_failed": False,
+              "cleanup_report": None,
               "notes_file_corrupt": False, "corrupt_backup_path": None,
-              "categories_adopted": [],
+              "categories_adopted": [], "set_aside_made": 0,
               "fresh_notebook": not os.path.exists(paths.DATA_FILE)}
     raw = []
     if os.path.exists(paths.DATA_FILE):
@@ -469,12 +696,27 @@ def load_notes(version_change=None):
         # automatically: old backups are the user's to throw away.
         if version_change and version_change[0] == "up":
             report["version_backup_path"] = backup_notes_file()
+            # Said at the start (announce_startup_changes): a safety net that
+            # could not be made read the same as one never promised.
+            report["version_backup_failed"] = report["version_backup_path"] is None
+        refused = False
         try:
-            with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+            raw = json_from_text(_read_data_file(paths.DATA_FILE))
+        except OSError:
+            # Refused, not damaged (another program holding it): held, never
+            # copied aside -- a copy made the moment it let go took a good file
+            # aside, and the empty list's first save went over it.
+            raw, refused = None, True
+        except paths.JSON_UNREADABLE:
             raw = None
-        if not isinstance(raw, list):
+        if refused:
+            paths.hold_writes(paths.DATA_FILE)
+            report["notes_file_corrupt"] = True
+            report["corrupt_backup_path"] = None
+            # The start says another program may hold it, not that it is broken.
+            report["notes_file_refused"] = True
+            raw = []
+        elif not isinstance(raw, list):
             # There, but nothing usable: its bytes are kept before an empty
             # list can be saved over them (once the moment a corrupt notebook
             # was lost for good), and the caller is told to TELL the user.
@@ -487,14 +729,23 @@ def load_notes(version_change=None):
     # The notes' own categories join the map BEFORE normalising, which files
     # an unknown category under General; saved at once, before the cleanup
     # below reads the settings, so its own write carries them too.
-    report["categories_adopted"] = adopt_categories_of(raw)
-    if report["categories_adopted"]:
-        persist_categories()
+    adopted = adopt_categories_of(raw)
+    # A settings file the start could not read was never read for its
+    # categories: they did not go missing from it, and it is not written.
+    held = paths.writes_held(paths.SETTINGS_FILE)
+    report["categories_adopted"] = [] if held else adopted
+    if adopted and not held:
+        # Refused, said so: "added back" came again at every start, unsaid why.
+        report["categories_unsaved"] = not persist_categories()
 
     # Every note gets the full set of fields, so no later code has to
     # guess whether an old note has 'comments' or 'attachments'.
     notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
     ids_repaired = repair_note_ids(notes)
+    # Days a series' copy set aside, notes of their own now, written below
+    # with the identities: unwritten, each start made them again under new
+    # ones, and said so again.
+    report["set_aside_made"] = aside_made = settle_set_aside(notes)
     # Identities minted in memory differ every launch unless written down
     # (ISSUES_LOG: "The identity that only lasted until you closed the
     # app"), so a read that minted any writes them, once, after the cleanup.
@@ -509,36 +760,59 @@ def load_notes(version_change=None):
 
     settings = load_settings()
     # The one-time cleanup rewrites the file, so it waits out a launch that
-    # just declared the file unreadable: the startup notice is promising
-    # those bytes are still on disk (and an empty list has nothing to clean).
-    if not settings.get("cleanup_done") and not report["notes_file_corrupt"]:
-        backup_path = backup_notes_file()
+    # just declared the file unreadable (the notice promises its bytes), and
+    # settings it could not read, where "not done" only means unknown.
+    cleanup_due = (not settings.get("cleanup_done") and not report["notes_file_corrupt"]
+                   and TRASH_WINDOW_UNKNOWN not in settings)
+    backup_path = backup_notes_file() if cleanup_due else None
+    if cleanup_due and backup_path is None and os.path.exists(paths.DATA_FILE):
+        # The cleanup removes notes; with no copy of them made (a full disk)
+        # it waits for a launch that can make one.
+        cleanup_due = False
+    if cleanup_due:
         # The cleanup renumbers every id from 1, so the remembered open note
         # is re-pointed by identity, or forgotten if the cleanup removed it.
         # ISSUES_LOG, smaller lessons: load_notes.
         remembered = settings.get("last_open_note_id")
+        # On copies, kept only when their write lands: marked done over a
+        # file it never reached, its new ids met a file and a remembered
+        # note that still held the old ones. The next launch tries again.
+        copies = [dict(n) for n in notes]
         was_open = None
         if remembered is not None:
             was_open = next(
-                (n for n in notes if n.get("id") == remembered), None)
-        notes, stats = clean_notes(notes)
-        if remembered is not None:
-            settings["last_open_note_id"] = (
-                was_open["id"]
-                if was_open is not None and any(n is was_open for n in notes)
-                else None)
-        report["cleanup_report"] = (stats, backup_path)
+                (c for c, n in zip(copies, notes) if n.get("id") == remembered), None)
+        cleaned, stats = clean_notes(copies)
+        # Against what the file holds, not the notes as read: the read drops a
+        # body written as a list, and a field past unknown ones' bounds or named
+        # "_..." -- and its copy was then the only place they were left.
+        unchanged = cleaned == raw
+        written, _error = _write_json_atomic(paths.DATA_FILE, cleaned)
+        if written:
+            notes = cleaned
+            if remembered is not None:
+                settings["last_open_note_id"] = (
+                    was_open["id"]
+                    if was_open is not None and any(n is was_open for n in notes)
+                    else None)
+            report["cleanup_report"] = (stats, None if unchanged else backup_path)
+            settings["cleanup_done"] = True
+            save_settings(settings)
+            # That write already carries the new identities, and numbers
+            # every note afresh besides.
+            minted_any = False
+            ids_repaired = False
+            aside_made = 0
+        if backup_path is not None and (unchanged or not written):
+            # The file is as it was (its write failed, or nothing to change:
+            # a settings file refusing the mark ran it at every start), so
+            # its copy is no safety net, and one more piled up each launch.
+            try:
+                os.remove(backup_path)
+            except OSError:
+                pass
 
-        _write_json_atomic(paths.DATA_FILE, notes)
-
-        settings["cleanup_done"] = True
-        save_settings(settings)
-        # That write already carries the new identities, and numbers
-        # every note afresh besides.
-        minted_any = False
-        ids_repaired = False
-
-    if (minted_any or ids_repaired) and not report["notes_file_corrupt"]:
+    if (minted_any or ids_repaired or aside_made) and not report["notes_file_corrupt"]:
         # Guarded like the cleanup: never over a file just declared
         # unreadable. A failure needs no dialog, as the next save writes them
         # anyway; repaired ids ride along, or a read-only session repeats it.
@@ -547,7 +821,30 @@ def load_notes(version_change=None):
         except (IOError, OSError):
             pass
 
+    if report["notes_file_corrupt"]:
+        _UNREAD_AT_LOAD.add(paths.DATA_FILE)
+    else:
+        _UNREAD_AT_LOAD.discard(paths.DATA_FILE)
     return notes, report
+
+
+# The notes and Trash files whose last load held none of their notes: set
+# aside unreadable, a run's notes are only what it writes.
+_UNREAD_AT_LOAD = set()
+
+
+def json_text(value):
+    """*value* as a data file holds it: the text _write_json_atomic writes,
+    and a backup export packs from what the app holds."""
+    # Mended only when needed: mend_surrogates rebuilds the notebook (a
+    # quarter of an autosave at 5,000 notes), while asking the dumped text
+    # whether it encodes is one C pass, and the bytes come out the same.
+    text = json.dumps(value, indent=2, ensure_ascii=False)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        text = json.dumps(mend_surrogates(value), indent=2, ensure_ascii=False)
+    return text
 
 
 def mend_surrogates(value):
@@ -576,10 +873,16 @@ def mend_surrogates(value):
 # this is its one way to say "that write FAILED". Every failed write is also
 # appended to crash_log.txt, so a route nobody checks still leaves a trace.
 on_write_failure = None
+#: The held files whose refused write was reported this run (_write_json_atomic).
+_held_reported = set()
 
 
 def _report_write_failure(path, exc):
-    diagnostics.append_crash_log("write failure", "%s\n%r" % (path, exc))
+    # The file's name and the error's kind, never its folder: the path holds
+    # the person's name, and an OSError's own text repeats the path.
+    diagnostics.append_crash_log("write failure", "%s: %s (errno %s, %s)" % (
+        os.path.basename(path), type(exc).__name__, getattr(exc, "errno", None),
+        getattr(exc, "strerror", None)))
     cb = on_write_failure
     if cb is not None:
         try:
@@ -601,21 +904,30 @@ def _write_json_atomic(path, value):
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``.
     """
+    if paths.writes_held(path):
+        # Worded for both holds: a file the start could not read, and one a
+        # first start could not bring in from an older notebook (no file yet).
+        exc = PermissionError(
+            13, "Not saved: Note Organizer could not open this file, or bring "
+            "it in, when it started, so nothing is written to it until Note "
+            "Organizer is opened again", path)
+        # Reported once a run: a setting is written at every note opened,
+        # and its banner each time took the place of a delete's Undo.
+        if path not in _held_reported:
+            _held_reported.add(path)
+            _report_write_failure(path, exc)
+        return False, exc
     tmp_path = path + ".tmp"
     try:
-        # Mended only when needed: mend_surrogates rebuilds the notebook (a
-        # quarter of an autosave at 5,000 notes), while asking the dumped text
-        # whether it encodes is one C pass, and the bytes come out the same.
-        text = json.dumps(value, indent=2, ensure_ascii=False)
-        try:
-            text.encode("utf-8")
-        except UnicodeEncodeError:
-            text = json.dumps(mend_surrogates(value), indent=2,
-                              ensure_ascii=False)
+        text = json_text(value)
         with open(tmp_path, "w", encoding="utf-8") as f:
             # One string, one write: json.dump streams the same bytes in
             # thousands of pieces, twice the time at 1,000 notes (36 ms to 18).
             f.write(text)
+            # On the disk before the rename: a power cut just after a replace
+            # could otherwise leave an empty file where the notes were.
+            f.flush()
+            os.fsync(f.fileno())
         # Atomic replace: a crash mid-write can't corrupt the real file,
         # it either fully updates or stays as it was.
         os.replace(tmp_path, path)
@@ -657,15 +969,39 @@ def move_notes_to_trash(trash, notes_to_trash):
         notes_to_trash: the notes being removed from the active list.
 
     Returns:
-        The same trash list, for convenience at the call site.
+        ``(True, None)`` once trash.json holds them, or ``(False, exception)``
+        with *trash* as it was: the caller must then keep the notes, or they
+        are in neither file (ISSUES_LOG: "A delete that trusted the Trash").
     """
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    before = len(trash)
+    stamp = now_stamp()
     for note in notes_to_trash:
         entry = dict(note)
         entry["deleted_at"] = stamp
         trash.append(entry)
-    save_trash(trash)
-    return trash
+    ok, exc = save_trash(trash)
+    if not ok:
+        del trash[before:]
+    return ok, exc
+
+
+def renew_in_trash(trash, entry):
+    """Start the Trash's clock again for *entry*, already in *trash*: put in
+    a second time, it is kept the whole window from now, as promised.
+
+    Returns ``(True, None)`` once trash.json holds the new stamp, or
+    ``(False, exception)`` with the entry's stamp as it was.
+    """
+    had = "deleted_at" in entry
+    was = entry.get("deleted_at")
+    entry["deleted_at"] = now_stamp()
+    ok, exc = save_trash(trash)
+    if not ok:
+        if had:
+            entry["deleted_at"] = was
+        else:
+            entry.pop("deleted_at", None)
+    return ok, exc
 
 
 def days_left_in_trash(deleted_at):
@@ -677,8 +1013,9 @@ def days_left_in_trash(deleted_at):
     window = trash_retention_days()
     if window is None:
         return None
-    # Real days, by the purge's own clock, so the row and the purge agree.
-    elapsed = int((_now_epoch() - when) // 86400)
+    # Real days, by the purge's own clock, so the row and the purge agree;
+    # a stamp in the future (a clock put right since) is "just deleted".
+    elapsed = max(0, int((_now_epoch() - when) // 86400))
     return max(0, window - elapsed)
 
 
@@ -717,8 +1054,8 @@ def restore_many_from_trash(notes, trash, entries):
     worn = {n.get("uid") for n in notes if isinstance(n, dict)}
     restored = []
     for entry in entries:
-        # normalize_note rebuilds the note from a known schema, so it drops
-        # "deleted_at" and anything else the trash entry carried.
+        # normalize_note leaves the Trash's "deleted_at" out, and keeps a field
+        # this version does not know as it came (model.KNOWN_NOTE_FIELDS).
         note = normalize_note(entry)
         # A fresh id: the trashed note's own id may have been reused by a
         # note created after it was deleted.
@@ -764,7 +1101,8 @@ def save_setting(key, value):
     Read-modify-write rather than a blind overwrite: several parts of the
     app own different keys in this one file, and a save that rewrote the
     whole thing from one caller's view of it would drop the others.
+    Returns whether it was written, for a screen that says so.
     """
     settings = load_settings()
     settings[key] = value
-    save_settings(settings)
+    return save_settings(settings)[0]

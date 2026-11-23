@@ -25,3 +25,27 @@ Source: [Android Developers — Version your app](https://developer.android.com/
 - Apps must target a recent Android API level (the specific minimum shifts over time — check current requirements when this actually becomes relevant, rather than trusting a number written down today).
 
 Sources: [Android Developers — App Bundle FAQ](https://developer.android.com/guide/app-bundle/faq), [Android App Bundle — Wikipedia](https://en.wikipedia.org/wiki/Android_App_Bundle)
+
+## Rolling out, and stopping a release
+
+Written down before the first release, so that a bad one is met with steps rather than a
+scramble (2026-11-12).
+
+1. **The bundle is tried as Play hands it out.** The internal testing track installs the APKs
+   Google Play makes from the `.aab`, which are not the APK the emulator walked; the closed test
+   that new accounts need (12 people, 14 days) is that trial at length. The testing tracks'
+   pre-launch report runs the app on real devices of several Android versions.
+2. **Production goes out as a staged rollout**: a share of people first, raised after a few quiet
+   days, while Android vitals (crashes, "isn't responding") are watched.
+3. **When something is wrong, the rollout is halted first**, in the Play Console: nobody new
+   receives the version while the fix is made. Android never puts an older version back over a
+   newer one; the way out is a newer version, its `versionCode` higher.
+4. **The fix is a release like any other**, in the app's own repository: its branch, the
+   version a patch higher, the unit tests, the gates and the walk, the release build and the two
+   checks only it can answer (`check_release_lookups.py`, `make_licenses.py --check`), then the
+   upload. A crash's trace in the console is read through the R8 mapping the bundle carries.
+   R8 writes `mapping.txt` into the build folder, where the next build writes over it, so each
+   release's copy is to be kept beside the bundle uploaded, named for its version: a step to add
+   to the release build before the first upload (the phone's STATUS, "Before the first upload").
+5. **What a person sees is read before anything is guessed**: the reviews, and the console's
+   crashes and "isn't responding" reports (the app sends nothing itself).

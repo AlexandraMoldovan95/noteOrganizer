@@ -1,14 +1,17 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **595 cases**. I walk it
-by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **992 cases** on 23 November
+2026. I walk it
+by hand on the packaged `.exe` before a release - a case I pass is one I've seen pass, and a
+pass that is the scripts' says so.
 
 ## How the plan is used
 
-- **Every case says what automation already covers.** A hand check is a choice, not a duty - the
-  *Automation status* column names the script that walks the case end to end, or says plainly
-  that nothing can judge it.
+- **Every case says what automation already covers.** Where the *Automation status* column names
+  the script that walks the case end to end, a hand check is a choice, not a duty; where it says
+  "Automated in part", it names what the checks are known not to reach, as a guide rather than a
+  full list, and I walk the case whole; or it says plainly that nothing can judge it.
 - **What only a person can judge is marked.** Some cases ask whether something reads well or
   looks right, the questions a script never asks.
 - **Field checks become cases.** Anything left to check on the `.exe` after a change is added to
@@ -16,35 +19,44 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 ## The plan in numbers
 
+Counted on 23 November 2026: 992 cases, 900 walked and passed, 92 not yet
+walked. Of the passes, 604 are mine, by hand on the built `.exe`; 296 are
+the scripted suites', run for the final audit on the source of 0.102.556
+and marked *Claude (automated, final audit)*: a pass for what the suites
+walk, not a walk by hand like mine, with what they leave to the hand
+named in Actual Result. The 92 not yet walked are 90 cases that need my
+eye, whose result columns hold the suites' run all the same, and two the
+scripts did not run this time.
+
 ### By priority
 
 | Priority | Cases |
 |---|---:|
-| High | 182 |
-| Medium | 291 |
-| Low | 122 |
+| High | 263 |
+| Medium | 457 |
+| Low | 272 |
 
 ### The six largest areas
 
 | Area | Cases |
 |---|---:|
-| Editor | 71 |
-| Notes | 63 |
-| Tables | 54 |
-| Settings | 48 |
-| Recurrence | 47 |
-| Calendar | 46 |
+| Backup & Sharing | 108 |
+| Editor | 103 |
+| Notes | 96 |
+| Recurrence | 88 |
+| Tables | 72 |
+| Settings | 71 |
 
 ## The test case template, filled out four times
 
-Every one of the 595 cases uses the same template: area, priority, preconditions, numbered
+Every case uses the same template: area, priority, preconditions, numbered
 steps, expected result, status, and what automation covers. **The four below are a small sample
 of that full list** - not the only ones, just quick to picture without seeing the app:
 
 - **A safety check** - Case 9, cancelling a delete.
 - **An everyday action** - Case 38, marking a checklist item done.
 - **A performance check at scale** - Case 15, the Trash panel with 100+ deleted notes.
-- **A manual visual check** - Case 43, a checkbox's contrast in Light mode.
+- **A visual check, since automated** - Case 43, a checkbox's contrast in Light mode.
 
 ### Case 9 - Cancel a delete
 
@@ -62,10 +74,11 @@ of that full list** - not the only ones, just quick to picture without seeing th
 
 **Expected Result:** The note is NOT deleted and remains in the list.
 
-**Automation:** Automated (`qa1`) - answers No to the confirmation, then checks both the note
-list and the Trash. A mutant that ignored the confirmation was caught by this check.
+**Automation:** Automated in part (`qa1`) - answers No to the confirmation in code, then checks
+both the note list and the Trash. A mutant that ignored the confirmation was caught by this check.
+Left to the hand: the question answered by a person.
 
-### Case 38 - Mark a checklist item done
+### Case 38 - Mark an item done
 
 - **Area / Sub-feature:** Checklist · Check item
 - **Priority:** Medium
@@ -79,7 +92,8 @@ list and the Trash. A mutant that ignored the confirmation was caught by this ch
 
 **Expected Result:** The item text gets a strikethrough and dims; the progress count updates.
 
-**Automation:** Automated (`qa1`).
+**Automation:** Automated in part (`qa1` reads the item kept done in the store). Left to the hand:
+the strikethrough, the dimming and the progress count.
 
 ### Case 15 - Trash panel opens quickly with 100+ deleted notes
 
@@ -92,12 +106,12 @@ list and the Trash. A mutant that ignored the confirmation was caught by this ch
 **Test Steps:**
 
 1. Open Settings → Recently deleted.
-2. Click 'Show more'.
+2. Click 'Show N more (M not shown)'.
 
 **Expected Result:** Step 1: the panel opens promptly with a first batch, not a long freeze.
 Step 2: the next batch appears, added to what's already shown.
 
-**Automation:** Automated (`qa3`).
+**Automation:** Automated in part (`qa3`). Left to the hand: the words "Show N more (M not shown)".
 
 ### Case 43 - 'Group by category' checkbox in Light mode
 
@@ -115,12 +129,12 @@ Step 2: the next batch appears, added to what's already shown.
 **Expected Result:** The checkbox background is white with a black check mark, not
 black-on-black.
 
-**Automation:** Automated (`qa4`) - every tick box on screen, this one included, is judged on
-every theme: its well is not the surface it sits on, and its mark reads on the well. The case was
+**Automation:** Automated (`qa4`) - on every theme this box's mark is judged against its well
+by its pixels, and every palette's well is checked light. The case was
 written as manual first, when nothing crashed, nothing threw, and a checkbox was just invisible -
 a bug no script noticed until one was written for it.
 
 ---
 
-These four are a sample. The other 591 cases follow the same template and live in the full
+These four are a sample. The other cases follow the same template and live in the full
 spreadsheet, walked by hand before every release.

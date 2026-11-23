@@ -1,73 +1,27 @@
-"""Share codes: moving notes between devices as copy-paste text.
+"""Share codes -- notes moved between devices as copy-paste text, ``notes ->
+JSON -> zlib -> Base64 -> "NOTE1:" + text`` and back -- and a backup zip's
+guards. Compression, not encryption: anyone holding a code reads it; files
+stay out, a code with them would run to millions of characters.
 
-WHAT THIS MODULE IS FOR
------------------------
-A share code is a block of text you can paste into a chat or an email
-that another copy of the app turns back into notes. The pipeline is::
-
-    notes -> JSON -> zlib compress -> Base64 -> "NOTE1:" + text
-
-and exactly the reverse coming back. The prefix is a version marker, so a
-future format can be recognised rather than misread.
-
-**This is compression, not encryption.** Anyone holding the code can read
-it. It exists to make notes portable, not private - worth stating plainly,
-because Base64 output *looks* scrambled.
-
-Attachments are deliberately excluded: binary files would push a code into
-millions of characters, well past what any chat box will accept. The ZIP
-export handles those instead.
-
-THE INTERESTING PART: DISTRUSTING YOUR OWN INPUT
-------------------------------------------------
-Decoding runs on text the user pasted from somewhere unknown, so every
-stage assumes the worst:
-
-* :data:`MAX_SHARE_CODE_CHARS` - refuse absurdly long input before doing
-  any work at all.
-* :func:`_bounded_decompress` - decompress in chunks with a hard ceiling.
-  A "zip bomb" is a tiny compressed payload that expands to gigabytes;
-  calling ``zlib.decompress()`` on one would exhaust memory before it ever
-  returned. Feeding it through a decompressor object and stopping at the
-  limit checks the size *while* expanding rather than after.
-* :data:`MAX_SHARED_NOTES` - cap how many notes a single code may carry.
-* :func:`_safe_extract_zip` - for ZIP import, reject any entry whose
-  resolved path escapes the destination folder. Without this an archive
-  containing ``../../something`` could write anywhere on disk. The attack
-  has a name, "Zip Slip", and the defence is to resolve each path and
-  confirm it still sits under the destination. It also refuses an entry
-  shaped like a zip bomb, and a backup the disk has no room for.
-* :class:`StoppableFile` - the file a backup's worker hands zipfile, so
-  closing the window stops a long export or import between two chunks
-  and its unfinished files can be taken away, instead of the process
-  dying mid-file with them on disk.
-
-The pattern worth taking away: when data comes from outside, enforce
-limits *during* processing instead of trusting it to be reasonable.
-
-The other half: every limit on reading is also a promise about writing.
-The app makes share codes and backups itself, and each is checked
-against the same limits it will meet coming back (encode_share_code,
-backup_entries_problem). A limit only on the reading side once made
-backups the app wrote that it then refused to restore.
+Decoding distrusts its input and limits it while working, not after: a
+length cap, a bounded decompress against zip bombs, a note cap, Zip Slip
+refused for a backup's paths, a stoppable file for a closing window. And
+every limit on reading is a promise on writing: what the app makes is
+checked against what it accepts back. ``docs/CODE_TOUR.md`` walks it.
 """
 
 import base64
 import json
 import os
+import re
 import shutil
 import zlib
 
 from .paths import JSON_UNREADABLE
-from .storage import mend_surrogates
+from .storage import json_from_text, mend_surrogates
 
-# ---- Share codes (move notes between devices as copy-paste text) ----
-#
-# A share code is: a small JSON payload -> zlib-compressed -> Base64 text,
-# tagged with a version prefix. It carries note CONTENT (title, body, comments,
-# category, date, color, recurrence) but NOT attachments — binary files
-# would bloat the code to millions of characters, past what any chat box or
-# email will paste. For attachments, the ZIP export is the right tool.
+# ---- Share codes: a note's content, never its files (the backup's zip
+# carries those); the prefix names the format's version. ----
 
 SHARE_CODE_PREFIX = "NOTE1:"
 
@@ -77,16 +31,11 @@ MAX_SHARE_CODE_CHARS = 5_000_000      # reject absurdly long pasted text outrigh
 MAX_DECOMPRESSED_BYTES = 20_000_000   # cap zlib output — guards against zip bombs
 MAX_SHARED_NOTES = 200                # most notes one code may carry
 
-# Only these fields travel in a share code. Notably absent: id (assigned fresh
-# on import), attachments, updated, overrides/exceptions/moved days.
-# "paragraphs" carries list indents/alignment and a table's place on the
-# page -- without it a shared note arrived flush left with flat lists.
+# Only these fields travel: no id (a place in one file), files, updated or a
+# series' own days. "paragraphs" keeps lists' indents and a table's place.
 SHAREABLE_FIELDS = [
-    # "uid" travels; "id" does not. The id is only a note's place in one
-    # file and means nothing anywhere else, but the uid is what lets the
-    # far end recognise a note it already has instead of guessing from
-    # the text -- a guess that fails exactly when the note was edited,
-    # which is the only time anyone re-sends one.
+    # The uid lets the far end know a note it already has, rather than guess
+    # from the text -- a guess that fails just when the note was edited.
     "uid",
     "title", "body", "formatting", "comments", "category", "date", "color", "recurrence",
     "paragraphs", "checklist",
@@ -118,10 +67,8 @@ def encode_share_code(notes):
             "some, or send a backup instead: Settings → Backup → Export."
             % (MAX_SHARED_NOTES, len(notes)))
     payload = {"v": 1, "notes": [_shareable_view(n) for n in notes]}
-    # In-memory notes can hold lone UTF-16 surrogates: Tk hands an astral
-    # emoji over as a surrogate pair, and mend_surrogates only ran when
-    # SAVING to disk — so sharing a note with a just-typed emoji hit the
-    # .encode("utf-8") below and crashed. Mend at this boundary too.
+    # Tk hands an emoji over as a surrogate pair: a note with one just typed,
+    # not yet mended by a save, crashed the encode below.
     payload = mend_surrogates(payload)
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
@@ -148,57 +95,103 @@ def _bounded_decompress(compressed, limit):
     return out
 
 
+# A code after its prefix: Base64 in either spelling, the whitespace and the
+# invisible break marks (soft hyphen, zero-width space) a chat app wraps it
+# with, and its padding.
+_CODE_SKIP = "\\s\u00ad\u200b-\u200d\u2060\ufeff"
+_CODE_BODY = re.compile("[A-Za-z0-9_\\-+/" + _CODE_SKIP + "]*(?:=[=" + _CODE_SKIP + "]*)?")
+_CODE_SKIPPED = re.compile("[" + _CODE_SKIP + "]")
+
+
+def code_in(text):
+    """The share code inside *text*, whitespace and invisible break marks
+    taken out (a chat app wraps a long code): from its prefix to its
+    padding, or to the first character a code is not written in, so "Hi!
+    NOTE1:... Thanks" reads. Without padding, letters past the last whole
+    group of four are left (a word after it). With no prefix, *text*
+    itself, whitespace out."""
+    at = text.find(SHARE_CODE_PREFIX)
+    if at < 0:
+        # The prefix itself broken by the wrapping ("NOTE\n1:") is read from as a
+        # whole one is: left to the lenient decoder, a stray letter read here that
+        # the phone refuses, and a code the phone reads was refused.
+        bare = _CODE_SKIPPED.sub("", text)
+        at = bare.find(SHARE_CODE_PREFIX)
+        if at < 0:
+            return "".join(text.split())
+        text = bare
+    body = _CODE_SKIPPED.sub("", _CODE_BODY.match(text, at + len(SHARE_CODE_PREFIX)).group(0))
+    if "=" not in body:
+        body = body[:len(body) - len(body) % 4]
+    return SHARE_CODE_PREFIX + body
+
+
+_NOT_A_CODE = ("This isn't a Note Organizer share code. A valid code starts "
+               "with “" + SHARE_CODE_PREFIX + "”.")
+
+
 def decode_share_code(code):
     """Parse a share code back into a list of note dicts. Raises ValueError with
     a human-readable message if the code is malformed, oversized, or from a
     newer version."""
     if not isinstance(code, str):
         raise ValueError("That doesn't look like a share code.")
-    # Tolerate extra whitespace/newlines from a chat app.
-    code = "".join(code.split())
+    try:
+        return _decode_found(code_in(code))
+    except _Unreadable:
+        # A hidden prefix leading to bytes no code holds is words saying "NOTE
+        # 1:", answered as such (the phone the same). A code that reads keeps
+        # its own answer: a newer version's, too many notes.
+        if SHARE_CODE_PREFIX not in code and SHARE_CODE_PREFIX in _CODE_SKIPPED.sub("", code):
+            raise ValueError(_NOT_A_CODE) from None
+        raise
+
+
+class _Unreadable(ValueError):
+    """A code whose bytes do not read: its Base64, its zlib or its JSON."""
+
+
+def _decode_found(code):
+    """decode_share_code, once code_in has found the code in the text."""
     if not code:
         raise ValueError("No code was pasted.")
     if len(code) > MAX_SHARE_CODE_CHARS:
         raise ValueError(
             "That code is far too large to import safely. For a transfer this "
-            "large, send a backup instead: Settings → Backup → Export, then "
-            "Import on the other computer."
+            "large, send a backup instead: save one in Settings → Backup on the "
+            "device it came from, then import it on this one."
         )
     if not code.startswith(SHARE_CODE_PREFIX):
-        raise ValueError(
-            "This isn't a Note Organizer share code. A valid code starts "
-            f"with \u201c{SHARE_CODE_PREFIX}\u201d."
-        )
+        raise ValueError(_NOT_A_CODE)
     body = code[len(SHARE_CODE_PREFIX):]
     try:
         compressed = base64.urlsafe_b64decode(body)
     except (base64.binascii.Error, ValueError):
-        raise ValueError(
+        raise _Unreadable(
             "This share code is damaged or incomplete. Ask the sender to copy "
             "the whole code again — chat apps sometimes cut long codes short."
         )
     try:
         raw = _bounded_decompress(compressed, MAX_DECOMPRESSED_BYTES)
     except (zlib.error, ValueError):
-        raise ValueError(
+        raise _Unreadable(
             "This share code is damaged, or too large to import safely. Ask the "
             "sender to send it again, or to send a backup instead (Settings → "
-            "Backup → Export)."
+            "Backup)."
         )
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        # Half an emoji spelled as an escape, mended (json_from_text).
+        payload = json_from_text(raw.decode("utf-8"))
     except (*JSON_UNREADABLE, ValueError):
-        raise ValueError(
+        raise _Unreadable(
             "This share code is damaged or incomplete. Ask the sender to copy "
             "the whole code again."
         )
     if not isinstance(payload, dict) or "notes" not in payload:
         raise ValueError("This share code doesn't contain any notes.")
-    # The version is the code's own claim about its format, and the code
-    # is text anyone can edit. Compared unchecked, a string, null or list
-    # here raised TypeError -- which the import box does not catch, so a
-    # hand-edited code got an internal error instead of the message
-    # below. bool is refused by name because it is an int to Python.
+    # The version is the code's own claim, in text anyone can edit: a string
+    # or null compared unchecked raised TypeError past the import box. bool
+    # is refused by name, an int to Python.
     version = payload.get("v", 1)
     if isinstance(version, bool) or not isinstance(version, (int, float)):
         raise ValueError(
@@ -218,33 +211,21 @@ def decode_share_code(code):
             f"This code contains {len(notes)} notes, which is over the "
             f"{MAX_SHARED_NOTES}-note limit for a single code. Ask the sender to "
             "split it into smaller codes, or to send a backup instead "
-            "(Settings → Backup → Export)."
+            "(Settings → Backup)."
         )
-    # Project each note through the SAME shareable slice encode produces,
-    # so a hand-crafted code can carry only the fields a real one would.
-    # A genuine code never includes attachments (they aren't in
-    # SHAREABLE_FIELDS); dropping them here means an imported note can't
-    # smuggle in an attachment reference whose stored_as points a later
-    # delete at a file outside the attachments folder. normalize_note
-    # already whitelists on top of this — this is the boundary that
-    # makes the two ends symmetric.
+    # The same slice encode makes, so a hand-made code carries only what a
+    # real one would: no attachment whose stored_as could point a later
+    # delete at a file outside the folder. normalize_note filters again.
     return [_shareable_view(n) if isinstance(n, dict) else {} for n in notes]
 
 
-# ---- Backups (the .zip of Settings -> Backup) ----
-#
-# A backup the app wrote must be one it agrees to read back. The export
-# takes every attached file whatever its size, and the import used to
-# refuse anything over 500 MB or 10,000 files: one long video, or a few
-# hundred phone photos, made a backup that could not be restored. The
-# limits are now about what a HOSTILE archive could do, and the export
-# checks what it wrote against the same rules (backup_entries_problem).
+# ---- Backups (the .zip of Settings -> Backup): what the app writes it must
+# read back, so the limits are about a HOSTILE archive, and the export checks
+# itself against them (backup_entries_problem). ----
 MAX_BACKUP_FILES = 100_000
-# Expanding to more than this many times its packed size, and to more than
-# BOMB_MIN_BYTES, is a zip bomb, not anything anyone attached: photos,
-# videos and documents pack to within a few times their size. Asked of
-# each entry and of the archive as a whole, or a thousand entries just
-# under the size each would pass one by one.
+# More than this many times its packed size, and past BOMB_MIN_BYTES, is a
+# zip bomb, not a photo or a video; asked of each entry and of the whole
+# archive, which a thousand entries each just under it would pass.
 BOMB_RATIO = 100
 BOMB_MIN_BYTES = 50_000_000
 # What an import leaves free on each disk it writes to. A size cap on the
@@ -307,6 +288,11 @@ def _disk_of(path):
     return shutil.disk_usage(path).free, os.stat(path).st_dev
 
 
+class BackupRefused(ValueError):
+    """A sound backup refused for a reason said whole: no room for it. Said
+    as it is, not as a file that could not be read."""
+
+
 def _safe_extract_zip(zf, dest_dir, attachments_dir=None):
     """Extract a zip safely: block path-traversal ('../' escapes), zip bombs
     and a full disk. extractall() guards against none of them, so a
@@ -315,16 +301,17 @@ def _safe_extract_zip(zf, dest_dir, attachments_dir=None):
     dest_root = os.path.abspath(dest_dir)
     infos = zf.infolist()
     problem = backup_entries_problem(infos)
-    if problem is None:
-        free_unpack, unpack_disk = _disk_of(dest_root)
-        free_attach = None
-        if attachments_dir is not None:
-            attach_free, attach_disk = _disk_of(attachments_dir)
-            if attach_disk != unpack_disk:
-                free_attach = attach_free
-        problem = backup_space_problem(infos, free_unpack, free_attach)
     if problem:
         raise ValueError(problem)
+    free_unpack, unpack_disk = _disk_of(dest_root)
+    free_attach = None
+    if attachments_dir is not None:
+        attach_free, attach_disk = _disk_of(attachments_dir)
+        if attach_disk != unpack_disk:
+            free_attach = attach_free
+    room = backup_space_problem(infos, free_unpack, free_attach)
+    if room:
+        raise BackupRefused(room)
 
     for info in infos:
         # Reject absolute paths and anything that escapes the destination.
@@ -371,6 +358,10 @@ def copy_file_until_stopped(src, dst, stop):
     try:
         with open(src, "rb") as fin, open(dst, "wb") as fout:
             shutil.copyfileobj(StoppableFile(fin, stop), fout, 1 << 20)
+            # On the disk before the caller's rename, as every data file is
+            # (_write_json_atomic): a power cut could leave an empty file.
+            fout.flush()
+            os.fsync(fout.fileno())
         shutil.copystat(src, dst)
     except BaseException:
         try:
@@ -378,3 +369,41 @@ def copy_file_until_stopped(src, dst, stop):
         except OSError:
             pass
         raise
+
+
+# Windows' "Mark of the Web", which SmartScreen and Office's Protected View
+# read: a zip keeps it on the zip only, so the import marks each file it takes
+# out, as Explorer does. ISSUES_LOG: "The photo that was a remote connection".
+ZONE_STREAM = ":Zone.Identifier"
+MAX_ZONE_MARK = 64 * 1024
+# What stands in for a mark too long to be a real one: the Internet zone.
+INTERNET_ZONE_MARK = b"[ZoneTransfer]\r\nZoneId=3\r\n"
+
+
+def zone_mark_of(path):
+    """The Mark of the Web *path* carries, as the bytes of its stream, or None:
+    there is none, this is not Windows, or the disk keeps no streams."""
+    if os.name != "nt":
+        return None
+    try:
+        with open(path + ZONE_STREAM, "rb") as fh:
+            mark = fh.read(MAX_ZONE_MARK + 1)
+    except (OSError, ValueError):
+        return None
+    if len(mark) > MAX_ZONE_MARK:
+        return INTERNET_ZONE_MARK
+    return mark or None
+
+
+def put_zone_mark(path, mark):
+    """Give the file at *path* the Mark of the Web *mark* (from zone_mark_of).
+    Never raises, and answers whether the mark was written: on FAT, exFAT or
+    a share without streams the file simply goes unmarked, and stays."""
+    if not mark or os.name != "nt":
+        return False
+    try:
+        with open(path + ZONE_STREAM, "wb") as fh:
+            fh.write(mark)
+        return True
+    except (OSError, ValueError):
+        return False

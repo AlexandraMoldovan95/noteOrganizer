@@ -1,25 +1,12 @@
-"""The in-note calculator panel.
+"""The in-note calculator panel: its buttons, display, history and "insert
+into note", the interface only -- the arithmetic is
+:mod:`noteorganizer.core.calculator`, tested without a window.
 
-The collapsible calculator that sits beside the checklist in the note
-editor: its buttons, display, history, and the "insert into note" action.
-
-This is the *interface* only. The arithmetic itself lives in
-:mod:`noteorganizer.core.calculator`, which knows nothing about windows and
-is tested without one — this module turns button presses into calls on it
-and puts the answer on screen.
-
-Worth knowing while reading:
-
-* ``_calc_press`` handles every button through one path, so a digit, an
-  operator and "=" all go through the same validation.
-* The display is editable, so an expression can be typed or pasted in as
-  well as built by tapping. Both end up as plain text handed to
-  ``evaluate_calculator_expression``, which is why there is no separate
-  "typed input" path to keep in sync.
-* ``insert into note`` writes the whole formula, not just the answer, and
-  each insertion lands on its own line — see ``_calc_insert_into_note``.
-* ``_sync_calculator_open_state`` is called whenever the open note changes,
-  so the panel resets rather than carrying one note's working into another.
+Every button goes through ``_calc_press``; the display can be typed or
+pasted into too, and both reach ``evaluate_calculator_expression`` as plain
+text, so there is no second path to keep in step. An insertion writes the
+whole formula on its own line (``_calc_insert_into_note``), and
+``_sync_calculator_open_state`` resets the panel when the open note changes.
 """
 
 import tkinter as tk
@@ -57,13 +44,10 @@ class CalculatorPanelMixin:
 
     def _build_calculator_section(self):
         """Build the (initially hidden) in-note calculator: an editable
-        expression display (buttons, typing, or pasting all feed the same
-        field) plus a compact keypad, an optional row of extra functions,
-        and a collapsible history of this session's calculations. Purely
-        a computation tool — nothing here is persisted on the note (no
-        new note field, no share-code/export changes); it starts empty
-        every time it's opened. Built once per editor (like the checklist
-        section above), not rebuilt on every note switch."""
+        display, a compact keypad, a row of extra functions and a folding
+        history of this session's calculations. Nothing here is kept on the
+        note, and it starts empty each time it opens. Built once per editor,
+        like the checklist section, not again at every note switch."""
         sec = self.calculator_section
         # No in-panel Close button: the "🧮 Calculator ▲" bar above the panel
         # already toggles it shut, so a second control said the same thing.
@@ -89,13 +73,13 @@ class CalculatorPanelMixin:
         # Right-click Cut/Copy/Paste, same as every other text field in the
         # app — plus a normal Ctrl+V/<<Paste>> binding below, so pasting an
         # expression copied from somewhere else just works either way.
-        # (No Return-triggers-"=" binding: it would only fire reliably when
-        # this exact field has keyboard focus, which isn't guaranteed after
-        # a sequence of button clicks — the "=" button already covers this
-        # without that fragility.)
         self._add_paste_menu(self.calculator_display)
-        self.calculator_display.bind("<KeyRelease>", self._calc_on_direct_edit)
-        self.calculator_display.bind("<<Paste>>", self._calc_on_direct_edit)
+        self.calculator_display.bind("<KeyRelease>", self._calc_on_key_release)
+        self.calculator_display.bind("<KeyPress>", self._calc_on_key_press)
+        self.calculator_display.bind("<<Paste>>", self._calc_on_paste)
+        # A sum typed here ends with Enter, as on any calculator.
+        for key in ("<Return>", "<KP_Enter>"):
+            self.calculator_display.bind(key, lambda _e: (self._calc_press("="), "break")[1])
 
         grid = tk.Frame(sec, bg=self.colors["card"])
         grid.pack(fill="x", padx=10, pady=(0, 2))
@@ -122,10 +106,8 @@ class CalculatorPanelMixin:
                     self.track_theme(btn, bg="sidebar", fg="text")
                 btn.grid(row=r, column=c, sticky="nsew", padx=1, pady=1, ipady=3)
 
-        # --- Extra functions: extra bracket styles, √, a general power
-        # operator '^' (e.g. "3^4" for 3 to the 4th, not just a fixed
-        # square), and % — collapsed by default so the everyday keypad
-        # above stays the main focus. ---
+        # --- Extra functions: the other brackets, √, '^' and % -- folded by
+        # default, so the everyday keypad above stays the main thing. ---
         self._calc_more_open = False
         self.calculator_more_btn = tk.Button(
             sec, text="More functions  ▾", command=self._toggle_calc_more,
@@ -158,15 +140,9 @@ class CalculatorPanelMixin:
                          disabledforeground="subtext")
         self.calculator_insert_btn.pack(fill="x", padx=10, pady=(2, 8), ipady=4)
 
-        # --- History: this session's past calculations, newest first.
-        # Collapsed by default, like the extra-functions row — a toggle
-        # button reveals it rather than it always taking up space. Not
-        # persisted anywhere — clears with the rest of the calculator on
-        # note switch, same as the expression itself. Each entry is
-        # clickable to insert that specific formula into the note (the
-        # same "own line, right after the last insertion" placement the
-        # main Insert button uses), so an earlier result is still one
-        # click away without having to recompute it. ---
+        # --- History: this session's calculations, newest first, folded by
+        # default and cleared at a note switch. A row clicked is inserted as
+        # the Insert button inserts, so an earlier result is one click away. ---
         self._calc_history_open = False
         self.calculator_history_head = hist_head = tk.Frame(sec, bg=self.colors["card"])
         hist_head.pack(fill="x", padx=10, pady=(0, 0))
@@ -191,16 +167,14 @@ class CalculatorPanelMixin:
         hist_wrap.pack_propagate(False)
         hist_canvas = tk.Canvas(hist_wrap, bg=self.colors["card"], highlightthickness=0)
         hist_sb = ttk.Scrollbar(hist_wrap, orient="vertical", command=hist_canvas.yview)
-        self.calculator_history_frame = tk.Frame(hist_canvas, bg=self.colors["card"])
-        self.calculator_history_frame.bind(
-            "<Configure>", lambda e: hist_canvas.configure(scrollregion=hist_canvas.bbox("all")))
-        hist_cwin = hist_canvas.create_window((0, 0), window=self.calculator_history_frame, anchor="nw")
-        hist_canvas.bind("<Configure>", self._canvas_width_sync(hist_canvas, hist_cwin))
-        hist_canvas.configure(yscrollcommand=hist_sb.set)
         hist_sb.pack(side="right", fill="y")
         hist_canvas.pack(side="left", fill="both", expand=True)
-        self._bind_wheel_tree(self.calculator_history_frame,
-                              lambda e: self._panel_or_page_wheel(hist_canvas, e))
+        wheel = lambda e: self._panel_or_page_wheel(hist_canvas, e)  # noqa: E731
+        # A long sitting's sums, past what one frame can scroll through.
+        self.calculator_history_rows = self._row_stack(
+            hist_canvas, scrolled=hist_sb.set,
+            on_chunk=lambda chunk: chunk.bind("<MouseWheel>", wheel)
+        ).group(every=32)
         self._calc_render_history()
 
     def _toggle_calc_more(self):
@@ -242,6 +216,42 @@ class CalculatorPanelMixin:
         self._calc_just_evaluated = False
         self._calc_refresh_insert_state()
 
+    def _calc_starts_afresh(self, first):
+        """A number typed or pasted (*first*, its first character) after a
+        result or Error starts a new sum, as the buttons do: typed, 12*3
+        Enter 5 read 365, and after Error every sum said Error again."""
+        # After Error any key starts afresh: a minus stayed glued to "Error",
+        # and Enter said Error again.
+        if first and (self._calc_display_var.get() == "Error"
+                      or ((first.isdecimal() or first in ".,([{√") and self._calc_just_evaluated)):
+            self._calc_display_var.set("")
+            self._calc_display_was = ""
+            self._calc_just_evaluated = False
+            self._calc_refresh_insert_state()
+
+    def _calc_on_key_press(self, event=None):
+        self._calc_starts_afresh(getattr(event, "char", ""))
+
+    def _calc_on_paste(self, event=None):
+        try:
+            pasted = self.clipboard_get()
+        except tk.TclError:
+            pasted = ""
+        self._calc_starts_afresh(pasted.lstrip()[:1])
+        self._calc_on_direct_edit(event)
+
+    def _calc_on_key_release(self, event=None):
+        """A key let go in the display: an edit only when the text changed.
+        The release of the Enter that had just pressed = greyed Insert out,
+        and the next digit was added onto the result."""
+        try:
+            now = self._calc_display_var.get()
+        except tk.TclError:
+            return
+        if now != getattr(self, "_calc_display_was", None):
+            self._calc_display_was = now
+            self._calc_on_direct_edit(event)
+
     def _calc_press(self, token):
         """Handle one calculator button press. Reads and writes the same
         editable display field a user could also type or paste into
@@ -255,7 +265,11 @@ class CalculatorPanelMixin:
             current = "" if self._calc_just_evaluated else current[:-1]
             self._calc_just_evaluated = False
         elif token == "=":
-            if current and current != "Error":
+            # A second = over its own result keeps the sum: it made the result
+            # its own formula, "36=36" in the history and on Insert.
+            if self._calc_just_evaluated:
+                pass
+            elif current and current != "Error":
                 result = evaluate_calculator_expression(current)
                 if result is not None:
                     formatted = format_calculator_result(result)
@@ -280,10 +294,9 @@ class CalculatorPanelMixin:
                 self._calc_just_evaluated = False
             current += token
         self._calc_display_var.set(current)
-        # Button presses set the StringVar programmatically, which doesn't
-        # move the Entry's own cursor the way normal typing would — without
-        # this, the cursor can end up stuck mid-text instead of following
-        # what was just "typed" via the button.
+        self._calc_display_was = current
+        # Set through the StringVar, the Entry's cursor does not follow as
+        # typing's would, and stayed stuck mid-text.
         self.calculator_display.icursor(tk.END)
         self._calc_refresh_insert_state()
 
@@ -298,30 +311,25 @@ class CalculatorPanelMixin:
         self.calculator_insert_btn.config(state=("normal" if enabled else "disabled"))
 
     def _calc_render_history(self):
-        if not hasattr(self, "calculator_history_frame"):
+        rows = getattr(self, "calculator_history_rows", None)
+        if rows is None:
             return
-        for w in self.calculator_history_frame.winfo_children():
-            w.destroy()
+        rows.clear()
         if not self._calc_history:
-            tk.Label(self.calculator_history_frame, text="No calculations yet.",
+            tk.Label(rows.add(), text="No calculations yet.",
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
             return
-        # What these rows do, said once. Clicking one types it into the note,
-        # and nothing on screen admitted that: a row of text with no button
-        # and no wording, so a stray click read as the app typing on its own,
-        # while someone who wanted a calculation back retyped it. The panel
-        # has already taught that inserting is something a button does --
-        # "⬇ Insert into note" is a few centimetres above. Same shape as the
-        # line the attachment rows carry ("Opens in your default app for this
-        # file type"), and only drawn when there is something to click.
-        tk.Label(self.calculator_history_frame,
+        # What these rows do, said once, only when there is one: unsaid, a
+        # stray click read as the app typing on its own, and a calculation
+        # wanted back was typed again. As the attachment rows' line says theirs.
+        tk.Label(rows.add(),
                  text="Click a line to insert it into the note",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 7), anchor="w").pack(fill="x", padx=6,
                                                         pady=(2, 1))
         for entry in self._calc_history:
-            lbl = tk.Label(self.calculator_history_frame, text=entry,
+            lbl = tk.Label(rows.add(), text=entry,
                            bg=self.colors["card"], fg=self.colors["subtext"],
                            font=("Consolas", 9), anchor="e", justify="right",
                            cursor="hand2")
@@ -377,7 +385,7 @@ class CalculatorPanelMixin:
         transient tool, not part of any note's saved content, so carrying
         a half-finished sum, history, or insertion point over from a
         previous note would be confusing rather than useful."""
-        if getattr(self, "_calculator_open", False):
+        if self._calculator_open:
             self.calculator_section.pack_forget()
             self._calculator_open = False
         if getattr(self, "_calc_more_open", False):
@@ -396,8 +404,7 @@ class CalculatorPanelMixin:
         self._calc_last_full_expr = ""
         self._calc_history = []
         self._calc_render_history()
-        if hasattr(self, "calculator_btn"):
-            self.calculator_btn.config(text="🧮 Calculator")
+        self.calculator_btn.config(text="🧮 Calculator")
         self._calc_refresh_insert_state()
         if "calc_insert_end" in self.body_text.mark_names():
             self.body_text.mark_unset("calc_insert_end")

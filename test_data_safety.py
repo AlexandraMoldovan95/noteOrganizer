@@ -9,50 +9,32 @@ directories (not the app's real data folder) for extra isolation, since
 this file specifically exercises backup/migration code."""
 import sys
 import os
+import glob
 import json
 import shutil
 import tempfile
+# The suites' shared support (its guest step and its seed): beside this file
+# in a scratch copy, in qa/ in the repository, where CI runs it.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+import _qa_support  # noqa: E402
 # ---- REFUSE TO RUN BESIDE REAL NOTES ----
-# This file deletes and rewrites notes_data.json in its own directory.
-# Run from the project root it destroys the real notebook -- which
-# happened once, despite the warning above being here the whole time. A
-# warning depends on being read; this check does not. CI and a proper
-# scratch copy have no notes_data.json here, so they pass through.
+# This file deletes and rewrites the notebook the app opens, and files in
+# its working folder. Run from the project root it destroyed the real
+# notebook once, despite the warning above being here the whole time. A
+# warning depends on being read; this check does not.
 #
-# It fails CLOSED. It used to let an unreadable notes_data.json through
-# as if it were no notebook at all -- and an unreadable notebook is the
-# one the app itself could still have rescued. And it runs only where a
-# throwaway folder has been declared (NOTEORG_SCRATCH=1, set by
-# tools/run_tests.py and by CI), the rule the qa scripts follow too
-# (qa/_qa_support.hermetic_seed).
+# It is the qa scripts' own guard (qa/_qa_support.hermetic_seed), not a
+# copy: only where a throwaway folder has been declared (NOTEORG_SCRATCH=1,
+# set by the runners and CI, or by hand in a scratch copy), failing CLOSED beside a notebook it
+# cannot prove empty, and only where the folder the app will open, asked of
+# its own resolver, is the working folder. The copy that was here looked
+# beside the test while the app opened the folder notebook_location.txt
+# names -- in the owner's checkout, her notebook.
+# It seeds that folder: an empty notebook and the reclaim marker. Unseeded,
+# the migration copied whatever notebook %APPDATA% held into this folder --
+# the built app's, the owner's -- on every Windows run.
 def _guard_real_notes():
-    if os.environ.get("NOTEORG_SCRATCH") != "1":
-        sys.exit(
-            "REFUSING to run: this test deletes and rewrites notes_data.json "
-            "beside it, and nothing says this folder is a throwaway copy. "
-            "Run it through tools/run_tests.py, or set NOTEORG_SCRATCH=1 "
-            "yourself in a scratch folder outside the project -- see "
-            "CLAUDE.md, 'QA testing safety'.")
-    here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "notes_data.json")
-    if not os.path.exists(here):
-        return
-    try:
-        with open(here, encoding="utf-8") as f:
-            notes = json.load(f)
-    except (IOError, OSError, ValueError) as exc:
-        sys.exit(
-            "REFUSING to run: the notes_data.json beside this test cannot "
-            "be read (%s). It may be a real notebook the app could still "
-            "rescue; this test would delete it." % exc)
-    if not isinstance(notes, list) or notes:
-        held = ("%d notes" % len(notes) if isinstance(notes, list)
-                else "something other than an empty notebook")
-        sys.exit(
-            "REFUSING to run: the notes_data.json beside this test holds "
-            "%s.\nThis test deletes and rewrites that file. Run it "
-            "only from a throwaway copy\noutside the project tree -- see "
-            "CLAUDE.md, 'QA testing safety'." % held)
+    _qa_support.hermetic_seed()
 
 
 _guard_real_notes()
@@ -70,7 +52,8 @@ from noteorganizer.core import paths as NO_paths
 # damage a notebook by itself. This file works directly with the data layer
 # rather than building a window, so it has to ask for it explicitly. Doing so
 # in THIS directory is exactly why the file must be run from a throwaway copy
-# (see CLAUDE.md's "QA testing safety").
+# (see CLAUDE.md's "QA testing safety"); the guard above has seeded the very
+# folder initialise() opens, and made sure no notes were there.
 NO.initialise()
 
 fails = []
@@ -95,6 +78,42 @@ if backup_path:
     check('the backup contains the original note content',
           bool(backed_up) and backed_up[0]['title'] == 'Real note')
     os.remove(backup_path)
+os.remove(NO.DATA_FILE)
+
+# On a full disk the copy stopped partway and left a cut-off file under the
+# backup's name, the update's notice said nothing of it, and the one-time
+# cleanup went ahead with no copy at all.
+from noteorganizer.core import storage as _bk_storage
+with open(NO.DATA_FILE, 'w', encoding='utf-8') as f:
+    json.dump([{'id': 1, 'title': 'Real note', 'body': 'x'},
+               {'id': 2, 'title': '', 'body': ''}], f)
+_bk_settings = _bk_storage.load_settings()
+_bk_storage.save_settings({k: v for k, v in _bk_settings.items() if k != 'cleanup_done'})
+_bk_copy2 = _bk_storage.shutil.copy2
+
+
+def _bk_full(src, dst, *a, **k):
+    with open(dst, 'w') as f:
+        f.write('[{"id": 1, "ti')
+    raise OSError(28, 'No space left on device')
+
+
+_bk_storage.shutil.copy2 = _bk_full
+try:
+    _bk_none = NO.backup_notes_file()
+    _bk_left = [n for n in os.listdir(os.path.dirname(os.path.abspath(NO.DATA_FILE)))
+                if n.startswith('notes_data_backup_')]
+    _bk_notes, _bk_report = _bk_storage.load_notes(('up', '0.1.0', '0.2.0'))
+finally:
+    _bk_storage.shutil.copy2 = _bk_copy2
+check(f'a backup the disk cannot hold leaves no cut-off file under its name ({_bk_left})',
+      _bk_none is None and not _bk_left)
+check('...the load after an update says the safety copy could not be made',
+      _bk_report.get('version_backup_failed') is True)
+check('...and the one-time cleanup waits for a launch that can keep a copy',
+      _bk_report.get('cleanup_report') is None and len(_bk_notes) == 2
+      and not _bk_storage.load_settings().get('cleanup_done'))
+_bk_storage.save_settings(_bk_settings)
 os.remove(NO.DATA_FILE)
 
 # ---- _timestamped_backup(): the migration-path backup helper ----
@@ -208,6 +227,57 @@ finally:
     NO_paths.get_appdata_dir = real_get_appdata_dir
     shutil.rmtree(app_dir, ignore_errors=True)
     shutil.rmtree(appdata_dir, ignore_errors=True)
+
+# ---- run_migrations(): Case 1 replaces a READABLE settings.json too ----
+# The module's rule is that nothing is overwritten without a copy first;
+# the reclaim kept an unreadable settings.json aside but wrote over a
+# readable one -- this folder's categories and choices -- with no copy.
+for _rs_backup_fails in (False, True):
+    _rs_app = tempfile.mkdtemp()
+    _rs_old = tempfile.mkdtemp()
+    try:
+        NO_paths.get_appdata_dir = lambda: _rs_old
+        with open(os.path.join(_rs_old, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            json.dump([{'id': 1, 'title': 'AppData note'}], f)
+        with open(os.path.join(_rs_old, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'categories': ['From AppData']}, f)
+        _rs_set = os.path.join(_rs_app, 'settings.json')
+        with open(_rs_set, 'w', encoding='utf-8') as f:
+            json.dump({'categories': ['Local only']}, f)
+        _rs_copy2 = shutil.copy2
+        def _rs_failing(src, dst):
+            if _rs_backup_fails and src == _rs_set:
+                raise OSError('simulated backup failure')
+            return _rs_copy2(src, dst)
+        shutil.copy2 = _rs_failing
+        try:
+            _rs_msg = NO.run_migrations(_rs_app)
+        finally:
+            shutil.copy2 = _rs_copy2
+        with open(_rs_set, encoding='utf-8') as f:
+            _rs_now = json.load(f)
+        _rs_kept = [n for n in os.listdir(_rs_app) if n.startswith('settings_replaced_')]
+        _rs_held = ([json.load(open(os.path.join(_rs_app, n), encoding='utf-8'))
+                     for n in _rs_kept])
+        with open(os.path.join(_rs_app, 'notes_data.json'), encoding='utf-8') as f:
+            _rs_notes = json.load(f)
+        check('the reclaim brings the notes in (settings backup fails: %s)' % _rs_backup_fails,
+              _rs_msg is not None and _rs_notes[0]['title'] == 'AppData note')
+        check('nothing half-copied is left behind (%s)' % _rs_backup_fails,
+              not [n for n in os.listdir(_rs_app) if n.endswith('.part')])
+        if _rs_backup_fails:
+            check('a readable settings.json that could not be copied aside stays',
+                  _rs_now.get('categories') == ['Local only'] and not _rs_kept)
+        else:
+            check('a readable settings.json is copied aside before it is replaced',
+                  _rs_held == [{'categories': ['Local only']}])
+            check('...and the reclaimed settings take its place',
+                  _rs_now.get('categories') == ['From AppData']
+                  and _rs_now.get('reclaimed_from_appdata') is True)
+    finally:
+        NO_paths.get_appdata_dir = real_get_appdata_dir
+        shutil.rmtree(_rs_app, ignore_errors=True)
+        shutil.rmtree(_rs_old, ignore_errors=True)
 
 # ---- purge_stale_copies(): must never delete the real AppData folder ----
 # The bug this closes: AppData was treated as just another disposable
@@ -392,6 +462,329 @@ try:
 finally:
     shutil.rmtree(_mig_root, ignore_errors=True)
 
+# ---- The built app keeps its notebook in the profile, beside Documents ----
+# Installed from the Store it runs as an MSIX package, and what it creates
+# in AppData goes to the package's private copy, which uninstalling deletes
+# (2026-10-27). Played here with sys.frozen set and a stand-in profile, so
+# nothing reaches the real one.
+_pr_root = tempfile.mkdtemp(prefix='qa_profile_')
+_pr_env = {k: os.environ.get(k) for k in ('USERPROFILE', 'APPDATA', 'XDG_DATA_HOME')}
+_pr_frozen = getattr(sys, 'frozen', None)
+try:
+    _pr_user = os.path.join(_pr_root, 'user')
+    os.environ['USERPROFILE'] = _pr_user
+    os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
+    os.environ['XDG_DATA_HOME'] = os.environ['APPDATA']
+    sys.frozen = True
+    _pr_home = NO_paths.get_user_notebook_dir()
+    _pr_old = NO_paths.get_appdata_dir()
+    if os.name != 'nt':
+        check('elsewhere than Windows, the built app keeps the AppData equivalent',
+              _pr_home == _pr_old)
+    else:
+        check('the built app keeps its notebook in the profile, beside Documents',
+              os.path.normcase(NO_paths.resolve_data_dir(os.path.dirname(
+                  os.path.abspath(__file__)))[0])
+              == os.path.normcase(os.path.join(_pr_user, 'Note Organizer')))
+        # An older .exe's notebook in AppData is brought in: copied, never moved.
+        os.makedirs(os.path.join(_pr_old, 'attachments'))
+        _pr_notes = [{'id': 1, 'uid': 'pr-1', 'title': 'From the old exe', 'body': 'a'},
+                     {'id': 2, 'uid': 'pr-2', 'title': 'Second', 'body': 'b'}]
+        with open(os.path.join(_pr_old, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            json.dump(_pr_notes, f)
+        with open(os.path.join(_pr_old, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'app_version': '0.97.405', 'theme': 'dark'}, f)
+        with open(os.path.join(_pr_old, 'attachments', 'pr_file.bin'), 'w') as f:
+            f.write('x')
+        with open(os.path.join(_pr_old, 'trash.json'), 'w', encoding='utf-8') as f:
+            json.dump([{'id': 9, 'uid': 'pr-t', 'title': 'In the old Trash',
+                        'deleted_at': '2026-10-20 09:00:00'}], f)
+        with open(os.path.join(_pr_old, 'templates.json'), 'w', encoding='utf-8') as f:
+            json.dump([{'name': 'Old template', 'title': '', 'body': 'x'}], f)
+        with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
+            _pr_bytes = f.read()
+        os.makedirs(_pr_home, exist_ok=True)
+        # The first start killed mid-copy (a reboot, Task Manager): the notes
+        # file is written last, so the next start copies again rather than
+        # keeping notes whose files never came.
+        _pr_copy2 = NO_paths.shutil.copy2
+
+        def _pr_killed(src, dst, *a, **k):
+            if src.endswith('pr_file.bin'):
+                open(dst, 'w').close()   # the copy cut short where it was going
+                raise SystemExit('killed mid-copy')
+            return _pr_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _pr_killed
+        try:
+            NO_paths.run_migrations(_pr_home)
+        except SystemExit:
+            pass
+        finally:
+            NO_paths.shutil.copy2 = _pr_copy2
+        check('a first start killed while copying files leaves no notes file to mark it done',
+              not os.path.exists(os.path.join(_pr_home, 'notes_data.json'))
+              and not os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin')))
+        _pr_msg = NO_paths.run_migrations(_pr_home) or ''
+        check(f"the first start brings the old exe's notebook in, its file too ({_pr_msg[:60]!r})",
+              NO_paths.count_notes_in(os.path.join(_pr_home, 'notes_data.json')) == 2
+              and os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin'))
+              and open(os.path.join(_pr_home, 'attachments', 'pr_file.bin')).read() == 'x')
+        check('...says the notebook in AppData is kept',
+              'kept as it was' in _pr_msg)
+        check('...and brings its Trash and templates too, not only the notes',
+              all(os.path.exists(os.path.join(_pr_home, n))
+                  and open(os.path.join(_pr_home, n), 'rb').read()
+                  == open(os.path.join(_pr_old, n), 'rb').read()
+                  for n in ('trash.json', 'templates.json')))
+        with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
+            _pr_after = f.read()
+        NO_paths.purge_stale_copies(_pr_home)
+        check('...and leaves it exactly as it was, a cleanup after it too',
+              _pr_after == _pr_bytes
+              and os.path.exists(os.path.join(_pr_old, 'notes_data.json'))
+              and os.path.exists(os.path.join(_pr_old, 'attachments', 'pr_file.bin')))
+        # An older exe run again writes to AppData; its notebook must never
+        # take the place of the notes written since in the profile.
+        with open(os.path.join(_pr_home, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            json.dump(_pr_notes + [{'id': 3, 'uid': 'pr-3', 'title': 'Written since'}], f)
+        with open(os.path.join(_pr_home, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'app_version': '0.97.405'}, f)
+        NO_paths.run_migrations(_pr_home)
+        check("a notebook the built app has is never replaced by AppData's",
+              NO_paths.count_notes_in(os.path.join(_pr_home, 'notes_data.json')) == 3
+              and not any(n.startswith('notes_data_replaced_')
+                          for n in os.listdir(_pr_home)))
+        # A profile that cannot be written: AppData, said out loud, with
+        # the one thing that can take it there -- the Store's uninstall.
+        _pr_writable = NO_paths._is_writable
+        NO_paths._is_writable = lambda folder: (
+            os.path.normcase(folder) != os.path.normcase(_pr_home)
+            and _pr_writable(folder))
+        try:
+            _pr_fall = NO_paths.resolve_data_dir(os.path.dirname(os.path.abspath(__file__)))
+        finally:
+            NO_paths._is_writable = _pr_writable
+        check(f'an unwritable profile falls back to AppData, with a warning ({str(_pr_fall[1])[:50]!r})',
+              os.path.normcase(_pr_fall[0]) == os.path.normcase(_pr_old)
+              and _pr_fall[1] is not None and 'backup' in _pr_fall[1].lower())
+        # A FILE where the folder goes: said as that, with what cures it --
+        # the message used to blame a profile that could not be written.
+        _pf_user = os.path.join(_pr_root, 'user_file')
+        os.environ['USERPROFILE'] = _pf_user
+        os.environ['APPDATA'] = os.path.join(_pf_user, 'AppData', 'Roaming')
+        os.makedirs(_pf_user)
+        with open(NO_paths.get_user_notebook_dir(), 'w') as f:
+            f.write('not a folder')
+        _pf_fall = NO_paths.resolve_data_dir(os.path.dirname(os.path.abspath(__file__)))
+        check(f'a file in the notes folder\'s place is named as the cause ({str(_pf_fall[1])[:60]!r})',
+              'file named' in (_pf_fall[1] or '') and 'Rename' in (_pf_fall[1] or ''))
+        os.environ['USERPROFILE'] = _pr_user
+        os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
+        # An old notebook with no notes left (all in the Trash) or one that
+        # cannot be read is still the old app's notebook: it used to be
+        # passed over, its Trash and templates with it, and a welcome note
+        # then ended every later attempt.
+        for _pe_how, _pe_notes in (('empty', '[]'), ('unreadable', '{ broken')):
+            _pe_user = os.path.join(_pr_root, 'user_' + _pe_how)
+            os.environ['USERPROFILE'] = _pe_user
+            os.environ['APPDATA'] = os.path.join(_pe_user, 'AppData', 'Roaming')
+            _pe_old, _pe_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+            os.makedirs(_pe_old)
+            os.makedirs(_pe_home)
+            for _pe_name, _pe_text in (('notes_data.json', _pe_notes),
+                                       ('settings.json', '{ not json'),
+                                       ('trash.json', '[{"id": 5, "title": "Binned",'
+                                                      ' "deleted_at": "2026-10-20 09:00:00"}]'),
+                                       ('templates.json', '[{"name": "Kept"}]')):
+                with open(os.path.join(_pe_old, _pe_name), 'w', encoding='utf-8') as f:
+                    f.write(_pe_text)
+            _pe_msg = NO_paths.run_migrations(_pe_home) or ''
+            check(f'an {_pe_how} old notebook is brought in with its Trash and templates '
+                  f'({_pe_msg[:40]!r})',
+                  all(os.path.exists(os.path.join(_pe_home, n))
+                      for n in ('notes_data.json', 'trash.json', 'templates.json'))
+                  and 'Brought in' in _pe_msg)
+            # Its settings could not be read, so there the Trash's window is
+            # unknown and nothing leaves it: the same here, or the default
+            # 30 days emptied that Trash at the first start (2026-10-28).
+            from noteorganizer.core import storage as _pe_storage
+            _pe_prev = NO_paths.APP_DIR
+            try:
+                NO_paths.configure(_pe_home)
+                _pe_window = _pe_storage.trash_retention_days()
+            finally:
+                NO_paths.configure(_pe_prev)
+            check(f'...and its Trash keeps the window its settings left unknown '
+                  f'({_pe_how}: {_pe_window})', _pe_window is None)
+        # A file the first start cannot copy (another program holds it) is
+        # tried again, then named: the notes file marks the copy done, and
+        # "Imported" said nothing of a Trash left behind (2026-10-28).
+        _pf_user = os.path.join(_pr_root, 'user_held')
+        os.environ['USERPROFILE'] = _pf_user
+        os.environ['APPDATA'] = os.path.join(_pf_user, 'AppData', 'Roaming')
+        _pf_old, _pf_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+        os.makedirs(os.path.join(_pf_old, 'attachments'))
+        os.makedirs(_pf_home)
+        for _pf_name, _pf_text in (('notes_data.json', '[{"id": 1, "title": "A"}]'),
+                                   ('settings.json', '{"app_version": "0.97.405"}'),
+                                   ('trash.json', '[]'),
+                                   (os.path.join('attachments', 'held.bin'), 'x'),
+                                   (os.path.join('attachments', 'free.bin'), 'y')):
+            with open(os.path.join(_pf_old, _pf_name), 'w', encoding='utf-8') as f:
+                f.write(_pf_text)
+        _pf_copy2 = NO_paths.shutil.copy2
+        _pf_tries = {}
+
+        def _pf_held(src, dst, *a, **k):
+            name = os.path.basename(src)
+            _pf_tries[name] = _pf_tries.get(name, 0) + 1
+            if name == 'trash.json' or (name == 'held.bin' and _pf_tries[name] < 3):
+                raise PermissionError('held by another program')
+            return _pf_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _pf_held
+        _pf_sleep = NO_paths.time.sleep
+        NO_paths.time.sleep = lambda s: None
+        try:
+            _pf_msg = NO_paths.run_migrations(_pf_home) or ''
+        finally:
+            NO_paths.shutil.copy2 = _pf_copy2
+            NO_paths.time.sleep = _pf_sleep
+        check(f'a file held a moment at the first start is copied on a later try '
+              f'({_pf_tries})',
+              os.path.exists(os.path.join(_pf_home, 'attachments', 'held.bin'))
+              and os.path.exists(os.path.join(_pf_home, 'attachments', 'free.bin')))
+        check(f'...and one that cannot be copied is named in the message '
+              f'({_pf_msg[-90:]!r})',
+              'could not be copied' in _pf_msg and 'trash.json' in _pf_msg
+              and 'held.bin' not in _pf_msg)
+        # The notes file itself held: all or nothing. It returned in silence,
+        # the app opened empty, its first save wrote a notes file, and the
+        # old notebook was never looked at again.
+        _pn_user = os.path.join(_pr_root, 'user_notes_held')
+        os.environ['USERPROFILE'] = _pn_user
+        os.environ['APPDATA'] = os.path.join(_pn_user, 'AppData', 'Roaming')
+        _pn_old, _pn_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+        os.makedirs(_pn_old)
+        os.makedirs(_pn_home)
+        for _pn_name, _pn_text in (('notes_data.json', '[{"id": 1, "title": "A"}]'),
+                                   ('settings.json', '{"app_version": "0.97.405"}')):
+            with open(os.path.join(_pn_old, _pn_name), 'w', encoding='utf-8') as f:
+                f.write(_pn_text)
+
+        def _pn_held(src, dst, *a, **k):
+            if os.path.basename(src) == 'notes_data.json':
+                raise PermissionError('held by another program')
+            return _pf_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _pn_held
+        NO_paths.time.sleep = lambda s: None
+        try:
+            _pn_msg = NO_paths.run_migrations(_pn_home) or ''
+        finally:
+            NO_paths.shutil.copy2 = _pf_copy2
+            NO_paths.time.sleep = _pf_sleep
+        _pn_notes = os.path.join(_pn_home, 'notes_data.json')
+        check(f'a notes file held at the first start says the notebook could not '
+              f'come, asks to close the app and open it again, and nothing is '
+              f'written in its place ({_pn_msg[-90:]!r})',
+              'could not be brought in' in _pn_msg
+              and 'close Note Organizer and open it again' in _pn_msg
+              and not os.path.exists(_pn_notes)
+              and NO_paths.writes_held(_pn_notes)
+              # The settings too: written at once, they made the run a first
+              # one, with a welcome note and an "Export complete" over nothing.
+              and NO_paths.writes_held(os.path.join(_pn_home, 'settings.json')))
+        NO_paths.WRITES_HELD.clear()
+        _pn_msg = NO_paths.run_migrations(_pn_home) or ''
+        check('...and the next start brings it in',
+              NO_paths.count_notes_in(_pn_notes) == 1 and 'Imported 1' in _pn_msg)
+        # The settings file held instead: the notes must not come without it,
+        # or the old Trash falls under the default window and is emptied.
+        _ps_user = os.path.join(_pr_root, 'user_settings_held')
+        os.environ['USERPROFILE'] = _ps_user
+        os.environ['APPDATA'] = os.path.join(_ps_user, 'AppData', 'Roaming')
+        _ps_old, _ps_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+        os.makedirs(_ps_old)
+        os.makedirs(_ps_home)
+        for _ps_name, _ps_text in (('notes_data.json', '[{"id": 1, "title": "A"}]'),
+                                   ('settings.json', '{"app_version": "0.97.405"}')):
+            with open(os.path.join(_ps_old, _ps_name), 'w', encoding='utf-8') as f:
+                f.write(_ps_text)
+
+        def _ps_held(src, dst, *a, **k):
+            if os.path.basename(src) == 'settings.json':
+                raise PermissionError('held by another program')
+            return _pf_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _ps_held
+        NO_paths.time.sleep = lambda s: None
+        try:
+            _ps_msg = NO_paths.run_migrations(_ps_home) or ''
+        finally:
+            NO_paths.shutil.copy2 = _pf_copy2
+            NO_paths.time.sleep = _pf_sleep
+        _ps_notes = os.path.join(_ps_home, 'notes_data.json')
+        check(f'a settings file held at the first start keeps the notes from coming '
+              f'without it, and asks to close the app and open it again ({_ps_msg[-90:]!r})',
+              'could not be brought in' in _ps_msg
+              and 'close Note Organizer and open it again' in _ps_msg
+              and not os.path.exists(_ps_notes) and NO_paths.writes_held(_ps_notes))
+        NO_paths.WRITES_HELD.clear()
+        _ps_msg = NO_paths.run_migrations(_ps_home) or ''
+        check('...and the next start brings the notes and the settings in',
+              NO_paths.count_notes_in(_ps_notes) == 1
+              and os.path.exists(os.path.join(_ps_home, 'settings.json')))
+        os.environ['USERPROFILE'] = _pr_user
+        os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
+    # The second barrier: even listed as a leftover, the profile's notebook
+    # is never cleared. A run from source beside an empty notebook would
+    # otherwise find an empty one "covered", and delete it.
+    del sys.frozen
+    # A run from source taking over from AppData brings the Trash and the
+    # templates where it has none -- and never over a Trash of its own.
+    if os.name == 'nt':
+        _pr_take = os.path.join(_pr_root, 'take')
+        os.makedirs(_pr_take)
+        with open(os.path.join(_pr_take, 'trash.json'), 'w', encoding='utf-8') as f:
+            f.write('[]')
+        NO_paths.run_migrations(_pr_take)
+        with open(os.path.join(_pr_take, 'trash.json'), encoding='utf-8') as f:
+            _pr_own = f.read()
+        check('a run from source keeps its own Trash, and takes the templates it lacks',
+              _pr_own == '[]'
+              and os.path.exists(os.path.join(_pr_take, 'templates.json'))
+              and NO_paths.count_notes_in(os.path.join(_pr_take, 'notes_data.json')) == 2)
+    _pr_src = os.path.join(_pr_root, 'source')
+    os.makedirs(_pr_src)
+    # Without the file brought in above: a folder holding a file the
+    # source run lacks is spared for that reason alone, and proves nothing.
+    shutil.rmtree(_pr_home, ignore_errors=True)
+    os.makedirs(_pr_home)
+    for _pr_dir in (_pr_src, _pr_home):
+        with open(os.path.join(_pr_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            f.write('[]')
+        with open(os.path.join(_pr_dir, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'app_version': '0.97.405'}, f)
+    _pr_legacy = NO_paths.get_legacy_dirs
+    NO_paths.get_legacy_dirs = lambda app_dir: [_pr_home]
+    try:
+        NO_paths.purge_stale_copies(_pr_src)
+    finally:
+        NO_paths.get_legacy_dirs = _pr_legacy
+    check("even listed as a leftover, the profile's notebook is never cleared",
+          os.path.exists(os.path.join(_pr_home, 'notes_data.json'))
+          and os.path.exists(os.path.join(_pr_home, 'settings.json')))
+finally:
+    for _pr_key, _pr_value in _pr_env.items():
+        if _pr_value is None:
+            os.environ.pop(_pr_key, None)
+        else:
+            os.environ[_pr_key] = _pr_value
+    if _pr_frozen is None:
+        if hasattr(sys, 'frozen'):
+            del sys.frozen
+    else:
+        sys.frozen = _pr_frozen
+    shutil.rmtree(_pr_root, ignore_errors=True)
+
 # The app's own APP_DIR must sit beside note_organizer.py, not inside the
 # noteorganizer/ package.
 check('APP_DIR is not inside the noteorganizer package',
@@ -443,6 +836,53 @@ try:
     _again, _ = _storage.load_notes()
     check('what save_notes wrote is what load_notes reads back',
           [n['title'] for n in _again] == ['Kept', 'Added'])
+
+    # Days a series' copy set aside become notes at the start, written at
+    # once: unwritten, each start made them again under new identities and
+    # said so again.
+    with open(NO_paths.DATA_FILE, 'r', encoding='utf-8') as f:
+        _sa_was = f.read()
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump([{'id': 1, 'uid': 'gym', 'title': 'Gym', 'body': 'x', 'date': '2026-11-02',
+                    'recurrence': {'freq': 'weekly'},
+                    '_set_aside': [{'day': '2026-11-09', 'body': 'Earlier words'},
+                                   {'day': '2026-11-16', 'title': 'Own title', 'body': 'B'}]}], f)
+    _sa_first, _sa_report = _storage.load_notes()
+    _sa_again, _sa_report2 = _storage.load_notes()
+    _sa_made = [(n['title'], n['date'], n['uid']) for n in _sa_first if n['id'] != 1]
+    check('a start makes the days set aside notes of their own and writes them at once: the same '
+          'notes at the next start, nothing made again (%s; %s, then %s)'
+          % ([m[:2] for m in _sa_made], _sa_report['set_aside_made'], _sa_report2['set_aside_made']),
+          [m[:2] for m in _sa_made] == [('Gym (earlier text)', '2026-11-09'),
+                                        ('Own title (earlier text)', '2026-11-16')]
+          and _sa_report['set_aside_made'] == 2 and _sa_report2['set_aside_made'] == 0
+          and [(n['title'], n['date'], n['uid']) for n in _sa_again if n['id'] != 1] == _sa_made
+          and not any('_set_aside' in n for n in _sa_again))
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write(_sa_was)
+
+    # A start that set the notes file aside unreadable holds none of its
+    # notes: a file the Trash's entry shares with one of them is no one's to
+    # delete. Only a held run spared them.
+    with open(NO_paths.DATA_FILE, 'r', encoding='utf-8') as f:
+        _nu_good = f.read()
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write('{not json')
+    os.makedirs(NO_paths.ATTACHMENTS_DIR, exist_ok=True)
+    _nu_file = os.path.join(NO_paths.ATTACHMENTS_DIR, '20261029_shared.png')
+    _nu_entry = [{'attachments': [{'stored_as': '20261029_shared.png'}]}]
+    with open(_nu_file, 'wb') as f:
+        f.write(b'png')
+    _storage.load_notes()
+    _storage._delete_attachment_files(_nu_entry)
+    _nu_kept = os.path.isfile(_nu_file)
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write(_nu_good)
+    _storage.load_notes()
+    _storage._delete_attachment_files(_nu_entry)
+    check('a start that could not read the notes deletes no attached file; one '
+          'that read them does (kept %s, then %s)' % (_nu_kept, os.path.isfile(_nu_file)),
+          _nu_kept and not os.path.isfile(_nu_file))
 
     # The file keeps its exact shape: a two-space indent, and every
     # character written as itself rather than escaped, so a note in any
@@ -625,10 +1065,19 @@ try:
 
     _notes = [{'id': 1, 'title': 'Keep'}, {'id': 2, 'title': 'Bin', 'category': 'Gone'}]
     _trash = []
-    _storage.move_notes_to_trash(_trash, [_notes[1]])
+    _moved = _storage.move_notes_to_trash(_trash, [_notes[1]])
+    check('move_notes_to_trash says it wrote the trash file', _moved == (True, None))
     check('move_notes_to_trash puts the note in the trash', len(_trash) == 1)
     check('move_notes_to_trash stamps a deletion time', bool(_trash[0].get('deleted_at')))
     check('move_notes_to_trash writes the trash file', os.path.exists(NO_paths.TRASH_FILE))
+    # A Trash that cannot be written keeps nothing, and says so: the caller
+    # then keeps the note, which used to end up in neither file.
+    os.makedirs(NO_paths.TRASH_FILE + '.tmp')
+    _held = list(_trash)
+    _refused = _storage.move_notes_to_trash(_trash, [{'id': 3, 'title': 'Doomed'}])
+    os.rmdir(NO_paths.TRASH_FILE + '.tmp')
+    check('a Trash that cannot be written is reported, and keeps nothing',
+          _refused[0] is False and _trash == _held)
 
     check('days_left_in_trash counts from the stamp',
           _storage.days_left_in_trash(_trash[0]['deleted_at']) == NO.TRASH_RETENTION_DAYS)
@@ -636,6 +1085,10 @@ try:
           _storage.days_left_in_trash('not a date') is None)
     check('days_left_in_trash returns None rather than raising on junk',
           _storage.days_left_in_trash(None) is None)
+    # Deleted while the clock ran ahead, read after it was put right: the
+    # row promised more days than the window has.
+    check('a stamp in the future promises no more than the window',
+          _storage.days_left_in_trash('2099-01-01 09:00:00') == NO.TRASH_RETENTION_DAYS)
 
     _notes = [n for n in _notes if n['id'] != 2]
     # A note created AFTER the delete has taken the id the trashed one used.
@@ -898,6 +1351,16 @@ check("an unserializable note reports (False, exc) instead of raising",
       _ok3 is False and isinstance(_exc3, TypeError))
 check("and cleans up its .tmp too",
       not os.path.exists(_paths.DATA_FILE + ".tmp"))
+# The new file is on the disk before it replaces the old: a power cut just
+# after a replace could otherwise leave an empty notes file.
+_synced = []
+_real_fsync = _storage.os.fsync
+_storage.os.fsync = lambda fd: (_synced.append(fd), _real_fsync(fd))[1]
+try:
+    _storage.save_notes([{"id": 994, "title": "synced"}])
+finally:
+    _storage.os.fsync = _real_fsync
+check("a save is flushed to the disk before it replaces the file", len(_synced) == 1)
 _storage.save_notes([])
 
 # ---- Purge deletes the files of what it purges ----
@@ -930,6 +1393,23 @@ check("purge permanently deletes the expired entry's attachment file",
 check("while the kept entry's file is untouched",
       os.path.exists(_new_att))
 os.remove(_new_att)
+
+# The Trash written first, then the files: deleted first, a refused write left
+# trash.json naming files that were gone.
+_expired = {"id": 1, "deleted_at": _stampO,
+            "attachments": [{"stored_as": "teeth_old.bin"}]}
+with open(_old_att, "w") as _f:
+    _f.write("x")
+_refusedT = _storage.purge_expired_trash(
+    [dict(_expired)], [], write=lambda kept: (False, OSError(28, "No space")))
+check("a purge whose Trash write is refused purges nothing and keeps the file",
+      _refusedT[1] == 0 and len(_refusedT[0]) == 1 and os.path.exists(_old_att))
+_writtenT = []
+_landedT = _storage.purge_expired_trash(
+    [dict(_expired)], [],
+    write=lambda kept: (_writtenT.append(list(kept)), (True, None))[1])
+check("written first, the purge then takes the file",
+      _landedT[1] == 1 and _writtenT == [[]] and not os.path.exists(_old_att))
 
 # ---- The purge spares a file something still uses ----
 # Two notes share one stored file when a duplicate or an import could not
@@ -985,6 +1465,13 @@ check("choosing a window forgets that the last one was not known",
       _storage.trash_retention_days() == 90
       and _storage.TRASH_WINDOW_UNKNOWN not in _storage.load_settings()
       and _storage.trash_window_words("within") == " within 90 days")
+_storage.save_settings({"trash_retention_days": 1})
+check("a one-day window is promised as one day, not '1 days'",
+      _storage.trash_window_words("within") == " within 1 day")
+check("a count's noun takes the form its number takes",
+      [_storage.count_noun(n, "note") for n in (0, 1, 2)] == ["0 notes", "1 note", "2 notes"]
+      and _storage.count_noun(1, "category", "categories") == "1 category"
+      and _storage.count_noun(3, "category", "categories") == "3 categories")
 _storage.save_settings({})
 check("a window never chosen is still the default",
       _storage.trash_retention_days() == _storage.TRASH_RETENTION_DAYS)
@@ -1120,6 +1607,122 @@ if _storage._attachment_path_within("../../out") is not None:
     _guard_ok = False
 check("the path guard never raises and never returns a path outside the folder",
       _guard_ok)
+# One file, one name. NTFS answers other strings for the same file -- an
+# 8.3 short name, a "::$DATA" stream suffix -- while every check upstream
+# compares names: a backup's Trash entry deleted a note's photo by its short
+# name, and "x.exe::$DATA" opened with no unsafe-file warning. A symlink is
+# the same alias on Linux.
+_two_names = os.path.join(_paths.ATTACHMENTS_DIR, "20261003091512345678_holiday.jpg")
+with open(_two_names, "w") as _f:
+    _f.write("photo")
+_aliases = []
+if os.name == "nt":
+    import ctypes
+    _aliases.append("20261003091512345678_holiday.jpg::$DATA")
+    _short_buf = ctypes.create_unicode_buffer(1024)
+    if ctypes.windll.kernel32.GetShortPathNameW(_two_names, _short_buf, 1024):
+        _short = os.path.basename(_short_buf.value)
+        if _short.lower() != os.path.basename(_two_names):
+            _aliases.append(_short)   # absent where the volume makes no short names
+    # Another case, which Windows opens as the same file: every spare and
+    # claimed set compares names exactly, so a backup's Trash entry naming a
+    # kept note's photo in capitals was spared by none and deleted it.
+    _aliases.append("20261003091512345678_HOLIDAY.JPG")
+    _aliases.append("zz\\..\\20261003091512345678_holiday.jpg")
+else:
+    os.symlink(_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG"))
+    _aliases.append("202610~1.JPG")
+# A path that comes back to the same name, which the guard's own tidying
+# used to collapse before it compared.
+_aliases += ["zz/../20261003091512345678_holiday.jpg",
+             "./20261003091512345678_holiday.jpg"]
+check("a name that reaches a file under another name is refused (%s)" % _aliases,
+      bool(_aliases) and all(_storage._attachment_path_within(a) is None for a in _aliases))
+check("...while the file's own name still resolves",
+      _storage._attachment_path_within("20261003091512345678_holiday.jpg") is not None)
+_storage._delete_attachment_files([{"attachments": [{"stored_as": a} for a in _aliases]}])
+check("...and a delete by an alias leaves the file", os.path.exists(_two_names))
+# A named stream of the file is a name for something else again: realpath
+# hands "x.jpg:Zone.Identifier" back unchanged, so it passed the exact-name
+# test, and a backup's Trash entry naming it deleted the Mark of the Web
+# the import had just written.
+# Refused on every system, so the check runs on each: on Linux the
+# "stream" is a file of its own, which the rule keeps all the same.
+_zone = b"[ZoneTransfer]\r\nZoneId=3\r\n"
+with open(_two_names + ":Zone.Identifier", "wb") as _f:
+    _f.write(_zone)
+_streams = ["20261003091512345678_holiday.jpg:Zone.Identifier",
+            "20261003091512345678_holiday.jpg:Zone.Identifier:$DATA",
+            "20261003091512345678_holiday.jpg:s.pdf",
+            "20261003091512345678_holiday.jpg:",
+            "20261003091512345678_holiday.jpg:$DATA"]
+check("a name that reaches a stream of a file is refused (%s)"
+      % [s for s in _streams if _storage._attachment_path_within(s) is not None],
+      all(_storage._attachment_path_within(s) is None for s in _streams))
+# What the start-up purge, Empty Trash and Delete forever all call.
+_storage._delete_attachment_files([{"attachments": [{"stored_as": s}]}
+                                   for s in _streams])
+try:
+    with open(_two_names + ":Zone.Identifier", "rb") as _f:
+        _zone_after = _f.read()
+except OSError:
+    _zone_after = None
+check("...and a Trash entry naming the file's mark leaves the mark",
+      _zone_after == _zone and os.path.exists(_two_names))
+for _left in (_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG"),
+              _two_names + ":Zone.Identifier"):
+    if os.path.lexists(_left):
+        os.remove(_left)
+# Trash entries come in as trash.json held them, and a hand-edited or
+# damaged one held attachments as 7, true, a string, or a file name that is
+# a list: the start-up purge read them and stopped the app at every start.
+_odd_trash = [{"id": 1, "deleted_at": "2001-01-01 00:00:00", "attachments": 7},
+              {"id": 2, "deleted_at": "2001-01-01 00:00:00", "attachments": True},
+              {"id": 3, "deleted_at": "2001-01-01 00:00:00", "attachments": "x.png"},
+              {"id": 4, "deleted_at": "2001-01-01 00:00:00",
+               "attachments": [{"stored_as": ["x"]}, 5, {"stored_as": "kept.png"}]}]
+try:
+    _odd_names = _storage.attachment_names_in(_odd_trash)
+    _storage._delete_attachment_files(_odd_trash, spare={"kept.png"})
+    _storage.purge_expired_trash([dict(e) for e in _odd_trash], [])
+    _odd_ok = _odd_names == {"kept.png"}
+except Exception as _odd_exc:   # the start-up crash this guards against
+    _odd_ok = False
+    print("   raised:", repr(_odd_exc))
+check("Trash entries whose attachments are not a list of files neither "
+      "stop the purge nor hide the files that are named", _odd_ok)
+# JSON's 1e999 reads as infinity, and int() of it raised OverflowError in the
+# recurrence's clamps: one such number in notes_data.json -- or in a leftover
+# notebook the start-up purge reads -- stopped the app at every start. So did
+# raw notes nested 990 lists deep, through the purge's content signature.
+from noteorganizer.core import model as _model_nf, recurrence as _rec_nf
+_nf_ok = True
+for _nf_v in (float("inf"), float("-inf")):
+    try:
+        _nf_rule = _rec_nf.normalize_recurrence(
+            {"freq": "daily", "interval": _nf_v, "count": _nf_v})
+        _nf_ok = _nf_ok and _nf_rule["interval"] == 1 and _nf_rule["count"] == 0
+        _model_nf.normalize_note({"id": 1, "title": "t", "date": "2026-10-01",
+                                  "recurrence": {"freq": "daily", "interval": _nf_v}})
+    except Exception as _nf_exc:
+        _nf_ok = False
+        print("   raised:", repr(_nf_exc))
+check("an infinite repeat interval or count reads as the default, not a crash", _nf_ok)
+_nf_deep = []
+_nf_cur = _nf_deep
+for _ in range(985):
+    _nf_cur.append([])
+    _nf_cur = _nf_cur[0]
+_nf_file = os.path.join(_paths.APP_DIR, "nf_stale_notes.json")
+with open(_nf_file, "w", encoding="utf-8") as _f:
+    json.dump([{"id": 1, "title": "t", "paragraphs": _nf_deep}], _f)
+try:
+    _nf_judged = _paths.is_redundant_copy(_nf_file, [{"id": 1, "title": "t"}])
+except Exception as _nf_exc:
+    _nf_judged = "raised %r" % _nf_exc
+os.remove(_nf_file)
+check("a leftover notebook too deep to sign is kept, never a crash (%s)" % _nf_judged,
+      _nf_judged is False)
 # And normalize_note flattens a smuggled path to a bare filename at the
 # data choke point, closing traversal for every channel (share + zip +
 # hand-edit), not only the sinks.
@@ -1155,6 +1758,176 @@ try:
 except RecursionError:
     _copy_ok = False
 check("so a note carrying one can still be duplicated", _copy_ok)
+# The label is only a label. A backup can write "Holiday photo.jpg" over
+# an .rdp, and the row showed a photo while Windows opened a remote
+# connection. normalize_note makes the shown name end in the type of the
+# file that opens, and takes out what reorders or hides text.
+# ISSUES_LOG: "The photo that was a remote connection".
+from noteorganizer.core.model import attachment_display_name as _dn
+_label = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "Holiday photo.jpg", "stored_as": "20261001120000000001_trip.rdp"},
+    {"filename": "photo.tar.jpg", "stored_as": "20261001_photo"},
+    {"filename": "x", "stored_as": ".rdp"}]})
+check("a backup's label ends in the type of the file that opens (%s)"
+      % [a["filename"] for a in _label["attachments"]],
+      [a["filename"] for a in _label["attachments"]]
+      == ["Holiday photo.rdp", "photo", "x.rdp"])
+_hidden = ("\x00\x07\x1b\x7f\x85\x9f\u061c\u200e\u200f\u202a\u202b\u202c"
+           "\u202d\u202e\u2066\u2067\u2068\u2069\u2028\u2029\ufeff")
+_bidi = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "Invoice\u202efdp.exe", "stored_as": "20261001_inv.exe"},
+    {"filename": "a" + _hidden + "b.txt", "stored_as": "20261001_ab.txt"}]})
+check("a shown name keeps no character that reorders or hides text (%r)"
+      % [a["filename"] for a in _bidi["attachments"]],
+      [a["filename"] for a in _bidi["attachments"]] == ["Invoicefdp.exe", "ab.txt"])
+_own = ["report.pdf", "Photo.JPG", "README", ".bashrc", "Ünïcödé €.docx",
+        "a b.tar.gz", "שלום.txt",
+        "family \U0001F468\u200d\U0001F469\u200d\U0001F467.png"]
+check("...while a name the app stored itself is shown as it was, every time",
+      all(_dn(n, "20261028120000000000_" + n) == n
+          and _dn(_dn(n, "20261028120000000000_" + n), "20261028120000000000_" + n) == n
+          for n in _own)
+      and _nn_att(_label)["attachments"] == _label["attachments"])
+# What a click does is judged from the stored file, and only kinds whose
+# usual app just shows them open unasked. A list of dangerous kinds is never
+# complete: .pyw, .rdp, .theme, .xll and the macro documents went straight
+# to Windows. Anything not on the short list asks.
+from noteorganizer.core import model as _kinds
+_how = {name: _kinds.how_to_open("20261001_" + name) for name in [
+    "photo.jpg", "scan.PNG", "anim.gif",
+    "minutes.docx", "sheet.xlsx", "slides.pptx", "scan.pdf", "notes.txt",
+    "list.csv", "clip.mp4", "song.mp3", "film.mov",
+    "run.exe", "link.lnk", "evil.lnk. ", "n.pyw", "budget.py", "trip.rdp",
+    "wall.theme", "report.xll", "minutes.docm", "sum.xlsm", "upd.msu",
+    "app.msixbundle", "c.iqy", "w.wsc", "m.psm1", "nb.one",
+    "old.doc", "old.xls", "page.html", "drawing.svg", "data.json",
+    "archive.zip", "text.odt", "noext", "odd.xyz",
+    "x.r" + chr(0x202e) + "dp"]}
+_wrong = {n: k for n, k in _how.items() if k != (
+    "preview" if n in ("photo.jpg", "scan.PNG", "anim.gif")
+    else "open" if n.rsplit(".", 1)[-1] in ("docx", "xlsx", "pptx", "pdf", "txt",
+                                            "csv", "mp4", "mp3", "mov")
+    else "ask" if n in ("old.doc", "old.xls", "page.html", "drawing.svg",
+                        "data.json", "archive.zip", "text.odt", "noext",
+                        "odd.xyz", "x.r" + chr(0x202e) + "dp")
+    else "warn")}
+check("only kinds whose usual app just shows them open unasked; the rest ask, "
+      "those that run code with the warning (%r)" % _wrong, not _wrong)
+check("...a bare '.rdp' is an .rdp, as Windows reads it",
+      _kinds.how_to_open(".rdp") == "warn")
+_old_list = {".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp",
+             ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta",
+             ".cpl", ".jar", ".reg", ".ps2", ".msc", ".gadget", ".lnk", ".url",
+             ".scf", ".iso", ".img", ".vhd", ".vhdx", ".chm", ".inf", ".sct",
+             ".appref-ms", ".settingcontent-ms", ".msix", ".appx",
+             ".appinstaller", ".library-ms", ".search-ms", ".application",
+             ".diagcab", ".ws", ".vb", ".mht", ".mhtml"}
+check("...every kind that had the warning still has it, and none of them opens unasked",
+      _old_list <= _kinds.DANGEROUS_EXTENSIONS
+      and not (_kinds.DANGEROUS_EXTENSIONS & _kinds.OPENS_WITHOUT_ASKING))
+# An exported note's file is named from its title, and Windows refuses a
+# name holding any control character: a title with a bell in it (from a
+# share code, say) failed to export with "1 failed to write" and no name.
+_stems = {t: _kinds.export_file_stem(t) for t in [
+    "bell\x07title", "tab\there", "Export <trial>", "a" + chr(0x202e) + "b",
+    "c1\x85\x9fend", "del\x7fete", "...", "\x01\x02", "  .x.  ", "y" * 80]}
+check("a file named from a title holds nothing Windows refuses or hides (%r)" % _stems,
+      _stems == {"bell\x07title": "bell_title", "tab\there": "tab_here",
+                 "Export <trial>": "Export _trial", "a" + chr(0x202e) + "b": "ab",
+                 "c1\x85\x9fend": "c1end", "del\x7fete": "delete", "...": "note",
+                 "\x01\x02": "note", "  .x.  ": "x", "y" * 80: "y" * 60})
+# Windows' Mark of the Web travels with what the app brings in. A backup
+# downloaded from the internet is marked, and the import took files out of
+# it unmarked, so SmartScreen and Office's Protected View never saw them. A
+# file attached by hand keeps its own (shutil.copy2 copies the stream on
+# Windows), and so does a duplicate's copy. Windows only: nowhere else keeps
+# the stream.
+if os.name == "nt":
+    import types as _types_m
+    import zipfile as _zip_m
+    import tkinter.filedialog as _tkfd_m
+    _m_dir = tempfile.mkdtemp(prefix="notesorg-motw-")
+    _m_mark = (b"[ZoneTransfer]\r\nZoneId=3\r\n"
+               b"HostUrl=https://example.invalid/NotesBackup.zip\r\n")
+
+    def _m_read(path):
+        try:
+            with open(path + ":Zone.Identifier", "rb") as _fh:
+                return _fh.read()
+        except OSError:
+            return None
+
+    class _Quiet:
+        """A progress widget that is not there: every call does nothing."""
+        def __getattr__(self, _name):
+            return lambda *a, **k: None
+
+    _m_zip = os.path.join(_m_dir, "NotesBackup.zip")
+    with _zip_m.ZipFile(_m_zip, "w") as _z:
+        _z.writestr("notes_data.json", "[]")
+        _z.writestr("attachments/20261001120000000001_m_minutes.docm", b"PK macro")
+    with open(_m_zip + ":Zone.Identifier", "wb") as _f:
+        _f.write(_m_mark)
+    os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+    _m_app = _types_m.SimpleNamespace(
+        _export_state=None, _import_state=None, set_status=lambda *a: None,
+        ask_yes_no=lambda *a, **k: True, export_progress_bar=_Quiet(),
+        export_progress_lbl=_Quiet(), export_progress_frame=_Quiet(),
+        _start_io_worker=lambda work: work(), _poll_import_progress=lambda: None,
+        _while_native=lambda show: show())
+    _m_real_open = NO.filedialog.askopenfilename
+    NO.filedialog.askopenfilename = lambda **k: _m_zip
+    try:
+        NO.NoteOrganizer.import_data(_m_app)
+    finally:
+        NO.filedialog.askopenfilename = _m_real_open
+    _m_state = _m_app._import_state or {}
+    _m_dest = os.path.join(NO.ATTACHMENTS_DIR, "20261001120000000001_m_minutes.docm")
+    check("an attachment restored from a downloaded backup keeps the backup's "
+          "mark of the web (%r, %r)" % (_m_state.get("error"), _m_read(_m_dest)),
+          _m_state.get("error") is None and _m_read(_m_dest) == _m_mark)
+
+    _m_src = os.path.join(_m_dir, "Downloads", "minutes.docx")
+    os.makedirs(os.path.dirname(_m_src))
+    with open(_m_src, "wb") as _f:
+        _f.write(b"PK docx")
+    with open(_m_src + ":Zone.Identifier", "wb") as _f:
+        _f.write(_m_mark)
+    os.makedirs(_paths.ATTACHMENTS_DIR, exist_ok=True)
+    _m_editor = _types_m.SimpleNamespace(
+        current_attachments=[], selected_note_id=None,
+        show_warning=lambda *a, **k: None, show_error=lambda *a, **k: None,
+        ask_yes_no=lambda *a, **k: True, refresh_attachments_list=lambda: None,
+        _schedule_autosave=lambda: None, _while_native=lambda show: show())
+    # The real question whether it is attached already, which Add file asks first.
+    _m_editor._attached_already = lambda p: NO.NoteOrganizer._attached_already(_m_editor, p)
+    _m_real_many = _tkfd_m.askopenfilenames
+    _tkfd_m.askopenfilenames = lambda **k: (_m_src,)
+    try:
+        NO.NoteOrganizer.add_attachment(_m_editor)
+    finally:
+        _tkfd_m.askopenfilenames = _m_real_many
+    _m_added = [os.path.join(_paths.ATTACHMENTS_DIR, a["stored_as"])
+                for a in _m_editor.current_attachments]
+    check("a file attached by hand keeps its own mark of the web",
+          len(_m_added) == 1 and _m_read(_m_added[0]) == _m_mark)
+    _m_dup = (_storage.copy_attachment_file(os.path.basename(_m_added[0]))
+              if _m_added else None)
+    _m_dup_path = os.path.join(_paths.ATTACHMENTS_DIR, _m_dup) if _m_dup else None
+    check("...and so does the copy a duplicated note gets",
+          bool(_m_dup) and _m_read(_m_dup_path) == _m_mark)
+    try:
+        _m_nowhere = NO.put_zone_mark(os.path.join(_m_dir, "no folder", "x.docx"), _m_mark)
+    except Exception as _exc:
+        _m_nowhere = "raised %r" % _exc
+    check("...while a place that cannot hold the mark goes without it and never fails (%r)"
+          % (_m_nowhere,), _m_nowhere is False)
+    for _left in [_m_dest, _m_dup_path] + _m_added:
+        if _left and os.path.exists(_left):
+            os.remove(_left)
+    if _m_state.get("temp_dir"):
+        shutil.rmtree(_m_state["temp_dir"], ignore_errors=True)
+    shutil.rmtree(_m_dir, ignore_errors=True)
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.
@@ -1182,6 +1955,25 @@ check("deleting the copy's attachment file leaves the original's intact",
 # A missing source yields None (caller keeps the old ref, no crash).
 check("copy_attachment_file returns None for a missing source",
       _storage.copy_attachment_file("does_not_exist.bin") is None)
+# A copy a full disk cuts short leaves no half file, named by no note, behind.
+_dup_before = set(os.listdir(_paths.ATTACHMENTS_DIR))
+_dup_real_copy = _storage.shutil.copy2
+
+
+def _dup_full(src, dst, *a, **k):
+    with open(dst, "wb") as half:
+        half.write(b"half")
+    raise OSError(28, "No space left on device")
+
+
+_storage.shutil.copy2 = _dup_full
+try:
+    _dup_none = _storage.copy_attachment_file("20260101_shared.bin")
+finally:
+    _storage.shutil.copy2 = _dup_real_copy
+_dup_left = set(os.listdir(_paths.ATTACHMENTS_DIR)) - _dup_before
+check("...and a copy a full disk cuts short is not left in the folder (%s)" % sorted(_dup_left),
+      _dup_none is None and not _dup_left)
 # Defensive: a mutant sharing the file deletes _dup_src above, so a bare
 # remove would crash the run before its footer. Verdicts already recorded.
 if os.path.exists(_dup_src):
@@ -1299,6 +2091,76 @@ check("an all-junk templates file is preserved before falling back",
       _tpJ == [] and any(p.startswith("templates_corrupt_")
                          for p in os.listdir(_paths.APP_DIR)))
 
+# A file of 20,000 templates (a backup's, or a hand-edited one) took
+# fourteen seconds to import and five for the picker to open: a load keeps
+# the first MAX_TEMPLATES, which no one reaches by hand -- the doors refuse
+# the next one (2026-10-28).
+with open(_paths.TEMPLATES_FILE, "w", encoding="utf-8") as _f:
+    json.dump([{"name": "t%05d" % _i, "body": "b"}
+               for _i in range(_storage.MAX_TEMPLATES + 500)], _f)
+_tpMany = _storage.load_templates()
+check(f"a templates file past the ceiling loads its first "
+      f"{_storage.MAX_TEMPLATES:,} ({len(_tpMany):,})",
+      len(_tpMany) == _storage.MAX_TEMPLATES
+      and _tpMany[-1]["name"] == "t%05d" % (_storage.MAX_TEMPLATES - 1))
+os.remove(_paths.TEMPLATES_FILE)
+
+# Half an emoji, spelled as a JSON escape: a lone surrogate, which Tk will
+# not draw -- one in a note's title stopped the app starting, at every
+# launch (2026-10-28). Every data file, and a share code, reads it mended.
+_LONE = '"t' + chr(92) + 'ud83d x"'
+
+
+def _encodes(value):
+    try:
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+_lnKept = {}
+for _p in (_paths.DATA_FILE, _paths.TEMPLATES_FILE, _paths.SETTINGS_FILE,
+           _paths.TRASH_FILE):
+    if os.path.exists(_p):
+        with open(_p, "rb") as _f:
+            _lnKept[_p] = _f.read()
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"id": 1, "title": %s, "body": %s}]' % (_LONE, _LONE))
+_lnNotes, _lnReport = _storage.load_notes(None)
+with open(_paths.TEMPLATES_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"name": %s, "body": "b"}]' % _LONE)
+with open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as _f:
+    _f.write('{"username": %s}' % _LONE)
+with open(_paths.TRASH_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"id": 2, "title": %s, "deleted_at": "2026-10-28 00:00:00"}]' % _LONE)
+_lnAll = [_lnNotes, _storage.load_templates(), _storage.load_settings(),
+          _storage.load_trash()]
+check("a lone surrogate spelled in a data file is mended as each file is "
+      "read: notes, templates, settings, Trash",
+      all(_encodes(v) for v in _lnAll) and len(_lnNotes) == 1
+      and _lnNotes[0]["title"] == "t� x"
+      and _lnAll[1][0]["name"] == "t� x")
+import base64 as _b64
+import zlib as _zlib
+from noteorganizer.core import sharing as _sharingL
+_lnCode = "NOTE1:" + _b64.urlsafe_b64encode(_zlib.compress(
+    ('{"v": 1, "notes": [{"title": %s, "body": "b"}]}' % _LONE).encode("utf-8"))).decode()
+try:
+    _lnShared = _sharingL.decode_share_code(_lnCode)
+except ValueError as _e:
+    _lnShared = _e
+check(f"...and in a share code ({type(_lnShared).__name__})",
+      _encodes(_lnShared) if not isinstance(_lnShared, Exception) else False)
+# Each file put back as it was before these checks, or taken away again.
+for _p in (_paths.DATA_FILE, _paths.TEMPLATES_FILE, _paths.SETTINGS_FILE,
+           _paths.TRASH_FILE):
+    if _p in _lnKept:
+        with open(_p, "wb") as _f:
+            _f.write(_lnKept[_p])
+    elif os.path.exists(_p):
+        os.remove(_p)
+
 # ---- Damage the parser does not call JSON is damage all the same ----
 # Two more ways a file can be unreadable, and neither raised the
 # JSONDecodeError the loaders caught: bytes that are not UTF-8 (a file
@@ -1414,6 +2276,101 @@ check("the cleanup rewrite mends surrogates and completes atomically",
 _setK = _storage.load_settings()
 _setK["cleanup_done"] = True
 _storage.save_settings(_setK)
+
+# A cleanup whose write did not land (the file held by another program)
+# was marked done anyway: its renumbered ids lived only in the running
+# app, against a file and a remembered open note with the old ones.
+_setW = _storage.load_settings()
+_setW.pop("cleanup_done", None)
+_setW["last_open_note_id"] = 7
+_storage.save_settings(_setW)
+_rawW = [{"id": 3, "title": "", "body": ""}, {"id": 7, "title": "Kept", "body": "x"}]
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    json.dump(_rawW, _f)
+_writeW = _storage._write_json_atomic
+
+
+def _held_notes_file(path, value):
+    if os.path.abspath(path) == os.path.abspath(_paths.DATA_FILE):
+        return False, PermissionError(13, "held by another program", path)
+    return _writeW(path, value)
+
+
+_backupsW = os.path.join(os.path.dirname(_paths.DATA_FILE), "notes_data_backup_*.json")
+_beforeW = set(glob.glob(_backupsW))
+_storage._write_json_atomic = _held_notes_file
+try:
+    _notesW, _reportW = _storage.load_notes(None)
+finally:
+    _storage._write_json_atomic = _writeW
+_afterW = _storage.load_settings()
+check("a cleanup whose write does not land is not marked done, and says nothing",
+      not _afterW.get("cleanup_done") and _reportW.get("cleanup_report") is None)
+# Its copy went too: the file was untouched, and a file held for a week
+# left a full copy of the notebook at every launch.
+check("...and leaves no copy of the notes behind, the file being as it was",
+      set(glob.glob(_backupsW)) == _beforeW)
+# Stamped by the second, a copy made the same second wrote over the one
+# before it -- and the copy above, removed, took that one with it.
+_clockW = _storage.datetime
+
+
+class _OneSecond(_clockW):
+    """The same second for both copies, whatever the machine's speed."""
+    @classmethod
+    def now(cls, tz=None):
+        return _clockW(2026, 11, 13, 9, 0, 0)
+
+
+_storage.datetime = _OneSecond
+try:
+    _twiceA, _twiceB = _storage.backup_notes_file(), _storage.backup_notes_file()
+finally:
+    _storage.datetime = _clockW
+check(f"two copies of the notes in the same second are two files ({_twiceA!r}, {_twiceB!r})",
+      _twiceA and _twiceB and _twiceA != _twiceB
+      and os.path.isfile(_twiceA) and os.path.isfile(_twiceB))
+for _p in (_twiceA, _twiceB):
+    if _p and os.path.isfile(_p):
+        os.remove(_p)
+check("...the notes keep the ids their file and the remembered note still name",
+      [n["id"] for n in _notesW] == [3, 7] and _afterW.get("last_open_note_id") == 7)
+_notesW2, _reportW2 = _storage.load_notes(None)
+check("...and the next launch that can write does the cleanup, the open note followed",
+      _reportW2.get("cleanup_report") is not None
+      and [n["id"] for n in _notesW2] == [1]
+      and _storage.load_settings().get("last_open_note_id") == 1
+      and _storage.load_settings().get("cleanup_done") is True)
+# A settings file that refused the mark ran the cleanup at every start,
+# each keeping a full copy of a notebook it had nothing left to change.
+_setR = _storage.load_settings()
+_setR.pop("cleanup_done", None)
+_storage.save_settings(_setR)
+_beforeR = set(glob.glob(_backupsW))
+_notesR, _reportR = _storage.load_notes(None)
+check(f"a cleanup run again with nothing to change leaves no copy behind "
+      f"({sorted(set(glob.glob(_backupsW)) - _beforeR)!r})",
+      set(glob.glob(_backupsW)) == _beforeR and [n["id"] for n in _notesR] == [1]
+      and (_reportR.get("cleanup_report") or (None, "kept"))[1] is None)
+# ...but a file it rewrites only by reshaping what the read takes in
+# another shape (a body written as a list) keeps its copy: compared with
+# the notes as read, it went, the one place that shape was left. A field
+# the read does not know rides along in the copy (and stays in the notes).
+_setU = _storage.load_settings()
+_setU.pop("cleanup_done", None)
+_storage.save_settings(_setU)
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    json.dump([{"id": 1, "uid": "u1", "title": "Kept", "body": ["words", "in a list"],
+                "extra": "theirs"}], _f)
+_beforeU = set(glob.glob(_backupsW))
+_notesU, _ = _storage.load_notes(None)
+_newU = sorted(set(glob.glob(_backupsW)) - _beforeU)
+_heldU = open(_newU[0], encoding="utf-8").read() if len(_newU) == 1 else ""
+check(f"...but one whose file the read reshapes keeps its copy, with what it held in ({_newU!r})",
+      len(_newU) == 1 and '"extra"' in _heldU and "in a list" in _heldU)
+check(f"...and the field the read does not know stays in the notes too "
+      f"({[n.get('extra') for n in _notesU]!r})",
+      [n.get("extra") for n in _notesU] == ["theirs"])
 
 # The two loaders without a corrupt fixture yet: settings (unparsable)
 # and trash (wrong shape). Content-matched rather than counted, so a
@@ -1543,6 +2500,12 @@ try:
     check("the failed write lands in crash_log.txt",
           os.path.exists(_wf_log)
           and "write failure" in open(_wf_log, encoding="utf-8").read())
+    # The file's name and the kind of error, never its folder: the folder's
+    # path holds the person's name (core/diagnostics' own promise).
+    _wf_said = open(_wf_log, encoding="utf-8").read()
+    check("the crash log names the file that failed, not the folder it is in",
+          "trash.json" in _wf_said and _wf_dir not in _wf_said
+          and os.path.basename(_wf_dir) not in _wf_said)
     check("the failed write reaches the on_write_failure callback",
           len(_wf_calls) == 1 and "trash.json" in _wf_calls[0])
     _storage.on_write_failure = lambda *a: (_ for _ in ()).throw(RuntimeError)
@@ -1687,6 +2650,40 @@ check("normalize_note caps the checklist at the data choke point",
       len(_bomb["checklist"]) == _model.MAX_CHECKLIST_ITEMS)
 check("and the cap is far above any real list",
       _model.MAX_CHECKLIST_ITEMS >= 500)
+# ...and each item's length: one item is drawn as one wrapped label as tall as
+# its text, and a 490-character share code carried a 60,000-character item in.
+# The boxes refuse one past the
+# limit (qa1, qa6); one already longer is a person's words, kept whole by every
+# load, and drawn cut.
+from noteorganizer.core import model as _coreCL, sharing as _sharingCL
+from noteorganizer.core.storage import normalize_template as _ntCL
+_cl_long = "w" * 60000
+_cl_note = _model.normalize_note(
+    {"id": 1, "title": "long", "checklist": [{"text": _cl_long, "done": True},
+                                             {"text": "short", "done": False}]})
+_cl_tpl = _ntCL({"name": "t", "checklist": [{"text": _cl_long, "done": False}]})
+_cl_shared = _sharingCL.decode_share_code(_sharingCL.encode_share_code(
+    [{"id": 1, "title": "long", "checklist": [{"text": _cl_long, "done": False}]}]))
+_cl_in = _model.normalize_note(_cl_shared[0]) if _cl_shared else {"checklist": []}
+check("normalize_note, normalize_template and a share code keep a long "
+      "checklist item whole (%s)"
+      % [len(i["text"]) for i in _cl_note["checklist"] + _cl_tpl["checklist"]
+         + _cl_in["checklist"]],
+      [i["text"] for i in _cl_note["checklist"]] == [_cl_long, "short"]
+      and _cl_note["checklist"][0]["done"] is True
+      and [i["text"] for i in _cl_tpl["checklist"] + _cl_in["checklist"]]
+      == [_cl_long] * 2)
+_cl_shown = [_model.checklist_shown(t) for t in (
+    _cl_long, "x\n" * 999, "two\nlines", "v" * _model.MAX_CHECKLIST_ITEM_CHARS,
+    None)]
+check("...and a row draws it cut, by characters and by lines, leaving a "
+      "shorter item as it is (%s)" % [(len(t), t.count("\n")) for t in _cl_shown],
+      _cl_shown[0] == "w" * _model.MAX_CHECKLIST_ITEM_CHARS + "…"
+      and _cl_shown[1].endswith("…")
+      and _cl_shown[1].count("\n") == _coreCL.CHECKLIST_SHOWN_LINES - 1
+      and _cl_shown[2:] == ["two\nlines", "v" * _model.MAX_CHECKLIST_ITEM_CHARS, ""])
+check("...and the limit is far above any real item",
+      _model.MAX_CHECKLIST_ITEM_CHARS >= 1000)
 
 # ---- The rescue copy survives a restart (T0-6) ----
 # _prev is written to disk by the save that shrank the note, but was not
@@ -1735,7 +2732,7 @@ _PROBE = (
 
 def _other_process_can_take_it():
     out = _sp.run([sys.executable, "-c", _PROBE], capture_output=True,
-                  text=True, cwd=_lock_dir)
+                  text=True, cwd=_lock_dir, timeout=120)
     return "GOT" in out.stdout
 
 
@@ -1796,6 +2793,67 @@ try:
     check("while a lock genuinely held elsewhere still refuses",
           _acquire_with_lock_error(_errno.EACCES) is False
           and _acquire_with_lock_error(_errno.EAGAIN) is False)
+
+    # A lock file another program holds a moment (a sharing violation) is
+    # tried again: failing open at once let a second window in once it was
+    # let go. Raised twice, then the file opens: the lock is taken.
+    # Raised as open() raises it on Windows: EACCES, with no winerror.
+    _Sharing = PermissionError
+
+    _sh_left = {"n": 2}
+    _sh_real_open, _sh_real_sleep = open, _si_mod.time.sleep
+
+    def _sh_open(path, *a, **k):
+        if path.endswith("sharing_probe.lock") and _sh_left["n"] > 0:
+            _sh_left["n"] -= 1
+            raise _Sharing(13, "held by another program")
+        return _sh_real_open(path, *a, **k)
+
+    _si_mod.open = _sh_open
+    _si_mod.time.sleep = lambda s: None
+    try:
+        _sh_got = _si_mod.acquire(os.path.join(_lock_dir, "sharing_probe.lock"))
+        _sh_held = _si_mod.held()
+    finally:
+        del _si_mod.open
+        _si_mod.time.sleep = _sh_real_sleep
+        try:
+            _si_mod.release()
+        except Exception:
+            pass
+    check("a lock file held a moment by another program is taken on a later try "
+          "(got %s, held %s)" % (_sh_got, _sh_held),
+          _sh_got is True and _sh_held is True and _sh_left["n"] == 0)
+
+    if os.name == "nt":
+        # The same, held for real: opened with no sharing, let go 0.3 s later.
+        # A simulated error once carried a winerror open() never sets, and
+        # the retry it proved never ran on Windows.
+        import ctypes as _sh_ct
+        import threading as _sh_th
+        _sh_k32 = _sh_ct.WinDLL("kernel32", use_last_error=True)
+        _sh_k32.CreateFileW.restype = _sh_ct.c_ssize_t     # -1: it failed
+        _sh_k32.CreateFileW.argtypes = [_sh_ct.c_wchar_p, _sh_ct.c_uint32, _sh_ct.c_uint32,
+                                        _sh_ct.c_void_p, _sh_ct.c_uint32, _sh_ct.c_uint32,
+                                        _sh_ct.c_void_p]
+        _sh_k32.CloseHandle.argtypes = [_sh_ct.c_ssize_t]
+        _sh_path = os.path.join(_lock_dir, "sharing_real.lock")
+        # GENERIC_READ | GENERIC_WRITE, no sharing, OPEN_ALWAYS.
+        _sh_hold = _sh_k32.CreateFileW(_sh_path, 0xC0000000, 0, None, 4, 0x80, None)
+        _sh_timer = _sh_th.Timer(0.3, lambda: _sh_k32.CloseHandle(_sh_hold))
+        _sh_timer.start()
+        try:
+            _sh_real_got = _si_mod.acquire(_sh_path)
+            _sh_real_held = _si_mod.held()
+        finally:
+            _sh_timer.join()
+            try:
+                _si_mod.release()
+            except Exception:
+                pass
+        check("a lock file another program holds for real is taken once let go "
+              "(got %s, held %s)" % (_sh_real_got, _sh_real_held),
+              _sh_hold != -1 and _sh_real_got is True and _sh_real_held is True)
 
     # A lock that cannot be created must never stop the app from starting:
     # refusing to open because a LOCK failed is worse than what it guards.
@@ -1936,6 +2994,35 @@ _t1 = dict(_base, title="Groceries", checklist=[{"text": "milk", "done": False}]
 _t2 = dict(_base, title="Groceries", checklist=[{"text": "gym", "done": False}])
 check("different checklists keep two same-text notes apart",
       _fdg([_t1, _t2]) == [])
+# A series' own days are never merged either: a copy holding a deleted, an
+# edited or a moved day grouped with one that did not. The same days, or
+# none on both, still group.
+_sd = dict(_base, title="Gym", date="2026-01-05", recurrence={"freq": "weekly"})
+check("a series' own days -- deleted, edited, moved -- keep two copies apart",
+      _fdg([_sd, dict(_sd, exceptions=["2026-01-12"])]) == []
+      and _fdg([_sd, dict(_sd, overrides={"2026-01-12": {"body": "legs"}})]) == []
+      and _fdg([_sd, dict(_sd, moved={"2026-01-12": "2026-01-13"})]) == [])
+check("...and the same days, or none on either, still group",
+      len(_fdg([dict(_sd, exceptions=["2026-01-12"]),
+                dict(_sd, exceptions=["2026-01-12"])])) == 1
+      and len(_fdg([dict(_sd, overrides={}), dict(_sd)])) == 1)
+# Every question about duplicates says what is compared through SAME_AS;
+# a field the key gains and the phrase lacks is the drift it stops.
+from noteorganizer.core.duplicates import SAME_AS as _same_as, _dup_key as _dk
+# Each part the words name, and a change to it the key must see: counting
+# the parts alone passed a phrase that swapped "repeat rule" for "date".
+_sa_parts = {"same title": ("title", "Other"), "text": ("body", "other"),
+             "comments": ("comments", "x"), "category": ("category", "Work"),
+             "checklist": ("checklist", [{"text": "a", "done": False}]),
+             "repeat rule": ("recurrence", {"freq": "weekly"}),
+             "a series' own days": ("exceptions", ["2026-01-12"])}
+_sa_named = _same_as.replace(" and ", ", ").split(", ")
+# ...but its last part, the fields a version does not know, which no person
+# sees and the words do not name (D2; its own check is at the file's end).
+check("the words every duplicate question uses name each part of the key, "
+      "and each part they name is one the key sees",
+      len(_sa_named) + 1 == len(_dk(_t1)) and sorted(_sa_named) == sorted(_sa_parts)
+      and all(_dk(dict(_t1, **{f: v})) != _dk(_t1) for f, v in _sa_parts.values()))
 _r1 = dict(_base, title="Sport", date="2026-01-01",
            recurrence={"freq": "weekly", "weekdays": [0]})
 _r2 = dict(_base, title="Sport", date="2026-01-01", recurrence={})
@@ -2221,7 +3308,7 @@ check("stored names lose their trailing-dot disguise at the choke point",
 check("a record naming no file at all is dropped, not crashed on",
       len(_dirty_att["attachments"]) == 2)
 
-_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nfolders = {}\n\n\ndef _recording_initialise(app_dir=None, resolved=None):\n    paths.configure(HERE)\n    events.append("init")\n    folders["opened"] = resolved[0] if resolved else None\n\n\nNO.initialise = _recording_initialise\n_real_acquire = NO.single_instance.acquire\n\n\ndef _recording_acquire(path=None):\n    events.append("acquire")\n    folders["locked"] = os.path.dirname(path) if path else None\n    return _real_acquire(path)\n\n\nNO.single_instance.acquire = _recording_acquire\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\nprint("FOLDERS:" + json.dumps(folders))\n'
+_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nfolders = {}\n\n\ndef _recording_initialise(app_dir=None, resolved=None):\n    paths.configure(HERE)\n    events.append("init")\n    folders["opened"] = resolved[0] if resolved else None\n\n\nNO.initialise = _recording_initialise\n_real_acquire = NO.single_instance.acquire\n\n\ndef _recording_acquire(path=None):\n    events.append("acquire")\n    folders["locked"] = os.path.dirname(path) if path else None\n    return _real_acquire(path)\n\n\nNO.single_instance.acquire = _recording_acquire\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def on_session_end(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\nprint("FOLDERS:" + json.dumps(folders))\n'
 
 # ---- The guard is WIRED, not merely implemented ----
 # The primitive above is proven end-to-end; this proves _main() actually
@@ -2445,7 +3532,22 @@ try:
     check("...the category is saved back into the settings",
           "Clients 2026" in (_storage.load_settings().get("categories") or {}))
     check("...and the load reports it, so the app can say what happened",
-          _rt_report.get("categories_adopted") == ["Clients 2026"])
+          _rt_report.get("categories_adopted") == ["Clients 2026"]
+          and _rt_report.get("categories_unsaved") is False)
+    # ...and a settings file that refuses them is reported too: "added back"
+    # came again at every start, with no word of why.
+    os.remove(_paths.SETTINGS_FILE)
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update(_cats2.load_categories())
+    _rt_save_was = _cats2.save_settings
+    _cats2.save_settings = lambda _s: (False, OSError(28, "No space left on device"))
+    try:
+        _rt_notes, _rt_report = _storage.load_notes(None)
+    finally:
+        _cats2.save_settings = _rt_save_was
+    check("...and when the settings file refuses them, the load says they were not saved",
+          _rt_report.get("categories_adopted") == ["Clients 2026"]
+          and _rt_report.get("categories_unsaved") is True)
 finally:
     _paths.configure(_rt_prev_dir)
     _cats2.CATEGORY_COLORS.clear()
@@ -2527,9 +3629,17 @@ _junk_prev = _model_mod.normalize_note({"id": 1, "_prev": {
 _junk_p = _junk_prev.get("_prev") or {}
 check("the extra fields of a rescue copy pass the note's own validators",
       _junk_p.get("color") == ""
-      and _junk_p.get("pinned") is True
+      and _junk_p.get("pinned") is False
       and len(_junk_p.get("checklist") or []) == _model_mod.MAX_CHECKLIST_ITEMS
       and _junk_p.get("exceptions") == ["2026-01-02"])
+# Only true pins and ticks: bool() read a hand-edited "false" as a pin and
+# "no" as ticked, where the phone, reading true alone, said neither.
+_pin_rule = _model_mod.normalize_note({
+    "id": 1, "pinned": "false",
+    "checklist": [{"text": "a", "done": "no"}, {"text": "b", "done": True}]})
+check("only true pins and ticks: a hand-edited \"false\" is neither, as on the phone",
+      _pin_rule.get("pinned") is False
+      and [i["done"] for i in _pin_rule["checklist"]] == [False, True])
 
 # A backup is the user's own notebook: its copy owns the timeline and the
 # pin as well, and dropping them was silent.
@@ -2549,6 +3659,1200 @@ check("...and its rescue copy holds what they replaced",
       (_bk_note.get("_prev") or {}).get("exceptions") == []
       and (_bk_note.get("_prev") or {}).get("pinned") is False
       and (_bk_note.get("_prev") or {}).get("overrides") == {})
+
+# A share code turning a series' repeat off kept the series' own days in
+# the note, out of sight, and its rescue copy without them: the next save
+# dropped the days with no copy anywhere, and Restore previous brought the
+# repeat back empty.
+_off_days = {"2026-10-12": {"body": "Leg day: squats"}}
+_off_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "body": "Warm up", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}, "exceptions": ["2026-10-26"],
+    "overrides": copy_mod.deepcopy(_off_days)})
+_model_mod.apply_shared_update(_off_note, {
+    "title": "Gym", "body": "Warm up!", "date": "2026-10-05", "recurrence": {}})
+_off_prev = _off_note.get("_prev") or {}
+check("a share code that ends a repeat keeps the series' days in the rescue copy",
+      _off_prev.get("overrides") == _off_days
+      and _off_prev.get("exceptions") == ["2026-10-26"]
+      and (_off_prev.get("recurrence") or {}).get("freq") == "weekly")
+# ...COPIED, and kept in the note too: moved into the one copy slot, the
+# next copy made over it -- a second update, a big rewrite -- erased them.
+check("...and the note keeps them too, so no later copy can take them",
+      _off_note["overrides"] == _off_days and _off_note["exceptions"] == ["2026-10-26"])
+check("...and the copy keeps them across a save and a reload",
+      (_model_mod.normalize_note(json.loads(json.dumps(_off_note)))
+       .get("_prev") or {}).get("overrides") == _off_days)
+_model_mod.apply_shared_update(_off_note, {
+    "title": "Gym", "body": "Warm up!!", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}})
+check("a second code that turns the repeat back on finds every day's own text",
+      _off_note["overrides"] == _off_days
+      and _model_mod.is_recurring(_off_note))
+_on_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}, "overrides": copy_mod.deepcopy(_off_days)})
+_model_mod.apply_shared_update(_on_note, {
+    "title": "Gym (v2)", "date": "2026-10-05", "recurrence": {"freq": "daily"}})
+check("a share code that keeps a repeat leaves this device's days in the note",
+      _on_note["overrides"] == _off_days
+      and "overrides" not in (_on_note.get("_prev") or {}))
+# The restore's own copy: putting back a version that did not repeat over
+# a series with days of its own.
+_rs_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "body": "Warm up", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}, "overrides": copy_mod.deepcopy(_off_days)})
+_rs_copy = _model_mod.copy_replaced_by_restore(
+    _rs_note, {"title": "Gym", "body": "Warm up", "recurrence": {}})
+check("a restore that ends a repeat keeps the series' days in its copy",
+      _rs_copy is not None and _rs_copy.get("overrides") == _off_days
+      and (_rs_copy.get("recurrence") or {}).get("freq") == "weekly")
+
+# What a save loses is measured in cells, not in the padding lining a table
+# up: one cell grown wider re-pads every row, and read as the whole table
+# lost, its copy replaced the rescue copy the note held (2026-10-28).
+_pad_old = ("Shopping\n| Item     | Qty |\n| -------- | --- |\n| milk     | 1   |\n"
+            "| bread    | 2   |\n| eggs     | 12  |\n| apples   | 6   |")
+_pad_new = ("Shopping\n| Item                  | Qty |\n| --------------------- | --- |\n"
+            "| oat milk, semi-skimmed | 1   |\n| bread                 | 2   |\n"
+            "| eggs                  | 12  |\n| apples                | 6   |")
+check("a cell grown wider is no loss to keep a copy for",
+      not _model_mod.rescue_copy_due("List", _pad_old, "List", _pad_new))
+check("...while a table emptied of its rows still is",
+      _model_mod.rescue_copy_due("List", _pad_old, "List", "Shopping\n| Item | Qty |\n| --- | --- |"))
+# ...nor a change made to every row: a column added or an empty one removed,
+# a numbered list renumbered by a step put in, each read as the whole span
+# between its first and last change lost, and its copy replaced the one the
+# note held.
+_col_old = "\n".join(["Pie"] + ["| %s | %d |" % (w, i) for i, w in enumerate(
+    ["flour", "butter", "sugar", "apples", "cinnamon", "lemon", "salt", "egg"])])
+_col_new = "\n".join(line + "  |" if line.startswith("|") else line
+                     for line in _col_old.split("\n"))
+_steps = "\n".join("%d. Step number %d of the recipe" % (i, i) for i in range(1, 13))
+_steps_in = _steps.replace("1. Step number 1 of the recipe",
+                           "1. Step number 1 of the recipe\n2. Wash the bowl")
+for i in range(12, 1, -1):
+    _steps_in = _steps_in.replace("\n%d. Step number %d" % (i, i),
+                                  "\n%d. Step number %d" % (i + 1, i))
+_cjk = "今天我们讨论了下个季度的计划以及每个人负责的部分和截止日期" * 3
+check("a column added, removed empty, or a list renumbered is no loss either "
+      "(%s)" % [_model_mod.rescue_copy_due("t", a, "t", b) for a, b in (
+          (_col_old, _col_new), (_col_new, _col_old), (_steps, _steps_in))],
+      not _model_mod.rescue_copy_due("t", _col_old, "t", _col_new)
+      and not _model_mod.rescue_copy_due("t", _col_new, "t", _col_old)
+      and not _model_mod.rescue_copy_due("t", _steps, "t", _steps_in))
+# ...nor a list's markers changed: numbers turned to bullets, or bullets one
+# level in, counted each "1." as a word lost, and the copy of a paragraph
+# deleted before was replaced (found on Android first).
+_mk_items = ["milk", "eggs", "bread", "butter", "flour", "sugar", "salt",
+             "apples", "pears", "rice", "beans", "tea", "coffee", "onion"]
+_mk_num = "\n".join("%d. %s" % (i + 1, w) for i, w in enumerate(_mk_items))
+_mk_bul = "\n".join("• " + w for w in _mk_items)
+_mk_in = "\n".join("◦ " + w for w in _mk_items)
+from collections import Counter as _Counter
+# The markers counted as words would pass the bars: what this check rules out.
+_mk_as_words = sum((len(w) + 1) * n for w, n in
+                   (_Counter(_mk_num.split()) - _Counter(_mk_bul.split())).items())
+check("...nor a list's markers changed: numbers to bullets, bullets one level in "
+      "(as words %d, now %d)" % (_mk_as_words, _model_mod.words_lost(_mk_num, _mk_bul)),
+      not _model_mod.rescue_copy_due("t", _mk_num, "t", _mk_bul)
+      and not _model_mod.rescue_copy_due("t", _mk_bul, "t", _mk_in)
+      and _mk_as_words > 40 and _model_mod.text_lost(_mk_num, _mk_bul) > 0.3 * len(_mk_num)
+      and _model_mod.rescue_copy_due("t", _mk_num, "t", "\n".join(_mk_num.split("\n")[:3])))
+check("...nor one letter changed in a paragraph written without spaces",
+      not _model_mod.rescue_copy_due("t", _cjk, "t", _cjk.replace("季度", "月份", 1)))
+_col_full = "\n".join(line + " a long note about where to buy it |"
+                      if line.startswith("|") else line for line in _col_old.split("\n"))
+check("...while a column of words deleted still keeps one",
+      _model_mod.rescue_copy_due("t", _col_full, "t", _col_old))
+# ...and so do five rows of eight: words gone were set against a length that
+# counts the padding, and half a table read as a quarter.
+from noteorganizer.core import tables as _tables_mod
+# Short cells, as a shopping list's: their padding is most of each row.
+_trip_lines = ["Groceries"] + _tables_mod.format_table([["Item", "Qty", "Ok"]] + [
+    list(row) for row in (("tea", "1", "y"), ("jam", "2", "n"), ("oat", "1", "y"),
+                          ("egg", "6", "y"), ("fig", "3", "n"), ("rye", "1", "y"),
+                          ("soy", "2", "n"), ("nut", "4", "y"))])
+_trip_old = "\n".join(_trip_lines)
+_trip_cut = "\n".join(_trip_lines[:2] + _trip_lines[7:])
+_trip_lost = _model_mod._lost(_trip_old, _trip_cut)
+check("...and five rows of a table's eight deleted at once keep one (%d of %d "
+      "characters, %d lost)" % (len(_trip_cut), len(_trip_old), _trip_lost),
+      _model_mod.rescue_copy_due("t", _trip_old, "t", _trip_cut)
+      and 40 < _trip_lost < 0.3 * len(_trip_old))
+# The comments are a text the copy holds, and the measure left them out: 780
+# characters of them replaced by "ok" kept no copy. Weighed as a
+# text of their own, so a long comment does not make a whole body deleted
+# read as a small share either.
+_cm_long = " ".join("Remember the vet said %d grams a day" % i for i in range(24))
+_cm_body = "Walk the dog twice a day and keep the lead short near the road."
+check("comments replaced keep a copy, weighed as a text of their own",
+      _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, _cm_long, "ok")
+      and _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, _cm_long, "")
+      and _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", "", _cm_long, _cm_long)
+      and not _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body,
+                                         _cm_long, _cm_long + " Buy food.")
+      and not _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, "", "new"))
+
+# A repeat turned off keeps its days' own text in the note here; the phone,
+# and this app before the fix, kept them only in the rescue copy, which the
+# next copy erased (the owner's choice: one place, the note). Brought back
+# into the note as it is read, once.
+_kd_series = {"date": "2026-11-02", "recurrence": {"freq": "weekly", "interval": 1}}
+_kd_days = {"overrides": {"2026-11-09": {"body": "Leg day - knee hurt"}},
+            "exceptions": ["2026-11-16"]}
+_kd_turned_off = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "body": "Warm up.",
+    "_prev": dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)})
+# A copy that does not repeat holds days an update replaced on purpose:
+# left as it is (the phone's copies of words that carried days were never
+# released, only its turn-off copies, which repeat).
+_kd_carried = _model_mod.normalize_note({
+    "id": 2, "title": "Gym", "body": "Warm up.",
+    "_prev": dict({"title": "Gym", "body": "Warm up. Physio said no squats."}, **_kd_days)})
+_kd_empty_days = _model_mod.normalize_note({   # days with no text of their own
+    "id": 3, "title": "Gym", "body": "Warm up.",
+    "_prev": dict({"title": "Gym", "body": "Warm up."}, exceptions=["2026-11-16"], **_kd_series)})
+# Repeating again on another start: the old series' days are not its own.
+_kd_live = _model_mod.normalize_note({
+    "id": 4, "title": "Gym", "body": "Warm up.", "date": "2026-11-03",
+    "recurrence": {"freq": "weekly", "interval": 1}, "_prev": dict(_kd_series, **_kd_days)})
+check("an older notebook's days kept only in the rescue copy come back into the note",
+      _kd_turned_off["overrides"] == _kd_days["overrides"]
+      and _kd_turned_off["exceptions"] == ["2026-11-16"]
+      and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
+check("...but not days that hold no text of their own, nor an update's copy that does "
+      "not repeat, nor a note repeating from another start, and a second read changes nothing",
+      _kd_empty_days["exceptions"] == [] and _kd_empty_days["overrides"] == {}
+      and _kd_carried["overrides"] == {} and _kd_carried["_prev"].get("overrides") == _kd_days["overrides"]
+      and _kd_live["overrides"] == {} and _kd_live["_prev"].get("overrides") == _kd_days["overrides"]
+      and _model_mod.normalize_note(_kd_turned_off) == _kd_turned_off
+      and _model_mod.normalize_note(_kd_carried) == _kd_carried)
+# The phone's 0.12.0 turned a series back on as it was with none of its days:
+# repeating, the copy the same series, its days' text in the copy alone, which
+# the next copy of words erased.
+_kd_back_on = _model_mod.normalize_note(dict(
+    {"id": 5, "title": "Gym", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series))
+check("a series the phone turned back on as it was takes its days back from its copy",
+      _kd_back_on["overrides"] == _kd_days["overrides"]
+      and _kd_back_on["exceptions"] == ["2026-11-16"])
+# An update's copy repeats when the series here did, and holds the days the
+# update replaced on purpose: taken in, the same backup imported again read
+# as a change, and its Update spent the only earlier version.
+_kd_updated = _model_mod.normalize_note(dict(
+    {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days))
+_kd_updated["uid"] = "kd-updated"
+_kd_backup = {"uid": "kd-updated", "title": "Gym", "body": "Rowing only.",
+              "created": _kd_updated["created"]}
+_model_mod.apply_shared_update(_kd_updated, _kd_backup, _model_mod.UPDATABLE_FROM_BACKUP)
+_kd_reread = _model_mod.normalize_note(_kd_updated)
+check("an update's copy of a series gives no days back, and the same backup "
+      "again changes nothing (%s)" % sorted(
+          f for f in _model_mod.UPDATABLE_FROM_BACKUP
+          if _model_mod.normalize_note(dict(_kd_reread))[f]
+          != _model_mod.normalize_note(dict(_kd_backup))[f]),
+      _model_mod.is_recurring(_kd_updated["_prev"])
+      and "category" in _kd_updated["_prev"]
+      and _kd_reread["overrides"] == {} and _kd_reread["exceptions"] == []
+      and not _model_mod.shared_update_changes(
+          _kd_reread, _kd_backup, _model_mod.UPDATABLE_FROM_BACKUP))
+# ...nor does a copy of the series taking days a moment ago make the note,
+# held in memory, differ from the same note arriving again.
+_kd_mem = dict(_kd_turned_off, overrides={}, exceptions=[])
+check("a note's rescue copy never makes the same note arriving again read as changed",
+      not _model_mod.shared_update_changes(
+          _kd_mem, {k: v for k, v in _kd_mem.items() if k != "_prev"},
+          _model_mod.UPDATABLE_FROM_BACKUP))
+# Taken back into a note that repeats as the copy's series, the copy's days
+# were kept as well: a day the person then reset came back at every read.
+# Once the note repeats as that series, the copy's are spent --
+# here, and in a copy a turn-off left that holds them beside the note's.
+_kd_reset = _model_mod.normalize_note(dict(_kd_back_on, overrides={}, exceptions=[]))
+_kd_beside = _model_mod.normalize_note(dict(
+    {"id": 9, "title": "Gym", "body": "Warm up. And stretch.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series, **_kd_days))
+check("once a note repeats as its copy's series, the copy's days are spent, and a day reset "
+      "stays reset (%s, %s)" % (sorted(_kd_back_on["_prev"]), sorted(_kd_reset["overrides"])),
+      not any(key in _kd_back_on["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _kd_reset["overrides"] == {} and _kd_reset["exceptions"] == []
+      and _kd_beside["overrides"] == _kd_days["overrides"]
+      and not any(key in _kd_beside["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
+# ...and an arriving note is read as a load reads it, its copy's days taken
+# back: an older backup of a turned-off series, compared bare, lacked the days
+# the same notebook here holds and read as edited elsewhere. One
+# whose copy holds a day reset here since holds that day: a real difference.
+_kd_old_off = {"id": 1, "title": "Gym", "body": "Warm up.",
+               "_prev": dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}
+_kd_old_on = dict(_kd_reset, _prev=dict(
+    {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days))
+check("an older backup of a series, turned off or back on, reads as the notebook it came "
+      "from read here; one whose copy holds a day reset here since reads as changed",
+      not _model_mod.shared_update_changes(
+          _kd_turned_off, _kd_old_off, _model_mod.UPDATABLE_FROM_BACKUP)
+      and not _model_mod.shared_update_changes(
+          _kd_back_on, dict(_kd_back_on, overrides={}, exceptions=[], _prev=dict(
+              {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)),
+          _model_mod.UPDATABLE_FROM_BACKUP)
+      and _model_mod.shared_update_changes(
+          _kd_reset, _kd_old_on, _model_mod.UPDATABLE_FROM_BACKUP))
+
+# The copy's days come back per date: a note that repeats as the copy's
+# series again and holds a day of its own -- edited after 0.97.405 or the
+# phone's 0.12.0 turned it back on with none -- took none back, and the spend
+# erased the copy's own-text day for good.
+_kd_own = {"2026-11-23": {"body": "Rest week"}}
+_kd_some = _model_mod.normalize_note(dict(
+    {"id": 12, "title": "Gym", "body": "Warm up.", "overrides": _kd_own, "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series))
+check("a note repeating as its copy's series again takes back each of the copy's days on a "
+      "date it leaves free, then the copy's are spent (%s)" % sorted(_kd_some["overrides"]),
+      _kd_some["overrides"] == dict(_kd_own, **_kd_days["overrides"])
+      and _kd_some["exceptions"] == ["2026-11-16"]
+      and not any(key in _kd_some["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _model_mod.normalize_note(_kd_some) == _kd_some)
+# The note's own day wins its date; a move never goes onto a date it holds.
+_kd_mine = _model_mod.normalize_note(dict(
+    {"id": 13, "title": "Gym", "body": "Warm up.",
+     "overrides": {"2026-11-09": {"body": "Swim instead"}},
+     "moved": {"2026-11-30": "2026-12-01"}, "_prev": dict(
+         {"title": "Gym", "body": "Warm up."}, overrides={}, exceptions=["2026-11-09"],
+         moved={"2026-11-23": "2026-12-01", "2026-12-07": "2026-12-08"}, **_kd_series)},
+    **_kd_series))
+check("the note's own day keeps its date over the copy's, and the copy's move onto a date "
+      "the note holds is dropped, the note's own move kept (%s, %s)" % (
+          _kd_mine["moved"], _kd_mine["exceptions"]),
+      _kd_mine["overrides"] == {"2026-11-09": {"body": "Swim instead"}}
+      and _kd_mine["exceptions"] == []
+      and _kd_mine["moved"] == {"2026-11-30": "2026-12-01", "2026-12-07": "2026-12-08"})
+# A copy holding only deleted days: they come back too, so the days the person
+# deleted before trying another start stay deleted when it is put back.
+_kd_gone = _model_mod.normalize_note(dict(
+    {"id": 14, "title": "Gym", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, exceptions=["2026-11-16"], **_kd_series)},
+    **_kd_series))
+check("a series' deleted days kept only in its copy stay deleted once it repeats as that "
+      "series again", _kd_gone["exceptions"] == ["2026-11-16"]
+      and "exceptions" not in _kd_gone["_prev"])
+
+# A date the note holds with no words of its own -- the same day moved, or
+# only coloured, after 0.97.405 or the phone's 0.12.0 turned the repeat back
+# on -- spent the copy's own text for that day at the first start.
+# The rule: a copy's day is dropped only where the note deleted that day or
+# wrote words of its own for it; its words go where the note draws the day.
+from noteorganizer.core import recurrence as _rec_t10
+_t10_word = {"body": "Dentist 3pm"}
+
+
+def _t10(days, copy_days=None):
+    """A note repeating as its copy's series, holding *days*; the copy holds
+    *copy_days* (by default 11-09's own text alone), read as a load reads it."""
+    copy_days = {"overrides": {"2026-11-09": dict(_t10_word)}} if copy_days is None else copy_days
+    return _model_mod.normalize_note(dict(
+        {"id": 20, "title": "Gym", "body": "Warm up.", "_prev": dict(
+            {"title": "Gym", "body": "Warm up."}, **_kd_series, **copy_days)},
+        **_kd_series, **days))
+
+
+def _t10_shows(note, day):
+    """The words the calendar shows on *day* for *note*, or None: no day there."""
+    when = _rec_t10.parse_date(day)
+    if day not in _rec_t10.expand_occurrences(note, when, when):
+        return None
+    return _rec_t10.effective_note(note, day).get("body")
+
+
+_t10_moved = _t10({"moved": {"2026-11-09": "2026-11-10"}})
+_t10_desk = _t10({"overrides": {"2026-11-09": {"title": "Gym", "body": "Warm up.", "comments": "",
+                                               "color": "#ff6b6b", "category": "Work"}}})
+_t10_phone = _t10({"overrides": {"2026-11-09": {"color": "#ff6b6b"}}})
+check("the copy's own text for a day the note moved goes with the day, and for a day it "
+      "only coloured goes into that day, its colour and category kept (%s, %s, %s)" % (
+          _t10_moved["overrides"], _t10_desk["overrides"], _t10_phone["overrides"]),
+      _t10_shows(_t10_moved, "2026-11-10") == "Dentist 3pm"
+      and _t10_moved["moved"] == {"2026-11-09": "2026-11-10"}
+      and _t10_desk["overrides"]["2026-11-09"] == {"body": "Dentist 3pm", "color": "#ff6b6b",
+                                                   "category": "Work"}
+      and _t10_phone["overrides"]["2026-11-09"] == {"body": "Dentist 3pm", "color": "#ff6b6b"}
+      and not any(key in n["_prev"] for n in (_t10_moved, _t10_desk, _t10_phone)
+                  for key in _model_mod.DAY_FIELDS))
+# The copy's move that cannot be placed leaves its words with the day: the
+# note moved another day onto its date, or coloured the day where it stood.
+_t10_copy_moved = {"moved": {"2026-11-09": "2026-11-10"},
+                   "overrides": {"2026-11-10": dict(_t10_word)}}
+_t10_onto = _t10({"moved": {"2026-11-16": "2026-11-10"}}, _t10_copy_moved)
+_t10_stood = _t10({"overrides": {"2026-11-09": {"color": "#ff6b6b"}}}, _t10_copy_moved)
+check("a copy's move the note's days leave no room for keeps its words on the day, where the "
+      "note draws it (%s, %s)" % (_t10_onto["overrides"], _t10_stood["overrides"]),
+      _t10_shows(_t10_onto, "2026-11-09") == "Dentist 3pm"
+      and _t10_onto["moved"] == {"2026-11-16": "2026-11-10"}
+      and _t10_shows(_t10_onto, "2026-11-10") == "Warm up."
+      and _t10_shows(_t10_stood, "2026-11-09") == "Dentist 3pm"
+      and _t10_stood["overrides"]["2026-11-09"].get("color") == "#ff6b6b"
+      and _t10_stood["moved"] == {})
+# A day moved onto a date whose own day the copy moved away, that move left
+# behind: both stay home, each with its words, none hidden under the other.
+_t10_chain = _t10({"moved": {"2026-11-23": "2026-11-10"}}, {
+    "moved": {"2026-11-09": "2026-11-10", "2026-11-16": "2026-11-09"},
+    "overrides": {"2026-11-10": {"body": "Monday 9th's words"},
+                  "2026-11-09": {"body": "Monday 16th's words"}}})
+check("a copy's move onto a day whose own move stays behind stays behind too, each day's "
+      "words on its own date (%s, %s)" % (_t10_chain["moved"], _t10_chain["overrides"]),
+      _t10_chain["moved"] == {"2026-11-23": "2026-11-10"}
+      and _t10_shows(_t10_chain, "2026-11-09") == "Monday 9th's words"
+      and _t10_shows(_t10_chain, "2026-11-16") == "Monday 16th's words")
+# An edit the copy draws on no day -- under a date its day was moved from, a
+# shape neither app writes -- stays on its date, beside the day's own words.
+# The note holds a day of its own, so the days come back one by one.
+_t10_stray = _t10({"overrides": {"2026-11-30": {"body": "Rest week"}}}, {
+    "moved": {"2026-11-09": "2026-11-10"},
+    "overrides": {"2026-11-10": dict(_t10_word), "2026-11-09": {"body": "Stray words"}}})
+check("an edit the copy draws on no day stays on its own date, beside its day's own words "
+      "(%s)" % _t10_stray["overrides"],
+      _t10_shows(_t10_stray, "2026-11-10") == "Dentist 3pm"
+      and (_t10_stray["overrides"].get("2026-11-09") or {}).get("body") == "Stray words")
+
+def _t10_aside(note):
+    """The copy's days *note* set aside, as (date, text) pairs."""
+    return [(entry["day"], entry["body"]) for entry in note.get("_set_aside") or []]
+
+
+# What the note wrote still wins: its deletion, and its own words as they are
+# -- the copy's for that day are set aside, to be a note of their own on that
+# date (the owner's choice: added to the day's, four earlier fixes read them
+# four ways, each leaving a case; and, her choice again, for a day deleted
+# too, the phone's older build having shown it blank).
+_t10_gone = _t10({"exceptions": ["2026-11-09"]}, _t10_copy_moved)
+_t10_own = _t10({"moved": {"2026-11-09": "2026-11-10"},
+                 "overrides": {"2026-11-10": {"body": "Swim instead"}}})
+check("a day the note deleted keeps the note's; one it wrote words for keeps them as they are, the "
+      "copy's set aside for that date (%s, %s)" % (_t10_own["overrides"], _t10_aside(_t10_own)),
+      "Dentist" not in json.dumps(_t10_gone.get("overrides")) and _t10_gone["exceptions"] == ["2026-11-09"]
+      and _t10_aside(_t10_gone) == [("2026-11-10", "Dentist 3pm")]
+      and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead"}}
+      and _t10_aside(_t10_own) == [("2026-11-10", "Dentist 3pm")])
+
+# A day coloured before the series' words changed holds the old words, read
+# as its own: the copy's for that day were in no file after the first start of
+# this build over 0.97.405's notebook, or the phone's 0.12.0. Now
+# the day stays as it is and the copy's words are set aside. Read again,
+# nothing changes and nothing is set aside twice.
+_t11 = _model_mod.normalize_note(dict(
+    {"id": 21, "title": "Gym", "body": "Warm up.\nBring water.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series,
+        overrides={"2026-11-09": dict(_t10_word)})},
+    **_kd_series, overrides={"2026-11-09": {"title": "Gym", "body": "Warm up.", "comments": "",
+                                            "color": "#ff6b6b", "category": "Work"}}))
+check("a day coloured before the series' words changed keeps its words and look, the copy's words "
+      "for it set aside, the copy spent, and a second read changes nothing (%s, %s)" % (
+          _t11["overrides"], _t10_aside(_t11)),
+      _t11["overrides"]["2026-11-09"]["body"] == "Warm up."
+      and _t11["overrides"]["2026-11-09"]["color"] == "#ff6b6b"
+      and _t10_aside(_t11) == [("2026-11-09", "Dentist 3pm")]
+      and "overrides" not in _t11["_prev"]
+      and _model_mod.normalize_note(json.loads(json.dumps(_t11))) == _t11)
+# ...a day whose words the note holds too is left as it is, its series renamed
+# since: the series' words are not the day's.
+_t11_held = _model_mod.normalize_note(dict(
+    {"id": 22, "title": "Gym!", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series,
+        overrides={"2026-11-09": dict(_t10_word)})},
+    **_kd_series, overrides={"2026-11-09": dict(_t10_word)}))
+# ...and two of the copy's days for one date -- the note moved its day onto a
+# day off the copy's schedule holding words of its own: one goes on the day,
+# the other is set aside.
+_t11_tie = _t10({"moved": {"2026-11-16": "2026-11-10"}},
+                {"overrides": {"2026-11-10": {"body": "Off-schedule words"},
+                               "2026-11-16": {"body": "Monday 16th's own"}}})
+check("a copy's day the note holds again is left as it is, nothing set aside; of two for one date, "
+      "one is on the day and the other set aside (%s, %s)" % (_t11_held["overrides"], _t11_tie["overrides"]),
+      _t11_held["overrides"] == {"2026-11-09": _t10_word} and "overrides" not in _t11_held["_prev"]
+      and not _t10_aside(_t11_held)
+      and _t10_shows(_t11_tie, "2026-11-10") == "Monday 16th's own"
+      and _t10_aside(_t11_tie) == [("2026-11-10", "Off-schedule words")]
+      and "overrides" not in _t11_tie["_prev"])
+# A day whose words differ from the copy's in any way -- grown from them,
+# corrected in a line, a table cell edited, a box ticked -- keeps its text to
+# the letter, and the copy's whole text is set aside once. Two earlier fixes
+# added only the lines the day lacked, and each way of telling them apart
+# left a case: a moved line added again, a long day frozen.
+_t13_grown = _t10({"overrides": {"2026-11-09": {"body": "Agenda.\nBook room\nCancelled"}}},
+                  {"overrides": {"2026-11-09": {"title": "", "body": "Agenda.\nBook room"}}})
+_t14_cell = _t10({"overrides": {"2026-11-09": {"body": "Plan\n| Task | Who        |\n| ---- | ---------- |\n"
+                                                       "| Room | Ann (done) |\n| Food | Bob        |"}}},
+                 {"overrides": {"2026-11-09": {"body": "Plan\n| Task | Who |\n| ---- | --- |\n"
+                                                       "| Room | Ann |\n| Food | Bob |"}}})
+_t14_box = _t10({"overrides": {"2026-11-09": {"body": "| Done | Task |\n| --- | --- |\n| [x] | Lunch |"}}},
+                {"overrides": {"2026-11-09": {"body": "| Done | Task |\n| --- | --- |\n| [ ] | Lunch |"}}})
+_t13_again = _model_mod.normalize_note(json.loads(json.dumps(_t14_cell)))
+check("a day grown from the copy's text, a cell edited or a box ticked keeps its text to the letter; "
+      "the copy's is set aside once, whole, and a second read sets nothing aside again (%s, %s, %s)" % (
+          _t10_aside(_t13_grown), _t10_aside(_t14_cell), _t10_aside(_t14_box)),
+      _t13_grown["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room\nCancelled"
+      and _t14_cell["overrides"]["2026-11-09"]["body"].startswith("Plan\n| Task | Who        |\n")
+      and _t14_box["overrides"]["2026-11-09"]["body"] == "| Done | Task |\n| --- | --- |\n| [x] | Lunch |\n"
+      and _t10_aside(_t13_grown) == [("2026-11-09", "Agenda.\nBook room")]
+      and [day for day, _text in _t10_aside(_t14_cell)] == ["2026-11-09"]
+      and "| Room | Ann |" in _t10_aside(_t14_cell)[0][1]
+      and len(_t10_aside(_t14_box)) == 1
+      and _t13_again == _t14_cell)
+# Read alike as a day's words: a title with a space after it, and a text
+# ending in a table with the line under it or without -- the phone keeps its
+# series' text as typed, its days with the line. Read apart, a day only
+# coloured was set aside as earlier text, or took none.
+_t15_tbl = "Plan\n| a | b |\n| --- | --- |\n| 1 | 2 |"
+_t15_alike = _model_mod.normalize_note(dict(
+    {"id": 27, "title": "Gym", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": _t15_tbl}, **_kd_series,
+        overrides={"2026-11-16": {"title": "Gym ", "body": _t15_tbl + "\n", "color": "#ff6b6b"}})},
+    **_kd_series, overrides={"2026-11-16": {"body": "Own words"}}))
+_t15_spaced = _t10({"overrides": {"2026-11-09": {"title": "Gym ", "body": "Warm up.", "color": "#ff6b6b"}}})
+check("a copy's day only coloured, its title with a space after it or its table with the line under "
+      "it, is no earlier text; a note's day the same takes the copy's words (%s, %s)" % (
+          _t10_aside(_t15_alike), _t15_spaced["overrides"]),
+      not _t10_aside(_t15_alike) and _t15_alike["overrides"]["2026-11-16"] == {"body": "Own words"}
+      and _t10_shows(_t15_spaced, "2026-11-09") == "Dentist 3pm")
+# A note of its own is made of each day set aside: on its date, its words and
+# look, the series' title marked as the earlier text -- and taken off the note.
+_t15_made = _model_mod.notes_set_aside(_t13_grown)
+check("a day set aside becomes a note on its date, titled with the series' name and \"(earlier "
+      "text)\", and leaves the note (%s)" % _t15_made,
+      _t15_made == [{"title": "Gym (earlier text)", "body": "Agenda.\nBook room", "comments": "",
+                     "category": "General", "color": "", "date": "2026-11-09"}]
+      and "_set_aside" not in _t13_grown
+      and _model_mod.normalize_note(dict(_t15_made[0], id=99))["date"] == "2026-11-09")
+# Read from a file, the days set aside keep a real date in the calendar's
+# form and a word; anything else in the list is not a day.
+_t15_read = _model_mod.normalize_note({"id": 28, "title": "Gym", "_set_aside": [
+    {"day": " 2026-11-9 ", "body": "Kept", "color": 5}, {"day": 5, "body": "No date"},
+    "not a day", {"day": "2026-11-10", "body": "   "}, {"day": "2026-11-11", "title": "Only a title"}]})
+check("days set aside read from a file keep a real date in the calendar's form and a word (%s)"
+      % _t10_aside(_t15_read),
+      _t10_aside(_t15_read) == [("2026-11-09", "Kept"), ("2026-11-11", "")]
+      and (_t15_read.get("_set_aside") or [{}])[0].get("color") == "")
+# A copy of another series than the note's repeats as now is replaced by the
+# next turn-off, delete or import Update: its days with words were in it
+# alone, and the new copy erased them. Set aside first.
+_t15_other = _model_mod.normalize_note(dict(
+    {"id": 23, "title": "Gym", "body": "Warm up.", "_prev": {
+        "title": "Gym", "body": "Warm up.", "date": "2026-11-03",
+        "recurrence": {"freq": "weekly", "interval": 1, "weekdays": [1]},
+        "overrides": {"2026-11-10": {"body": "Tuesday words"},
+                      "2026-11-17": {"color": "#ff6b6b"}}}}, **_kd_series))
+_t15_waits = "overrides" in _t15_other["_prev"] and not _t10_aside(_t15_other)
+_t15_update = copy_mod.deepcopy(_t15_other)
+_model_mod.apply_shared_update(_t15_update, dict(_t15_other, body="Warm up. Stretch.", _prev=None),
+                               _model_mod.UPDATABLE_FROM_BACKUP)
+_model_mod.copy_days_set_aside(_t15_other)
+check("another series' copy keeps its days while it waits, and sets aside those with words before "
+      "a turn-off or an import's Update replaces it (%s, %s)" % (
+          _t10_aside(_t15_other), _t10_aside(_t15_update)),
+      _t15_waits and _t10_aside(_t15_other) == [("2026-11-10", "Tuesday words")]
+      and not any(key in _t15_other["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _t10_aside(_t15_update) == [("2026-11-10", "Tuesday words")]
+      and _t15_update["_prev"]["body"] == "Warm up.")
+# A day moved onto a date its rule now gives by itself -- made daily since, or
+# started elsewhere -- was drawn nowhere, and a delete there took it: its move
+# goes, its words staying where they showed (the owner's choice: words never
+# move on their own). A chain (the 9th to the
+# 10th, the 16th onto the 9th it left) holds while the rule leaves the dates
+# free; and a day deleted there leaves its date free too.
+_t15_chain = {"moved": {"2026-11-09": "2026-11-10", "2026-11-16": "2026-11-09"},
+              "overrides": {"2026-11-10": {"body": "Ninth's words"}, "2026-11-09": {"body": "16th's words"}}}
+_t15_weekly = _model_mod.normalize_note(dict({"id": 24, "title": "Gym", "body": "x"}, **_kd_series,
+                                             **copy_mod.deepcopy(_t15_chain)))
+_t15_daily = _model_mod.normalize_note(dict(
+    {"id": 25, "title": "Gym", "body": "x", "date": "2026-11-02",
+     "recurrence": {"freq": "daily", "interval": 1}}, **copy_mod.deepcopy(_t15_chain)))
+_t15_freed = _model_mod.normalize_note(dict(
+    {"id": 26, "title": "Gym", "body": "x", "date": "2026-11-02", "exceptions": ["2026-11-10"],
+     "recurrence": {"freq": "daily", "interval": 1}}, moved={"2026-11-09": "2026-11-10"},
+    overrides={"2026-11-10": {"body": "N"}}))
+check("a day moved onto a date its rule now gives loses its move, its words where they showed, a chain "
+      "of moves too, while a chain on dates the rule leaves free, or a deleted day's date, holds (%s, %s)" % (
+          _t15_daily["moved"], _t15_daily["overrides"]),
+      _t15_weekly["moved"] == _t15_chain["moved"]
+      and _t15_daily["moved"] == {}
+      and _t10_shows(_t15_daily, "2026-11-10") == "Ninth's words"
+      and _t10_shows(_t15_daily, "2026-11-09") == "16th's words"
+      and _t10_shows(_t15_daily, "2026-11-16") == "x"
+      and _model_mod.normalize_note(json.loads(json.dumps(_t15_daily))) == _t15_daily
+      and _t15_freed["moved"] == {"2026-11-09": "2026-11-10"})
+# ...and at once when a share code makes the series daily, not at the next start.
+_t15_coded = _model_mod.normalize_note(dict({"id": 29, "uid": "coded", "title": "Gym", "body": "x"},
+                                            **_kd_series, moved={"2026-11-09": "2026-11-10"},
+                                            overrides={"2026-11-10": {"body": "Held on Tuesday"}}))
+_model_mod.apply_shared_update(_t15_coded, {"uid": "coded", "title": "Gym", "body": "x", "date": "2026-11-02",
+                                            "recurrence": {"freq": "daily"}})
+check("a share code making the series daily drops a move onto its new days at once, the words where "
+      "they showed (%s, %s)" % (_t15_coded["moved"], _t15_coded["overrides"]),
+      _t15_coded["moved"] == {} and _t10_shows(_t15_coded, "2026-11-10") == "Held on Tuesday")
+# Days set aside are capped as moved days are: each becomes a note at the next
+# start, and a file can say anything; a save empties the list each time.
+_t15_flood = _model_mod.normalize_note({"id": 30, "title": "Gym", "body": "x", "_set_aside": [
+    {"day": "2026-11-09", "body": "words %d" % i} for i in range(_model_mod.MAX_OCCURRENCES + 1)]})
+check("a file's days set aside are read at most as many as a series' moved days (%d)"
+      % len(_t15_flood.get("_set_aside") or []),
+      len(_t15_flood.get("_set_aside") or []) == _model_mod.MAX_OCCURRENCES
+      and _t15_flood["_set_aside"][0]["body"] == "words 0")
+# A day goes home only where the rule still gives its own date:
+# moved onto a Thursday, the series then on Thursdays, its words stay on the
+# Thursday they showed on, and the move goes -- sent "home" to a Monday the
+# rule no longer gives, they left the calendar.
+_t16_thu = _model_mod.normalize_note({"id": 31, "title": "Gym", "body": "plan", "date": "2026-11-05",
+                                      "recurrence": {"freq": "weekly"}, "moved": {"2026-11-09": "2026-11-12"},
+                                      "overrides": {"2026-11-12": {"body": "dentist at 4"}}})
+check("a day moved onto a date the rule now gives, its own date no longer the rule's, keeps its words "
+      "where they showed (%s, %s)" % (_t16_thu["moved"], sorted(_t16_thu["overrides"])),
+      _t16_thu["moved"] == {} and _t10_shows(_t16_thu, "2026-11-12") == "dentist at 4"
+      and "2026-11-09" not in _t16_thu["overrides"])
+
+
+class _T16Walked(dict):
+    """A note's moves that count each walk over them, and each move read."""
+    walks = reads = 0
+
+    def __iter__(self):
+        _T16Walked.walks += 1
+        return super().__iter__()
+
+    def items(self):
+        _T16Walked.walks += 1
+        return super().items()
+
+    def __getitem__(self, day):
+        _T16Walked.reads += 1
+        return super().__getitem__(day)
+
+
+# ...and a chain is walked once, not a pass a link: 2,000 links under a daily
+# rule took the square of that, and a crafted backup froze the window. Two
+# days moved onto each other's dates stay: neither date is free.
+_t16_days = [(_dtT.date(2026, 11, 2) + _dtT.timedelta(days=i)).isoformat() for i in range(2001)]
+_t16_chain = {"id": 32, "title": "Gym", "body": "x", "date": "2026-11-02",
+              "recurrence": {"freq": "daily", "interval": 1}, "exceptions": [],
+              "moved": _T16Walked({_t16_days[i]: _t16_days[i + 1] for i in range(2000)}),
+              "overrides": {_t16_days[2000]: {"body": "the last"}}}
+_model_mod.drop_hidden_moves(_t16_chain)
+_t16_swap = _model_mod.normalize_note({"id": 35, "title": "Gym", "body": "x", "date": "2026-11-02",
+                                       "recurrence": {"freq": "daily"},
+                                       "moved": {"2026-11-09": "2026-11-10", "2026-11-10": "2026-11-09"}})
+check("a chain of 2,000 moved days, every date the rule's, goes home walking the moves once, "
+      "not once a link; two days swapped stay (%d walks, %d reads; %s)"
+      % (_T16Walked.walks, _T16Walked.reads, _t16_swap["moved"]),
+      _T16Walked.walks <= 3 and _T16Walked.reads <= 2 * 2000 + 10 and _t16_chain["moved"] == {}
+      and _t16_chain["overrides"] == {_t16_days[2000]: {"body": "the last"}}
+      and _t16_swap["moved"] == {"2026-11-09": "2026-11-10", "2026-11-10": "2026-11-09"})
+# ...and a note made of a day set aside has words: one with none -- an
+# untitled series whose day's text was emptied -- made an empty note at a
+# save, and none at the start.
+check("days set aside with no words make no note, at a save as at the start",
+      _model_mod.notes_set_aside({"title": "", "_set_aside": [
+          {"day": "2026-11-09", "title": "", "body": "", "comments": "", "category": "", "color": "#ff0000"}]})
+      == [])
+# A week shifted a day at a time (Wed to Thu, Tue to Wed, Mon to
+# Tue), then the shift made the rule (Tue-Thu): an earlier fix sent words
+# home one by one and wrote what was left over the Wednesday's -- one day's
+# text in no file. Words now never move on their own (the owner's choice):
+# the moves go, each day's words staying where they showed; a date's own
+# words stay too.
+_t17_week = {"freq": "weekly", "interval": 1, "weekdays": [0, 1, 2]}
+_t17_copy_day = {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+                 "recurrence": {"freq": "weekly"}, "exceptions": []}
+_t17_shift = _model_mod.normalize_note({
+    "id": 36, "title": "Standup", "body": "series", "date": "2026-11-02", "recurrence": _t17_week,
+    "moved": {"2026-11-04": "2026-11-05", "2026-11-03": "2026-11-04", "2026-11-02": "2026-11-03"},
+    "overrides": {"2026-11-05": {"body": "WED"}, "2026-11-04": {"body": "TUE"}, "2026-11-03": {"body": "MON"}}})
+_t17_shift["recurrence"] = dict(_t17_week, weekdays=[1, 2, 3])
+_model_mod.drop_hidden_moves(_t17_shift)
+_t17_stray = {"id": 37, "title": "Gym", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "daily"},
+              "exceptions": [], "moved": {"2026-11-09": "2026-11-10"},
+              "overrides": {"2026-11-10": {"body": "MOVED"}, "2026-11-09": {"body": "STRAY"}}}
+_model_mod.drop_hidden_moves(_t17_stray)
+check("a week shifted a day at a time, the shift then made the rule, keeps every day's words where "
+      "they showed, the moves gone; a date's own words stay (%s; %s)"
+      % ({k: v["body"] for k, v in _t17_shift["overrides"].items()}, _t17_stray["overrides"]),
+      {k: v["body"] for k, v in _t17_shift["overrides"].items()}
+      == {"2026-11-03": "MON", "2026-11-04": "TUE", "2026-11-05": "WED"}
+      and _t17_shift["moved"] == {}
+      and {k: v["body"] for k, v in _t17_stray["overrides"].items()}
+      == {"2026-11-10": "MOVED", "2026-11-09": "STRAY"}
+      and _t17_stray["moved"] == {})
+# ...a day moved onto a deleted date, its own date then no longer the rule's,
+# is listed off the schedule: its words were shown and listed nowhere.
+_t17_hidden = _model_mod.normalize_note({
+    "id": 38, "title": "Meeting", "body": "x", "date": "2026-11-02",
+    "recurrence": {"freq": "weekly", "end": "2026-12-20"}, "exceptions": ["2026-12-14"],
+    "moved": {"2026-12-21": "2026-12-14"}, "overrides": {"2026-12-14": {"body": "Budget review"}}})
+_t17_drawn = _model_mod.normalize_note(dict(_t17_hidden, recurrence={"freq": "weekly"}))
+check("a day moved onto a deleted date, its own date no longer the rule's, is listed off the schedule; "
+      "drawn there, it is not (%s, %s)" % (_rec_t10.off_schedule_days(_t17_hidden),
+                                          _rec_t10.off_schedule_days(_t17_drawn)),
+      _rec_t10.off_schedule_days(_t17_hidden) == ["2026-12-14"]
+      and _rec_t10.off_schedule_days(_t17_drawn) == [])
+# ...a weekly series turned back on as it was is the same series whether its
+# start's weekday is lit or left to the start: read as another, its deleted
+# days came back and its copy's days became "earlier text".
+_t17_lit = {"freq": "weekly", "interval": 1, "weekdays": [0]}
+_t17_off = _model_mod.normalize_note({
+    "id": 39, "title": "Gym", "body": "x", "date": "2026-11-02", "recurrence": {"freq": ""},
+    "exceptions": ["2026-11-16"], "overrides": {"2026-11-09": {"body": "Own"}},
+    "_prev": dict(_t17_copy_day, date="2026-11-02", recurrence=_t17_lit, exceptions=["2026-11-16"], moved={},
+                  overrides={"2026-11-09": {"body": "Own"}})})
+check("a weekly series turned back on as it was is the same with its weekday lit or not",
+      _model_mod.kept_days_fit(_t17_off, "2026-11-02", {"freq": "weekly"})
+      and _model_mod._repeats_as(dict(_t17_off, recurrence={"freq": "weekly"}), _t17_off["_prev"])
+      and not _model_mod.kept_days_fit(_t17_off, "2026-11-02", {"freq": "weekly", "weekdays": [1]})
+      and _model_mod._same_series("2026-11-02", {"freq": "monthly"},
+                                  "2026-11-02", {"freq": "monthly", "month_days": [2]})
+      and not _model_mod._same_series("2026-11-02", {"freq": "monthly"},
+                                      "2026-11-02", {"freq": "monthly", "month_days": [3]}))
+# ...whatever month-day policy a weekly rule keeps hidden (saved from a
+# monthly draft), which it never reads; a monthly one reads it.
+check("a weekly rule is one series whatever 'Skip that month' it keeps hidden; a monthly one reads it",
+      _model_mod._same_series("2026-11-02", {"freq": "weekly", "month_day_policy": "skip"},
+                              "2026-11-02", {"freq": "weekly"})
+      and not _model_mod._same_series("2026-01-31", {"freq": "monthly", "month_day_policy": "skip"},
+                                      "2026-01-31", {"freq": "monthly"}))
+# ...nor the weekdays, month days or policy a rule keeps that its frequency
+# never reads: the phone's sheet stores all three.
+check("a rule is one series whatever fields it keeps that its frequency never reads",
+      _model_mod._same_series("2026-11-02", {"freq": "weekly", "month_days": [15]}, "2026-11-02", {"freq": "weekly"})
+      and _model_mod._same_series("2026-11-02", {"freq": "daily", "weekdays": [0, 2]}, "2026-11-02", {"freq": "daily"})
+      and _model_mod._same_series("2026-11-07", {"freq": "monthly", "month_day_policy": "skip"},
+                                  "2026-11-07", {"freq": "monthly"})
+      and not _model_mod._same_series("2026-11-02", {"freq": "weekly", "weekdays": [0, 2]},
+                                      "2026-11-02", {"freq": "weekly"}))
+# ...and an import reads the repeat by the days it gives: the start's weekday
+# lit in the backup and not here is no change, and the Update spent the
+# note's only earlier version for nothing.
+_t19_here = _model_mod.normalize_note({"id": 49, "uid": "t19-lit", "title": "Gym", "body": "x",
+                                       "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
+check("an import reads a repeat whose start weekday is lit, or left to the start, as unchanged",
+      not _model_mod.shared_update_changes(
+          _t19_here, dict(_t19_here, recurrence={"freq": "weekly", "weekdays": [0]}),
+          _model_mod.UPDATABLE_FROM_BACKUP)
+      and _model_mod.shared_update_changes(
+          _t19_here, dict(_t19_here, recurrence={"freq": "weekly", "weekdays": [1]}),
+          _model_mod.UPDATABLE_FROM_BACKUP))
+# ...a day moved onto a date a dead move -- its own date no longer the rule's
+# -- still points at takes it: two moves onto one date were read as the dead.
+_t17_dead = _model_mod.normalize_note({"id": 40, "title": "Gym", "body": "x", "date": "2026-11-02",
+                                       "recurrence": {"freq": "weekly"}, "moved": {"2026-11-18": "2026-11-20"}})
+_rec_t10.move_day(_t17_dead, "2026-11-23", "2026-11-20")
+check("a day moved onto a date a dead move points at takes it, the dead move gone (%s)" % _t17_dead["moved"],
+      _t17_dead["moved"] == {"2026-11-23": "2026-11-20"})
+# ...an Update's copy, as a restore leaves it, sets its days aside too when
+# replaced; and a backup's Update counts the days it brings as held.
+_t17_upd = _model_mod.normalize_note({
+    "id": 41, "title": "Meeting", "body": "x", "date": "2026-11-04", "recurrence": {"freq": "daily"},
+    "_prev": dict(_t17_copy_day, category="Work", date="2026-11-02", moved={},
+                  overrides={"2026-11-22": {"body": "Room W2"}})})
+_model_mod.copy_days_set_aside(_t17_upd)
+_t17_back = _model_mod.normalize_note({
+    "id": 42, "uid": "bk", "title": "Meeting", "body": "x", "date": "2026-11-04", "recurrence": {"freq": "daily"},
+    "_prev": dict(_t17_copy_day, date="2026-11-02", moved={}, overrides={"2026-11-09": {"body": "ROOM 4B"}})})
+_model_mod.apply_shared_update(_t17_back, {
+    "uid": "bk", "title": "Meeting", "body": "x, from the laptop", "date": "2026-11-02",
+    "recurrence": {"freq": "weekly"}, "overrides": {"2026-11-09": {"body": "ROOM 4B"}}},
+    _model_mod.UPDATABLE_FROM_BACKUP)
+check("an Update's copy sets its days with words aside when replaced; a backup's own days count as "
+      "held (%s, %s)" % (_t10_aside(_t17_upd), _t10_aside(_t17_back)),
+      _t10_aside(_t17_upd) == [("2026-11-22", "Room W2")] and _t10_aside(_t17_back) == [])
+
+
+# History lists a day moved past a bounded series' end, and one
+# moved onto a deleted date, and its search finds their words: in no row,
+# they were found nowhere -- History is the one search of a day's own words.
+_t18_bounded = _model_mod.normalize_note({
+    "id": 43, "title": "Meeting", "body": "x", "date": "2026-11-02",
+    "recurrence": {"freq": "weekly", "end": "2026-12-14"}, "moved": {"2026-12-14": "2026-12-18"},
+    "overrides": {"2026-12-18": {"body": "Budget review"}}})
+_t18_endless = _model_mod.normalize_note({
+    "id": 44, "title": "Meeting", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "weekly"},
+    "exceptions": ["2026-12-14"], "moved": {"2026-12-21": "2026-12-14"},
+    "overrides": {"2026-12-14": {"body": "Budget review"}}})
+
+
+def _t18_found(note):
+    return [c["date"] for row in _rec_t10.history_entries([note], "Budget") for c in row.get("children", [])]
+
+
+# Two moves onto one date -- an older build's, or an Undo's beside a
+# dead move -- are listed once: twice in History, and the phone's list threw.
+_t19_two = {"id": 46, "title": "Meeting", "body": "x", "date": "2026-11-02",
+            "recurrence": {"freq": "weekly", "interval": 2}, "exceptions": [], "overrides": {},
+            "moved": {"2026-12-14": "2026-12-10", "2026-12-07": "2026-12-10"}}
+# ...whichever the file lists first: the live move, or the dead one (the
+# check once built only the order that passes by luck).
+_t19_orders = [_t19_two, dict(_t19_two, moved={"2026-12-07": "2026-12-10", "2026-12-14": "2026-12-10"})]
+# Which origin an unread twin is named by follows the file's order (a read
+# keeps the live one, below; recorded as latent among the low findings): the
+# date is listed once either way.
+check("two moves onto one date are listed once, by the banner's count and in History (%s)"
+      % [_rec_t10.drawn_moves(n) for n in _t19_orders],
+      _rec_t10.drawn_moves(_t19_two) == [("2026-12-14", "2026-12-10")]
+      and all([new for _orig, new in _rec_t10.drawn_moves(n)] == ["2026-12-10"]
+              and [c["date"] for row in _rec_t10.history_entries([n]) for c in row.get("children", [])]
+              == ["2026-12-10"] for n in _t19_orders))
+# ...and a read keeps the one the calendar draws, whichever comes
+# first by date: by date alone it kept the dead 7 December, and a meeting
+# moved under the phone's 0.13.0 jumped back at the upgrade.
+check("of two moves onto one date, a read keeps the one the calendar draws (%s)"
+      % [_model_mod.normalize_note(copy_mod.deepcopy(n))["moved"] for n in _t19_orders],
+      all(_model_mod.normalize_note(copy_mod.deepcopy(n))["moved"] == {"2026-12-14": "2026-12-10"}
+          for n in _t19_orders))
+# The owner's choice: a day the note deleted stays deleted, but the
+# copy's words for it are set aside, not dropped: the phone's 0.13.0 showed
+# such a day blank, its words in the copy alone, and the install erased them.
+_t21_hidden = _model_mod.normalize_note({
+    "id": 47, "title": "Gym", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "weekly"},
+    "exceptions": ["2026-11-09"],
+    "_prev": {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+              "date": "2026-11-02", "recurrence": {"freq": "weekly"}, "exceptions": [], "moved": {},
+              "overrides": {"2026-11-09": {"body": "Hidden words"}}}})
+check("a day the note deleted stays deleted, and the copy's words for it are set aside, not dropped (%s)"
+      % _t10_aside(_t21_hidden),
+      "2026-11-09" in _t21_hidden["exceptions"] and _t10_aside(_t21_hidden) == [("2026-11-09", "Hidden words")])
+# ...and a backup's Update of that note keeps what its copy set aside as it
+# was read: an Add kept it, an Update dropped it.
+_t22_mine = _model_mod.normalize_note({"id": 48, "uid": "t22-gym", "title": "Gym", "body": "here",
+                                       "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
+_t22_theirs = {"uid": "t22-gym", "title": "Gym", "body": "x", "date": "2026-11-02",
+               "recurrence": {"freq": "weekly"}, "exceptions": ["2026-11-09"],
+               "_prev": {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+                         "date": "2026-11-02", "recurrence": {"freq": "weekly"}, "exceptions": [], "moved": {},
+                         "overrides": {"2026-11-09": {"body": "Words from the backup"}}}}
+_model_mod.apply_shared_update(_t22_mine, _t22_theirs, _model_mod.UPDATABLE_FROM_BACKUP)
+check("a backup's Update keeps the earlier text its note's copy set aside as it was read (%s)"
+      % _t10_aside(_t22_mine),
+      _t10_aside(_t22_mine) == [("2026-11-09", "Words from the backup")])
+# ...made once: a note already holding the same words on the same day is that
+# note, and each later Update from the same device made it again.
+_t22_book = [_t22_mine]
+_t22_first = _model_mod.settle_set_aside(_t22_book)
+_t22_mine["_set_aside"] = [{"day": "2026-11-09", "body": "Words from the backup"}]
+_t22_again = _model_mod.settle_set_aside(_t22_book)
+# ...its comments among its words: the same text with other comments is
+# another note, or its comments arrived nowhere.
+_t22_mine["_set_aside"] = [{"day": "2026-11-09", "body": "Words from the backup", "comments": "ask the physio"}]
+_t22_commented = _model_mod.settle_set_aside(_t22_book)
+check("an '(earlier text)' note already holding the same words on its day is not made again (%s, %s, %s, %d notes)"
+      % (_t22_first, _t22_again, _t22_commented, len(_t22_book)),
+      _t22_first == 1 and _t22_again == 0 and _t22_commented == 1 and len(_t22_book) == 3)
+# ...and a copy holding the series as the note does, its weekday lit and the
+# note's not, is spent: compared as stored, Restore previous stayed offered
+# for nothing, and the next turn-off brought back an old agenda.
+_t18_lit_copy = _model_mod.normalize_note({
+    "id": 45, "title": "Gym", "body": "plan", "date": "2026-11-02", "recurrence": {"freq": "weekly"},
+    "_prev": {"title": "Gym", "body": "plan", "comments": "", "formatting": [], "paragraphs": [],
+              "date": "2026-11-02", "recurrence": {"freq": "weekly", "weekdays": [0]}}})
+check("a copy holding the series as the note does, its weekday lit and the note's not, is spent, and "
+      "a restore keeps nothing of it",
+      _model_mod.rescue_copy_spent(_t18_lit_copy)
+      and _model_mod.copy_replaced_by_restore(_t18_lit_copy, _t18_lit_copy["_prev"]) is None
+      and not _model_mod.rescue_copy_spent(dict(_t18_lit_copy, recurrence={"freq": "weekly", "weekdays": [1]})))
+check("History lists a day moved past a bounded series' end, or onto a deleted date, and finds its "
+      "words (%s, %s)" % (_t18_found(_t18_bounded), _t18_found(_t18_endless)),
+      _t18_found(_t18_bounded) == ["2026-12-18"] and _t18_found(_t18_endless) == ["2026-12-14"]
+      and _rec_t10.history_entries([_t18_bounded])[0]["n_occurrences"] == 7)
+
+
+# The fuzz of a series' days (the owner's choice): seven reviews in a row
+# each found a road that lost or doubled a day's words. Random roads on one
+# series -- a day edited, moved, deleted; the rule or start changed, the
+# repeat off and on, Restore previous, a read, a share code's or a backup's
+# Update -- and after every step every day's words the person did not delete
+# or type over are somewhere (a day, the rescue copy, a note made of them),
+# and none twice among the days and the notes made. The save, turn-off and
+# restore are the window's (save_current_note, _turn_off_rescue_copy,
+# restore_previous_version), the phone's fixture replays them the same way.
+import random as _f17_random
+import collections as _f17_coll
+
+_F17_START = _dtT.date(2026, 11, 2)
+_F17_DAYS = [(_F17_START + _dtT.timedelta(days=i)).isoformat() for i in range(42)]
+_F17_RULES = [{"freq": "weekly"}, {"freq": "weekly", "weekdays": [0, 2]}, {"freq": "daily"},
+              {"freq": "daily", "interval": 2}, {"freq": "weekly", "weekdays": [1, 3]}, {"freq": ""},
+              {"freq": "weekly", "weekdays": [0, 1, 2]}, {"freq": "weekly", "weekdays": [1, 2, 3]}]
+
+
+def _f17_where(note, made):
+    """(the words of the note's days and of the notes made; every word a person
+    can reach -- a day the calendar draws or lists off the schedule, any day of
+    a note that no longer repeats (a repeat brings it back), the copy Restore
+    previous brings, a note made of them). A word in the file alone, on a date
+    nothing shows, is not kept (the fuzz counted it kept)."""
+    overrides = note.get("overrides") or {}
+    days = [p.get("body") for p in overrides.values() if p.get("body")]
+    if _rec_t10.is_recurring(note):
+        off = set(_rec_t10.off_schedule_days(note))
+        seen = [p.get("body") for d, p in overrides.items() if p.get("body") and (
+            d in off or _rec_t10.expand_occurrences(
+                note, _rec_t10.parse_date(d), _rec_t10.parse_date(d)) == [d])]
+    else:
+        seen = list(days)
+    held = seen + list(made)
+    prev = note.get("_prev") or {}
+    held += [p.get("body") for p in (prev.get("overrides") or {}).values() if p.get("body")]
+    held += [e.get("body") for e in note.get("_set_aside") or []]
+    return days + list(made), set(held)
+
+
+def _f17_save(note, date, rule):
+    """The window's series save of a new date and rule (the phone's fixture's save)."""
+    rule = _rec_t10.normalize_recurrence(rule)
+    days_lost = (_rec_t10.is_recurring(note) and not rule["freq"]
+                 and _model_mod.days_hold_own_text(note))
+    days_kept = _model_mod.days_hold_own_text(note)
+    if not _model_mod.kept_days_fit(note, date, rule):
+        note["exceptions"] = []
+    if days_lost:
+        existing = note.get("_prev")
+        if not (_model_mod.update_copy(existing) and not _model_mod.rescue_copy_spent(note)):
+            _model_mod.copy_days_set_aside(note)
+            note["_prev"] = NO.NoteOrganizer._whole_note_rescue_copy(note)
+        else:
+            kept = copy_mod.deepcopy(existing)
+            whole = NO.NoteOrganizer._whole_note_rescue_copy(note)
+            for key in ("date", "recurrence") + _model_mod.DAY_FIELDS:
+                kept.setdefault(key, whole.get(key))
+            note["_prev"] = kept
+    note["date"], note["recurrence"] = date, rule
+    _model_mod.drop_hidden_moves(note)
+    _model_mod.spend_series_days(note)
+    if not rule["freq"] and not days_kept:
+        note["exceptions"], note["overrides"], note["moved"] = [], {}, {}
+    if _model_mod.rescue_copy_spent(note):
+        note.pop("_prev", None)
+
+
+def _f17_restore(note):
+    """The window's restore_previous_version write."""
+    prev = note["_prev"]
+    replaced = _model_mod.copy_replaced_by_restore(note, prev)
+    for key in ("title", "body", "comments", "formatting", "paragraphs"):
+        note[key] = copy_mod.deepcopy(prev.get(key, note.get(key)))
+    for key, _label in NO.NoteOrganizer._PREV_EXTRA_LABELS:
+        if key in prev:
+            note[key] = copy_mod.deepcopy(prev[key])
+    _model_mod.drop_hidden_moves(note)
+    if replaced is None:
+        note.pop("_prev", None)
+    else:
+        note["_prev"] = replaced
+
+
+# Whether the roads reach the placement of a copy's days on a series turned
+# back on as it was (_copy_days_placed), and its setting aside of words for a
+# day the note deleted: the fuzz once took neither, in 3,000 roads.
+_f17_placed = {"calls": 0, "gone": 0}
+_f17_placed_fn = _model_mod._copy_days_placed
+
+
+def _f17_count_placed(note, prev, moved):
+    _f17_placed["calls"] += 1
+    overrides, aside = _f17_placed_fn(note, prev, moved)
+    deleted = set(note.get("exceptions") or [])
+    _f17_placed["gone"] += any(entry.get("day") in deleted for entry in aside)
+    return overrides, aside
+
+
+_model_mod._copy_days_placed = _f17_count_placed
+_F17_ALL = ["edit", "edit", "move", "shift", "delete", "rule", "rule", "read", "share", "backup", "restore",
+            "off", "back", "back", "older"]
+# A third of the roads keep to the turn-off and the turn-on with the days
+# edited and deleted between: the corner the reviews kept finding.
+_F17_OFF_ON = ["edit", "edit", "delete", "delete", "off", "back", "back", "older", "rule", "read"]
+_F17_ROADS = 1500
+_f17_failures, _f17_steps, _f17_doubles = [], 0, 0
+for _f17_seed in range(_F17_ROADS):
+    _rng17 = _f17_random.Random(_f17_seed)
+    _note = _model_mod.normalize_note({"id": 1, "uid": "f17", "title": "Gym", "body": "plan",
+                                       "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
+    _made, _live, _n = [], _f17_coll.Counter(), 0
+    _road = []
+    for _step in range(14):
+        _f17_steps += 1
+        _drawn = sorted(set(_rec_t10.expand_occurrences(
+            _note, _rec_t10.parse_date(_F17_DAYS[0]), _rec_t10.parse_date(_F17_DAYS[-1]))) & set(_F17_DAYS))
+        # A copy is one slot: replaced, the words it alone held go with it --
+        # the documented rule, not a loss -- unless it repeats as a series the
+        # note does not: those are set aside (copy_days_set_aside).
+        _copy_was = copy_mod.deepcopy(_note.get("_prev"))
+        _slot_copy = isinstance(_copy_was, dict) and not (
+            _rec_t10.is_recurring(_copy_was) and not _model_mod._repeats_as(_note, _copy_was))
+        _days_was = set(_f17_where(_note, _made)[0]) | {e.get("body") for e in _note.get("_set_aside") or []}
+        _only_copy = ({p.get("body") for p in (_copy_was.get("overrides") or {}).values()} - _days_was
+                      if _slot_copy else set())
+        # A day is edited, moved or deleted only while the note repeats.
+        _repeats = _rec_t10.is_recurring(_note)
+        _older_lost = set()
+        _op = _rng17.choice(_F17_ALL if _f17_seed % 3 else _F17_OFF_ON)
+        _road.append(_op)
+        if _op == "shift" and _repeats and len(_drawn) >= 2:
+            # A run of days each given words, each held a day later, the last
+            # first -- the road a critical loss once took.
+            _i = _rng17.randrange(len(_drawn) - 1)
+            _run = _drawn[_i:_i + _rng17.randint(2, 4)]
+            for _d in _run:
+                _old = (_note.get("overrides") or {}).get(_d, {}).get("body")
+                if _old in _live:
+                    _live[_old] -= 1
+                _n += 1
+                _note.setdefault("overrides", {})[_d] = {"body": "w%d" % _n}
+                _live["w%d" % _n] += 1
+            for _d in reversed(_run):
+                _t = (_rec_t10.parse_date(_d) + _dtT.timedelta(days=1)).isoformat()
+                _now = set(_rec_t10.expand_occurrences(
+                    _note, _rec_t10.parse_date(_F17_DAYS[0]), _rec_t10.parse_date(_F17_DAYS[-1])))
+                if (_t in _F17_DAYS and _t not in _now and _t not in (_note.get("overrides") or {})
+                        and _t not in (_note.get("moved") or {}).values()):
+                    _rec_t10.move_day(_note, _d, _t)
+        elif _op == "edit" and _repeats and _drawn:
+            _d = _rng17.choice(_drawn)
+            _old = (_note.get("overrides") or {}).get(_d, {}).get("body")
+            if _old in _live:
+                _live[_old] -= 1
+            _n += 1
+            _note.setdefault("overrides", {})[_d] = {"body": "w%d" % _n}
+            _live["w%d" % _n] += 1
+        elif _op == "move" and _repeats and _drawn:
+            _d = _rng17.choice(_drawn)
+            _free = [t for t in _F17_DAYS if t not in _drawn and t not in (_note.get("overrides") or {})
+                     and t not in (_note.get("moved") or {}).values()]
+            if _free:
+                _rec_t10.move_day(_note, _d, _rng17.choice(_free))
+        elif _op == "delete" and _repeats and _drawn:
+            _d = _rng17.choice(_drawn)
+            _origin = _rec_t10.moved_from(_note, _d) or _d
+            _note["exceptions"] = sorted(set(_note.get("exceptions") or []) | {_origin})
+            (_note.get("moved") or {}).pop(_origin, None)
+            _gone = (_note.get("overrides") or {}).pop(_d, {}).get("body")
+            if _gone in _live:
+                _live[_gone] -= 1
+        elif _op == "rule":
+            _f17_save(_note, _rng17.choice(_F17_DAYS[:7]), copy_mod.deepcopy(_rng17.choice(_F17_RULES)))
+        elif _op == "off" and _repeats:
+            _f17_save(_note, _note.get("date"), {"freq": ""})
+        elif _op == "older" and _repeats:
+            # The turn-off and the turn-on as it was of 0.97.405 and the
+            # phone's 0.13.0, the versions people upgrade from: the days left
+            # in the copy alone, each shown blank -- one, looking empty,
+            # perhaps deleted there -- then this build's
+            # first read, at the install. What the copy they replaced held
+            # alone was theirs to lose, not this build's.
+            _older_lost = {p.get("body") for p in ((_copy_was or {}).get("overrides") or {}).values()} - _days_was
+            _note["_prev"] = NO.NoteOrganizer._whole_note_rescue_copy(_note)
+            _note["exceptions"], _note["overrides"], _note["moved"] = [], {}, {}
+            _blank = sorted(set(_rec_t10.expand_occurrences(
+                _note, _rec_t10.parse_date(_F17_DAYS[0]), _rec_t10.parse_date(_F17_DAYS[-1]))) & set(_F17_DAYS))
+            if _blank and _rng17.random() < 0.5:
+                _note["exceptions"] = [_rng17.choice(_blank)]
+            _note = _model_mod.normalize_note(json.loads(json.dumps(_note)))
+        elif (_op == "back" and isinstance(_note.get("_prev"), dict)
+              and _rec_t10.is_recurring(_note["_prev"])):
+            # The copy's repeat put back: as it was, or from another start.
+            _f17_save(_note, _note["_prev"].get("date") if _rng17.random() < 0.6
+                      else _rng17.choice(_F17_DAYS[:7]), copy_mod.deepcopy(_note["_prev"]["recurrence"]))
+        elif _op == "read":
+            _note = _model_mod.normalize_note(json.loads(json.dumps(_note)))
+        elif _op in ("share", "backup"):
+            _incoming = {"uid": "f17", "title": "Gym", "body": "plan, from the laptop %d" % _step,
+                         "date": _rng17.choice(_F17_DAYS[:7]),
+                         "recurrence": copy_mod.deepcopy(_rng17.choice(_F17_RULES))}
+            if _op == "backup":
+                _n += 1
+                _incoming["overrides"] = {_rng17.choice(_F17_DAYS): {"body": "w%d" % _n}}
+                _live["w%d" % _n] += 1
+            _model_mod.apply_shared_update(_note, _incoming, _model_mod.UPDATABLE_FROM_BACKUP
+                                           if _op == "backup" else _model_mod.UPDATABLE_FROM_SHARED)
+        elif _op == "restore" and isinstance(_note.get("_prev"), dict):
+            _f17_restore(_note)
+        _box = [_note]
+        _model_mod.settle_set_aside(_box)
+        _made += [made.get("body") for made in _box[1:]]
+        _shown, _held = _f17_where(_note, _made)
+        # The slot rule excuses a copy REPLACED by another, never one spent --
+        # the same copy, its days taken out -- whose days are owed to the
+        # note, and were excused once (DR188). A new copy can match the old
+        # in every field but its days: an Update over an Update's copy.
+        _was, _now = _copy_was or {}, _note.get("_prev")
+        _spent = {key: value for key, value in _was.items() if key not in _model_mod.DAY_FIELDS}
+        # ...and never an Update's copy a turn-off replaced: kept whole is
+        # the promise there, which the slot rule must not excuse.
+        if (isinstance(_now, dict) and _now != _was and _now != _spent
+                and not (_op in ("off", "rule") and _model_mod.update_copy(_copy_was))):
+            for _word in _only_copy - _held:
+                _live[_word] = 0
+        for _word in _older_lost - _held:
+            _live[_word] = 0
+        _lost = sorted(w for w, k in _live.items() if k > 0 and w not in _held)
+        # Words shown twice -- an '(earlier text)' note repeating words a day
+        # shows, or a copy's day given back on its own date while the day
+        # holds them where it was moved -- are the duplicates the owner chose
+        # to leave (1 Nov): nothing lost, the extra deleted by hand. Counted,
+        # not failed: the fuzz once held only for its own seeds, by luck.
+        _f17_doubles += sum(1 for w, k in _f17_coll.Counter(_shown).items() if k > 1)
+        if _lost:
+            _f17_failures.append((_f17_seed, _road[:], _lost))
+            break
+    else:
+        # ...and History, the one search of a day's own words, finds every
+        # day the calendar draws or lists off the schedule.
+        _off = set(_rec_t10.off_schedule_days(_note)) if _rec_t10.is_recurring(_note) else set()
+        for _d, _p in (_note.get("overrides") or {}).items():
+            if not (_p.get("body") and _rec_t10.is_recurring(_note) and (_d in _off or _rec_t10.expand_occurrences(
+                    _note, _rec_t10.parse_date(_d), _rec_t10.parse_date(_d)) == [_d])):
+                continue
+            _found = [c["date"] for row in _rec_t10.history_entries([_note], _p["body"])
+                      for c in row.get("children", [])]
+            if _d not in _found:
+                _f17_failures.append((_f17_seed, _road[:], "History misses %s %s" % (_d, _p["body"])))
+                break
+_model_mod._copy_days_placed = _f17_placed_fn
+check("a fuzz of a series' days: %d roads, %d steps, no day's words lost, out of reach or missed by "
+      "History but those the person deleted or typed over (%s; words shown twice, the duplicates left by "
+      "the owner's choice: %d)" % (_F17_ROADS, _f17_steps, _f17_failures[:3], _f17_doubles),
+      not _f17_failures)
+check("...and its roads turn a series back on as its copy, and set aside a copy's words for a day the note "
+      "deleted (%s)" % _f17_placed,
+      _f17_placed["calls"] > 0 and _f17_placed["gone"] > 0)
+# ...and a copy of another series asks for each day where the note holds it
+# now: moved since by the note, or sent home -- by date alone, its words were
+# set aside as earlier text the note still held.
+_t16_copy_day = {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+                 "recurrence": {"freq": "weekly"}, "exceptions": []}
+_t16_moved_since = _model_mod.normalize_note({
+    "id": 33, "title": "Gym", "body": "x", "date": "2026-10-26", "recurrence": {"freq": "weekly"},
+    "moved": {"2026-11-09": "2026-11-11"}, "overrides": {"2026-11-11": {"body": "legs + towel"}},
+    "_prev": dict(_t16_copy_day, date="2026-11-02", moved={},
+                  overrides={"2026-11-09": {"body": "legs + towel"}})})
+_t16_sent_home = _model_mod.normalize_note({
+    "id": 34, "title": "Gym", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "daily"},
+    "overrides": {"2026-11-09": {"body": "legs + towel"}},
+    "_prev": dict(_t16_copy_day, date="2026-11-02", moved={"2026-11-09": "2026-11-12"},
+                  overrides={"2026-11-12": {"body": "legs + towel"}})})
+for _t16_note in (_t16_moved_since, _t16_sent_home):
+    _model_mod.copy_days_set_aside(_t16_note)
+check("a copy's day the note moved since, or sent home, is held, not set aside as earlier text (%s, %s)"
+      % (_t16_moved_since.get("_set_aside"), _t16_sent_home.get("_set_aside")),
+      not _t16_moved_since.get("_set_aside") and not _t16_sent_home.get("_set_aside")
+      and "overrides" not in _t16_moved_since["_prev"])
+
+
+def _t10_side(rnd, tag, ops):
+    """A series' days as either app's editor makes them, from none: a day
+    given words, or only a colour (the desktop's shape or the phone's),
+    deleted, reset, or moved to a date no day of it is drawn on."""
+    note = dict({"title": "Gym", "body": "Warm up."}, **_kd_series,
+                overrides={}, exceptions=[], moved={})
+    pool = [(_dtT.date(2026, 11, 2) + _dtT.timedelta(days=i)).isoformat() for i in range(70)]
+    for _k in range(rnd.randint(0, ops)):
+        shown = _rec_t10.expand_occurrences(note, _dtT.date(2026, 11, 2), _dtT.date(2027, 1, 15))
+        if not shown:
+            break
+        day, kind = rnd.choice(shown), rnd.choice(("text", "colour", "phone", "gone", "move", "reset"))
+        orig = _rec_t10.moved_from(note, day) or day
+        if kind == "text":
+            note["overrides"][day] = {"title": "Gym", "body": "%s %s %d" % (tag, day, rnd.randint(0, 99))}
+        elif kind == "colour":
+            note["overrides"][day] = {"title": "Gym", "body": "Warm up.", "color": "#00aa00"}
+        elif kind == "phone":
+            note["overrides"][day] = {"color": "#3366ff"}
+        elif kind == "gone":
+            note["overrides"].pop(day, None)
+            note["exceptions"].append(orig)
+        elif kind == "reset":
+            note["overrides"].pop(day, None)
+            note["moved"].pop(orig, None)
+        else:
+            free = [d for d in pool if d not in shown]
+            if free:
+                _rec_t10.move_day(note, day, rnd.choice(free))
+        note = _model_mod.normalize_note(note)
+    return {key: note[key] for key in _model_mod.DAY_FIELDS}
+
+
+def _t10_words(note, day):
+    """Whether *note*'s edit of *day* holds words its series does not."""
+    shown = _rec_t10.day_as_kept(note, day)
+    return any((shown.get(key) or "") != (note.get(key) or "") for key in ("title", "body", "comments"))
+
+
+def _t10_broken(mine, theirs):
+    """Where the take-back breaks its rule for one shape: the note's words
+    or look on a day changed, or a copy's day with words of its own neither
+    shown on the day the result draws it nor set aside for that date, though
+    the note did not delete that day."""
+    out = _t10(copy_mod.deepcopy(mine), copy_mod.deepcopy(theirs))
+    note = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **mine))
+    kept = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **theirs))
+    came = {to: day for day, to in kept["moved"].items()}
+    bad = [] if _model_mod.normalize_note(json.loads(json.dumps(out))) == out else ["not idempotent"]
+    aside = set(_t10_aside(out))
+    for day, patch in note["overrides"].items():
+        got = out["overrides"].get(day) or {}
+        if _t10_words(note, day) and any(got.get(key) != patch.get(key) for key in ("title", "body")):
+            bad.append("the note's words on %s" % day)
+        if any(got.get(key) != value for key, value in patch.items() if key in ("color", "category")):
+            bad.append("the note's look on %s" % day)
+    for key, patch in kept["overrides"].items():
+        when = _rec_t10.parse_date(key)
+        if not _t10_words(kept, key) or key not in _rec_t10.expand_occurrences(kept, when, when):
+            continue
+        day = came.get(key, key)
+        if day in note["exceptions"]:
+            continue
+        at = out["moved"].get(day, day)
+        if _t10_shows(out, at) != patch["body"] and (at, patch["body"]) not in aside:
+            bad.append("the copy's words for %s" % day)
+    return bad
+
+
+import random as _random_t10
+_t10_rnd = _random_t10.Random(10)
+_t10_bad = []
+for _t10_i in range(300):
+    _t10_shape = (_t10_side(_t10_rnd, "note", 6), _t10_side(_t10_rnd, "copy", 8))
+    _t10_bad.extend((_t10_i, why) for why in _t10_broken(*_t10_shape))
+check("on 300 shapes either app's editor makes, the take-back keeps every word the note wrote as it "
+      "is, and every day's own text the copy held, on the day it is drawn or set aside for its date "
+      "(%s)" % (_t10_bad[:3] or "all"),
+      not _t10_bad)
+
+# ...and the styles of words held in the copy's but not the same: a part of
+# the copy's text made bold since was written over, no copy kept.
+_rs_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",
+            "comments": "", "formatting": [], "paragraphs": []}
+_rs_bold = _model_mod.normalize_note({
+    "id": 10, "title": "Trip", "body": "Packing list:",
+    "formatting": [{"start": 0, "end": 7, "style": "bold"}], "_prev": dict(_rs_prev)})
+_rs_plain = _model_mod.normalize_note({
+    "id": 11, "title": "Trip", "body": "Packing list:", "_prev": dict(_rs_prev)})
+check("a restore over part of the copy's words made bold since keeps them as the copy in turn",
+      _model_mod.copy_replaced_by_restore(_rs_bold, _rs_bold["_prev"]) is not None
+      and _model_mod.copy_replaced_by_restore(_rs_plain, _rs_plain["_prev"]) is None)
+
+# "↩ Restore previous" weighs all it writes over: comments typed since the
+# copy, and the styles of the same words, went to no file.
+_rp_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",
+            "comments": "ok", "formatting": [], "paragraphs": []}
+_rp_note = _model_mod.normalize_note({
+    "id": 6, "title": "Trip", "body": "Packing list:", "_prev": dict(_rp_prev),
+    "comments": "ok. Call the hut warden on Friday about the late arrival."})
+_rp_styled = _model_mod.normalize_note({
+    "id": 7, "title": "Trip", "body": _rp_prev["body"], "comments": "ok",
+    "formatting": [{"start": 0, "end": 7, "style": "bold"}], "_prev": dict(_rp_prev)})
+_rp_plain = _model_mod.normalize_note({
+    "id": 8, "title": "Trip", "body": "Packing list:", "comments": "ok", "_prev": dict(_rp_prev)})
+_rp_kept = _model_mod.copy_replaced_by_restore(_rp_note, _rp_note["_prev"])
+check("a restore keeps comments typed since the copy, and styles put on the same "
+      "words, as the next copy; and nothing when nothing would be lost",
+      _rp_kept is not None and "hut warden" in _rp_kept["comments"]
+      and _model_mod.copy_replaced_by_restore(_rp_styled, _rp_styled["_prev"]) is not None
+      and _model_mod.copy_replaced_by_restore(_rp_plain, _rp_plain["_prev"]) is None)
 
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the
@@ -2646,6 +4950,23 @@ try:
           and not os.path.exists(os.path.join(_pg_stale, "attachments")))
     check("...but another program's settings.json there is left alone",
           os.path.isfile(os.path.join(_pg_stale, "settings.json")))
+
+    # 4. A backup beside a covered notebook is read too: one holding a note
+    #    the app does not have stays. They went unread, with the notebook.
+    with open(os.path.join(_pg_stale, "notes_data.json"), "w", encoding="utf-8") as _f:
+        json.dump(_pg_notes, _f)
+    _pg_unique = os.path.join(_pg_stale, "notes_data_backup_20261001_090000.json")
+    _pg_same = os.path.join(_pg_stale, "notes_data_backup_20261002_090000.json")
+    with open(_pg_unique, "w", encoding="utf-8") as _f:
+        json.dump(_pg_notes + [{"id": 2, "title": "Only in a backup"}], _f)
+    with open(_pg_same, "w", encoding="utf-8") as _f:
+        json.dump(_pg_notes, _f)
+    _paths.purge_stale_copies(_pg_app)
+    check("a leftover backup holding a note the app lacks survives the purge",
+          os.path.isfile(_pg_unique))
+    check("...while a backup the app already holds whole is cleaned up",
+          not os.path.exists(_pg_same)
+          and not os.path.exists(os.path.join(_pg_stale, "notes_data.json")))
 finally:
     _paths.get_legacy_dirs = _pg_real_legacy
     shutil.rmtree(_pg_root, ignore_errors=True)
@@ -2682,6 +5003,75 @@ finally:
     _paths.get_legacy_dirs = _ad_real_legacy
     _paths.get_appdata_dir = _ad_real_appdata
     shutil.rmtree(_ad_root, ignore_errors=True)
+
+# ...and this folder's own readable settings.json, met with no notes file,
+# is copied aside before the old notebook's replaces it: it was replaced
+# with no copy kept (the name, the theme, the categories, the Trash window).
+_ks_root = tempfile.mkdtemp(prefix="nd_keep_settings_")
+try:
+    _ks_app = os.path.join(_ks_root, "app")
+    _ks_old = os.path.join(_ks_root, "old")
+    os.makedirs(_ks_app)
+    os.makedirs(_ks_old)
+    with open(os.path.join(_ks_old, "notes_data.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"id": 1, "title": "Old note"}], _f)
+    with open(os.path.join(_ks_old, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"app_version": "0.1.0", "theme": "dark"}, _f)
+    with open(os.path.join(_ks_app, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"theme": "light", "username": "Ana"}, _f)
+    _paths.get_legacy_dirs = lambda app_dir: [_ks_old]
+    _paths.get_appdata_dir = lambda: os.path.join(_ks_root, "no_appdata")
+    _paths.run_migrations(_ks_app)
+    _ks_kept = sorted(p for p in os.listdir(_ks_app) if p.startswith("settings_replaced_"))
+    _ks_held = {}
+    if _ks_kept:
+        with open(os.path.join(_ks_app, _ks_kept[0]), encoding="utf-8") as _f:
+            _ks_held = json.load(_f)
+    with open(os.path.join(_ks_app, "settings.json"), encoding="utf-8") as _f:
+        _ks_now = json.load(_f)
+    check("an old notebook adopted keeps this folder's own readable settings aside first "
+          "(%s, now %s)" % (_ks_kept, _ks_now),
+          _ks_held.get("username") == "Ana" and _ks_now.get("theme") == "dark")
+    # ...not again when they are already the old notebook's own bytes (a start
+    # that went no further): each start left one more copy, of those.
+    os.remove(os.path.join(_ks_app, "notes_data.json"))
+    for _p in _ks_kept:
+        os.remove(os.path.join(_ks_app, _p))
+    _paths.run_migrations(_ks_app)
+    _ks_again = [p for p in os.listdir(_ks_app) if p.startswith("settings_replaced_")]
+    check("...and keeps no copy of settings that are already the old notebook's (%s)" % _ks_again,
+          _ks_again == [] and os.path.isfile(os.path.join(_ks_app, "notes_data.json")))
+    # ...and, that copy failing, the settings stay, and the old Trash stays where
+    # it is, said: brought under this folder's window, it would be emptied by it.
+    shutil.rmtree(_ks_app)
+    os.makedirs(_ks_app)
+    with open(os.path.join(_ks_app, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"theme": "light", "username": "Ana"}, _f)
+    with open(os.path.join(_ks_old, "trash.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"id": 9, "title": "Old trashed", "deleted_at": "2026-01-01 10:00:00"}], _f)
+    with open(os.path.join(_ks_old, "templates.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"name": "Weekly", "title": "w"}], _f)
+    _ks_backup_was = _paths._timestamped_backup
+    _paths._timestamped_backup = lambda *a, **k: None
+    try:
+        _ks_msg = _paths.run_migrations(_ks_app) or ""
+    finally:
+        _paths._timestamped_backup = _ks_backup_was
+    with open(os.path.join(_ks_app, "settings.json"), encoding="utf-8") as _f:
+        _ks_stayed = json.load(_f)
+    check("an old notebook whose settings could not be copied aside leaves this folder's, and "
+          "its Trash where it is, said (%s)" % _ks_msg.replace("\n", " ")[-120:],
+          _ks_stayed.get("username") == "Ana"
+          and not os.path.exists(os.path.join(_ks_app, "trash.json"))
+          and "trash.json" in _ks_msg
+          and os.path.isfile(os.path.join(_ks_app, "notes_data.json")))
+    check("...its templates, which no window empties, still come in",
+          os.path.isfile(os.path.join(_ks_app, "templates.json"))
+          and "templates.json" not in _ks_msg)
+finally:
+    _paths.get_legacy_dirs = _ad_real_legacy
+    _paths.get_appdata_dir = _ad_real_appdata
+    shutil.rmtree(_ks_root, ignore_errors=True)
 
 # ---- The reclaim message says what happened ----
 # "Moved your notebook back", when it was COPIED and the AppData copy
@@ -2767,20 +5157,22 @@ finally:
 # overwrote it with [], and ran from any folder at all. One definition now
 # (qa/_qa_support.hermetic_seed) refuses outside a declared scratch run,
 # and beside any notebook it cannot prove is empty -- leaving it untouched.
-_here = os.path.dirname(os.path.abspath(__file__))
-for _support_dir in (_here, os.path.join(_here, "qa")):
-    if os.path.isfile(os.path.join(_support_dir, "_qa_support.py")):
-        sys.path.insert(0, _support_dir)
-        break
-import _qa_support  # noqa: E402
+# And it asks the app's own resolver which folder the app will open: the
+# copy this file had looked beside itself while the app opened the folder
+# notebook_location.txt names, the owner's notebook.
+# Each fresh folder stands as a scratch copy's, the app's folder too; the
+# repository's layout is walked by tools/check_guest.py (item 12).
+# (_qa_support is imported at the top, for its guest step.)
 _hs_root = tempfile.mkdtemp(prefix="nd_seed_")
 _hs_cwd = os.getcwd()
 _hs_marker = os.environ.get(_qa_support.SCRATCH_MARKER)
+_hs_profile = os.environ.get("USERPROFILE")
 
 
-def _hs_try(contents, marker):
+def _hs_try(contents, marker, app_dir=None):
     """Run the guard in a fresh folder holding `contents` as its
-    notes_data.json (None: no file). Returns (refused, file afterwards)."""
+    notes_data.json (None: no file), the app in `app_dir` (default: that
+    folder). Returns (refused, the folder's notes file afterwards)."""
     folder = tempfile.mkdtemp(dir=_hs_root)
     path = os.path.join(folder, "notes_data.json")
     if contents is not None:
@@ -2792,7 +5184,7 @@ def _hs_try(contents, marker):
         os.environ.pop(_qa_support.SCRATCH_MARKER, None)
     os.chdir(folder)
     try:
-        _qa_support.hermetic_seed()
+        _qa_support.hermetic_seed(app_dir or folder)
         refused = False
     except SystemExit:
         refused = True
@@ -2803,6 +5195,30 @@ def _hs_try(contents, marker):
         with open(path, encoding="utf-8") as fh:
             after = fh.read()
     return refused, after
+
+
+def _hs_notebook(where):
+    """A stand-in for someone's notebook, never the owner's: its files, as bytes."""
+    os.makedirs(where, exist_ok=True)
+    for name, text in (("notes_data.json", '[{"id": 1, "title": "Her note"}]'),
+                       ("trash.json", '[{"id": 2, "title": "Her deleted note"}]'),
+                       ("settings.json", '{"theme": "dark"}')):
+        with open(os.path.join(where, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
+    return _hs_bytes(where)
+
+
+def _hs_bytes(where):
+    return {name: open(os.path.join(where, name), "rb").read()
+            for name in sorted(os.listdir(where))}
+
+
+def _hs_located(line):
+    """An app folder whose notebook_location.txt says `line`."""
+    app = tempfile.mkdtemp(dir=_hs_root)
+    with open(os.path.join(app, "notebook_location.txt"), "w", encoding="utf-8") as fh:
+        fh.write("# my own notebook, out of the repo" + chr(10) + line + chr(10))
+    return app
 
 
 try:
@@ -2820,11 +5236,37 @@ try:
     _real_refused, _real_after = _hs_try(_real, marker=True)
     check("...and refuses beside a notebook holding notes, leaving it as it was",
           _real_refused and _real_after == _real)
+    # The app's notebook_location.txt names her notebook: by its path, and
+    # through %USERPROFILE%, which a guest's homes leave as they are.
+    _hs_her = os.path.join(_hs_root, "her", "Note Organizer")
+    _hs_before = _hs_notebook(_hs_her)
+    _abs_refused, _abs_after = _hs_try(None, marker=True, app_dir=_hs_located(_hs_her))
+    check("...refuses where the app's notebook_location.txt names a notebook by "
+          "its path, writing nothing here or there",
+          _abs_refused and _abs_after is None and _hs_bytes(_hs_her) == _hs_before)
+    os.environ["USERPROFILE"] = os.path.join(_hs_root, "her")
+    _hs_var = ("%USERPROFILE%" + os.sep if os.name == "nt" else "$USERPROFILE/")
+    _var_refused, _var_after = _hs_try(
+        None, marker=True, app_dir=_hs_located(_hs_var + "Note Organizer"))
+    check("...and where it names one through %USERPROFILE%",
+          _var_refused and _var_after is None and _hs_bytes(_hs_her) == _hs_before)
+    # The app elsewhere, beside a notebook of its own, with no location file:
+    # the guard saw an empty folder here, and the app opened that one.
+    _hs_away = os.path.join(_hs_root, "checkout")
+    _hs_away_before = _hs_notebook(_hs_away)
+    _away_refused, _away_after = _hs_try(None, marker=True, app_dir=_hs_away)
+    check("...and where the app it starts opens another folder than this one",
+          _away_refused and _away_after is None
+          and _hs_bytes(_hs_away) == _hs_away_before)
 finally:
     if _hs_marker is None:
         os.environ.pop(_qa_support.SCRATCH_MARKER, None)
     else:
         os.environ[_qa_support.SCRATCH_MARKER] = _hs_marker
+    if _hs_profile is None:
+        os.environ.pop("USERPROFILE", None)
+    else:
+        os.environ["USERPROFILE"] = _hs_profile
     shutil.rmtree(_hs_root, ignore_errors=True)
 
 # ======================================================================
@@ -2860,6 +5302,25 @@ check("a backup the disk has no room for is refused, saying what it needs -- "
 check("...and with the attachments on another disk, each disk is asked for its own share",
       _sh.backup_space_problem(_backup, 1 * _GB, 1 * _GB) is None
       and _sh.backup_space_problem(_backup, 1 * _GB, 500_000_000) is not None)
+# Refused for no room, the backup is sound: its own kind, so the import says
+# that alone, not "couldn't be read". A hostile archive stays a plain refusal.
+_room_was = _sh._disk_of
+_sh._disk_of = lambda _p: (1000, "one-disk")
+try:
+    _zroom = tempfile.mkdtemp(prefix="zip-room-")
+    with _zipfile.ZipFile(os.path.join(_zroom, "r.zip"), "w") as _zf:
+        _zf.writestr("notes_data.json", "[]")
+    try:
+        with _zipfile.ZipFile(os.path.join(_zroom, "r.zip")) as _zf:
+            _sh._safe_extract_zip(_zf, os.path.join(_zroom, "out"))
+        _room_answer = None
+    except ValueError as _exc:
+        _room_answer = _exc
+finally:
+    _sh._disk_of = _room_was
+    shutil.rmtree(_zroom, ignore_errors=True)
+check("a backup refused for no room is refused as a sound one with no room, its own kind",
+      isinstance(_room_answer, _sh.BackupRefused) and "free space" in str(_room_answer))
 check("an entry expanding a thousand times past its packed size is refused as a zip bomb",
       "hostile" in (_sh.backup_entries_problem(
           [_entry("attachments/x.bin", 3 * _GB, 3_000_000)]) or ""))
@@ -3010,6 +5471,680 @@ for _limit, _small in (("MAX_DECOMPRESSED_BYTES", 1000), ("MAX_SHARE_CODE_CHARS"
         setattr(_sh, _limit, _saved_limit)
     check("no code is made past the import's %s either" % _limit,
           _answer.startswith("refused: ") and "too much for one code" in _answer)
+
+# ---- A notes file another program holds at the start ----
+# It read as unreadable, its copy failed for the same reason, and the first
+# keystroke's autosave replaced fifty notes with one. Read again a moment
+# later, and never written over while neither it nor a copy of it could be
+# read.
+_hw_dir = tempfile.mkdtemp(prefix="nd_held_")
+_hw_prev = _paths.APP_DIR
+try:
+    _paths.configure(_hw_dir)
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump([{"id": 1, "title": "Important"}], f)
+    _hw_real_open = open
+    _hw_tries = {"n": 0}
+
+    def _hw_flaky(path, *a, **k):
+        if os.path.abspath(str(path)) == os.path.abspath(_paths.DATA_FILE) and _hw_tries["n"] < 1:
+            _hw_tries["n"] += 1
+            raise PermissionError(13, "held by another program")
+        return _hw_real_open(path, *a, **k)
+
+    _hw_sleep = _storage.time.sleep
+    _storage.open = _hw_flaky
+    _storage.time.sleep = lambda s: None
+    try:
+        _hw_notes, _hw_report = _storage.load_notes()
+    finally:
+        del _storage.open
+        _storage.time.sleep = _hw_sleep
+    check("a notes file held for a moment at the start is read on a later try",
+          [n.get("title") for n in _hw_notes] == ["Important"]
+          and not _hw_report.get("notes_file_corrupt"))
+    # Held for good: here a folder stands where the file is, which neither
+    # reads nor copies, on Windows and elsewhere alike.
+    os.remove(_paths.DATA_FILE)
+    os.makedirs(_paths.DATA_FILE)
+    _storage.time.sleep = lambda s: None
+    try:
+        _hw_notes, _hw_report = _storage.load_notes()
+    finally:
+        _storage.time.sleep = _hw_sleep
+    # The other program lets go: the notes are back as they were, and the
+    # first save of this run must still leave them alone.
+    os.rmdir(_paths.DATA_FILE)
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump([{"id": 1, "title": "Important"}], f)
+    _hw_ok, _hw_exc = _storage.save_notes([{"id": 1, "title": "Shopping"}])
+    with open(_paths.DATA_FILE, encoding="utf-8") as f:
+        _hw_disk = [n.get("title") for n in json.load(f)]
+    check(f"a notes file neither read nor copied is never written over this run "
+          f"({_hw_ok}, {_hw_disk})",
+          _hw_report.get("notes_file_corrupt") and _hw_report.get("corrupt_backup_path") is None
+          and not _hw_ok and _hw_disk == ["Important"])
+    # Read but damaged, and its copy aside refused (a full disk): held by the
+    # other road, the copy's own. A refused read is held on its way in since
+    # 14 November, and no check reached this one after.
+    _paths.WRITES_HELD.clear()
+    _hw_damaged = '[{"id": 1, "title": "Important"'
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        f.write(_hw_damaged)
+    _hw_copy2 = shutil.copy2
+
+    def _hw_disk_full(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    shutil.copy2 = _hw_disk_full
+    try:
+        _hw_notes, _hw_report = _storage.load_notes()
+    finally:
+        shutil.copy2 = _hw_copy2
+    _hw_ok, _hw_exc = _storage.save_notes([{"id": 1, "title": "Shopping"}])
+    with open(_paths.DATA_FILE, encoding="utf-8") as f:
+        _hw_text = f.read()
+    check(f"a damaged notes file that could not be copied aside is never written over "
+          f"this run ({_hw_ok}, {_hw_text[:40]!r})",
+          _hw_report.get("notes_file_corrupt") and _hw_report.get("corrupt_backup_path") is None
+          and not _hw_ok and _hw_text == _hw_damaged)
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_hw_prev)
+    shutil.rmtree(_hw_dir, ignore_errors=True)
+
+# ---- The settings file held the same way ----
+# Left out of the notes file's retries, a refused read took the place-holder
+# for the file: the cleanup ran again, and save_setting wrote the place-holder
+# and one key over the person's categories and theme.
+_hs_prev = _paths.APP_DIR
+_hs_real_open = open
+_hs_sleep = _storage.time.sleep
+_hs_real = {"categories": {"Work": "#123456"}, "theme": "dark_slate",
+            "cleanup_done": False}
+
+
+def _hs_refusing(times):
+    left = {"n": times}
+
+    def _open(path, *a, **k):
+        if (os.path.abspath(str(path)) == os.path.abspath(_paths.SETTINGS_FILE)
+                and left["n"] != 0):
+            left["n"] -= 1
+            raise PermissionError(13, "held by another program")
+        return _hs_real_open(path, *a, **k)
+    return _open
+
+
+def _hs_disk():
+    with _hs_real_open(_paths.SETTINGS_FILE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+_hs_dirs = []
+_hs_slept = []
+try:
+    _storage.time.sleep = _hs_slept.append
+    for _hs_case in ("moment", "start", "later"):
+        _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
+        _paths.configure(_hs_dirs[-1])
+        with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(_hs_real, f)
+        with _hs_real_open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump([{"id": 1, "title": "a", "category": "Held-start client"},
+                       {"id": 2, "title": ""}], f)
+        if _hs_case == "later":
+            _storage.load_settings()                       # read whole once
+        _storage.open = _hs_refusing(1 if _hs_case == "moment" else -1)
+        try:
+            _hs_got = _storage.load_settings()
+            _hs_held = _paths.writes_held(_paths.SETTINGS_FILE)
+            # Every later read is one try: retried each time, a hold for the
+            # run cost a second a read -- the start 19 s, a note click 4.
+            _hs_waits = len(_hs_slept)
+            _hs_later = [_storage.load_settings() for _ in range(5)]
+            _hs_waits = len(_hs_slept) - _hs_waits
+            _storage.save_setting("last_open_note_id", 7)
+            _hs_saved = _hs_disk().get("last_open_note_id") == 7
+            _hs_notes, _hs_report = (_storage.load_notes() if _hs_case == "start"
+                                     else (None, {}))
+        finally:
+            del _storage.open
+        _hs_aside = [p for p in os.listdir(_paths.APP_DIR) if p.startswith("settings_corrupt_")]
+        if _hs_case == "moment":
+            check("a settings file held for a moment at the start is read on a "
+                  "later try (%s, held %s)" % (sorted(_hs_got), _hs_held),
+                  _hs_got.get("theme") == "dark_slate" and not _hs_held and _hs_saved)
+        elif _hs_case == "start":
+            check("held for the whole start, it is not taken for damage: no copy "
+                  "aside, never written over, and the cleanup waits (%s, %s, %s)"
+                  % (_hs_aside, _hs_disk(), _hs_report.get("cleanup_report")),
+                  _hs_got == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_held
+                  and not _hs_saved and not _hs_aside and _hs_disk() == _hs_real
+                  and _hs_report.get("cleanup_report") is None
+                  and len(_hs_notes) == 2)
+            check("...its categories not said to have gone missing, the notes "
+                  "keeping theirs (%s, %s)" % (_hs_report.get("categories_adopted"),
+                                               _hs_notes[0].get("category")),
+                  _hs_report.get("categories_adopted") == []
+                  and _hs_notes[0].get("category") == "Held-start client")
+            check("...and only the run's first read waits for it: five later reads "
+                  "try once each (%d waits)" % _hs_waits,
+                  _hs_waits == 0
+                  and _hs_later == [{_storage.TRASH_WINDOW_UNKNOWN: True}] * 5)
+        else:
+            check("refused later on, the last good read stands in, and a setting "
+                  "saved keeps every other (%s)" % _hs_disk(),
+                  _hs_got.get("categories") == {"Work": "#123456"} and not _hs_held
+                  and _hs_saved and not _hs_aside
+                  and _hs_disk() == dict(_hs_real, last_open_note_id=7))
+        _paths.WRITES_HELD.clear()
+    # ...and a hold that ends later in the run changes nothing: the defaults
+    # it said stand all run. Read once the hold ended, the real window purged
+    # a Trash the start said it would keep whole.
+    _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
+    _paths.configure(_hs_dirs[-1])
+    with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(dict(_hs_real, trash_retention_days=7), f)
+    _storage.open = _hs_refusing(-1)
+    try:
+        _storage.load_settings()
+    finally:
+        del _storage.open
+    _hs_after = _storage.load_settings()
+    _hs_window = _storage.trash_retention_days()
+    _paths.WRITES_HELD.clear()
+    check("a settings file held at the start keeps the run on its defaults once "
+          "the hold ends (%s, window %s)" % (sorted(_hs_after), _hs_window),
+          _hs_after == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_window is None)
+    # ...and with no good read to stand in (damaged at the start, copied aside),
+    # a read refused later is still one try: held after it, every read after
+    # returns at once, so only this one could wait.
+    _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
+    _paths.configure(_hs_dirs[-1])
+    with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+        f.write('{"theme": "dark_slate"')
+    _hs_first = _storage.load_settings()
+    _hs_waits = len(_hs_slept)
+    _storage.open = _hs_refusing(-1)
+    try:
+        _hs_later = _storage.load_settings()
+    finally:
+        del _storage.open
+    _hs_waits = len(_hs_slept) - _hs_waits
+    _paths.WRITES_HELD.clear()
+    check("...and one refused after a damaged start, with no good read to stand in, "
+          "is one try too (%d waits, %s)" % (_hs_waits, sorted(_hs_later)),
+          _hs_first == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_waits == 0
+          and _hs_later == {_storage.TRASH_WINDOW_UNKNOWN: True})
+finally:
+    _storage.time.sleep = _hs_sleep
+    NO.CATEGORY_COLORS.pop("Held-start client", None)
+    _paths.configure(_hs_prev)
+    for _d in _hs_dirs:
+        shutil.rmtree(_d, ignore_errors=True)
+
+# ...and a notes file the system refuses at the start is held the same, never
+# copied aside: a copy made the moment it let go took a good file aside, and
+# the empty list's first save went over it.
+_hn_dir = tempfile.mkdtemp(prefix="nd_heldnotes_")
+_hn_prev = _paths.APP_DIR
+try:
+    _paths.configure(_hn_dir)
+    with _hs_real_open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump([{"id": 1, "title": "kept"}], f)
+
+    def _hn_open(path, *a, **k):
+        if os.path.abspath(str(path)) == os.path.abspath(_paths.DATA_FILE):
+            raise PermissionError(13, "held by another program")
+        return _hs_real_open(path, *a, **k)
+    _storage.open = _hn_open
+    _storage.time.sleep = lambda _s: None
+    try:
+        _hn_notes, _hn_report = _storage.load_notes(None)
+    finally:
+        del _storage.open
+        _storage.time.sleep = _hs_sleep
+    _hn_aside = [p for p in os.listdir(_hn_dir) if p.startswith("notes_data_corrupt_")]
+    _hn_held = _paths.writes_held(_paths.DATA_FILE)
+    with _hs_real_open(_paths.DATA_FILE, encoding="utf-8") as f:
+        _hn_disk = json.load(f)
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_hn_prev)
+    shutil.rmtree(_hn_dir, ignore_errors=True)
+check("a notes file held at the start is held, never copied aside (%s, held %s)" % (_hn_aside, _hn_held),
+      _hn_aside == [] and _hn_held and _hn_report.get("notes_file_corrupt") is True
+      and _hn_notes == [] and _hn_disk == [{"id": 1, "title": "kept"}])
+
+# ...and so are the Trash and the templates (only the notes had a check, and
+# a copy aside of a refused Trash file would have gone unnoticed).
+for _hx_name, _hx_load in (("trash", _storage.load_trash),
+                           ("templates", _storage.load_templates)):
+    _hx_dir = tempfile.mkdtemp(prefix="nd_held_%s_" % _hx_name)
+    _hx_prev = _paths.APP_DIR
+    try:
+        _paths.configure(_hx_dir)
+        _hx_path = _paths.TRASH_FILE if _hx_name == "trash" else _paths.TEMPLATES_FILE
+        with _hs_real_open(_hx_path, "w", encoding="utf-8") as f:
+            json.dump([{"id": 1, "title": "kept"}], f)
+
+        def _hx_open(path, *a, _p=_hx_path, **k):
+            if os.path.abspath(str(path)) == os.path.abspath(_p):
+                raise PermissionError(13, "held by another program")
+            return _hs_real_open(path, *a, **k)
+        _storage.open = _hx_open
+        _storage.time.sleep = lambda _s: None
+        try:
+            _hx_got = _hx_load()
+        finally:
+            del _storage.open
+            _storage.time.sleep = _hs_sleep
+        _hx_aside = [p for p in os.listdir(_hx_dir) if "_corrupt_" in p]
+        _hx_held = _paths.writes_held(_hx_path)
+        with _hs_real_open(_hx_path, encoding="utf-8") as f:
+            _hx_disk = json.load(f)
+    finally:
+        _paths.WRITES_HELD.clear()
+        _paths.configure(_hx_prev)
+        shutil.rmtree(_hx_dir, ignore_errors=True)
+    check("a %s file refused at the start is held, never copied aside (%s, held %s)"
+          % (_hx_name, _hx_aside, _hx_held),
+          _hx_aside == [] and _hx_held and _hx_got == []
+          and _hx_disk == [{"id": 1, "title": "kept"}])
+
+# A run that did not read the Trash -- held, or set aside damaged -- deletes no
+# attached file: a backup's copy of a trashed note shared its file, and Remove
+# attachment on it took the file the trashed note still names.
+_ak_dir = tempfile.mkdtemp(prefix="nd_trashfiles_")
+_ak_prev = _paths.APP_DIR
+_ak_said = {}
+try:
+    _paths.configure(_ak_dir)
+    os.makedirs(_paths.ATTACHMENTS_DIR, exist_ok=True)
+    _ak_file = os.path.join(_paths.ATTACHMENTS_DIR, "abc.png")
+    _ak_gone = [{"attachments": [{"filename": "abc.png", "stored_as": "abc.png"}]}]
+    for _ak_case in ("held", "damaged", "read"):
+        with _hs_real_open(_ak_file, "w") as f:
+            f.write("x")
+        with _hs_real_open(_paths.TRASH_FILE, "w", encoding="utf-8") as f:
+            f.write("{ not json" if _ak_case == "damaged"
+                    else json.dumps([{"id": 1, "attachments": _ak_gone[0]["attachments"]}]))
+        if _ak_case == "held":
+            _paths.hold_writes(_paths.TRASH_FILE)
+        else:
+            _storage.load_trash()
+        _ak_kept = _storage.attached_files_kept()
+        _storage._delete_attachment_files(_ak_gone)
+        _ak_said[_ak_case] = (_ak_kept, os.path.isfile(_ak_file))
+        _paths.WRITES_HELD.clear()
+finally:
+    _paths.WRITES_HELD.clear()
+    _storage._UNREAD_AT_LOAD.clear()
+    _paths.configure(_ak_prev)
+    shutil.rmtree(_ak_dir, ignore_errors=True)
+check("a run whose Trash was held or set aside damaged keeps every attached file; one "
+      "that read it does not (%s)" % _ak_said,
+      _ak_said == {"held": (True, True), "damaged": (True, True), "read": (False, False)})
+
+# The unknown window's mark kept the one-time cleanup waiting too: a window
+# chosen, its "done" lost with the damaged file read as never, and the cleanup
+# ran again on months of notes, merging look-alikes.
+_cw_dir = tempfile.mkdtemp(prefix="nd_cleanupagain_")
+_cw_prev = _paths.APP_DIR
+try:
+    _paths.configure(_cw_dir)
+    with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+        f.write("{ damaged")
+    _storage.load_settings()
+    _cw_mark = _storage.load_settings().get(_storage.TRASH_WINDOW_UNKNOWN)
+    _storage.choose_trash_window(14)
+    _cw_after = _storage.load_settings()
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_cw_prev)
+    shutil.rmtree(_cw_dir, ignore_errors=True)
+check("a window chosen over settings that were lost marks the one-time cleanup done, "
+      "not never (%s)" % _cw_after,
+      _cw_mark is True and _cw_after.get("trash_retention_days") == 14
+      and _cw_after.get("cleanup_done") is True
+      and _storage.TRASH_WINDOW_UNKNOWN not in _cw_after)
+
+# A change whose write was refused does not live on in the settings kept for a
+# later refused read: the dict handed out was the one kept, and the next write
+# that landed put the refused Trash length on disk.
+_sc_dir = tempfile.mkdtemp(prefix="nd_settingscache_")
+_sc_prev = _paths.APP_DIR
+_sc_write = _storage._write_json_atomic
+try:
+    _paths.configure(_sc_dir)
+    _storage.save_settings({"trash_retention_days": 30, "cleanup_done": True})
+    _storage._write_json_atomic = lambda path, value: (False, OSError(28, "No space left"))
+    _sc_refused = _storage.choose_trash_window(7)[0]
+    _storage._write_json_atomic = _sc_write
+
+    def _sc_open(path, *a, **k):
+        if os.path.abspath(str(path)) == os.path.abspath(_paths.SETTINGS_FILE):
+            raise PermissionError(13, "held for a moment")
+        return _hs_real_open(path, *a, **k)
+    _storage.open = _sc_open
+    try:
+        _sc_seen = _storage.load_settings().get("trash_retention_days")
+    finally:
+        del _storage.open
+finally:
+    _storage._write_json_atomic = _sc_write
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_sc_prev)
+    shutil.rmtree(_sc_dir, ignore_errors=True)
+check("a refused settings change is not what a later refused read gives back "
+      "(refused %s, then %s)" % (not _sc_refused, _sc_seen),
+      _sc_refused is False and _sc_seen == 30)
+
+# A number of more than 4,300 digits is a plain ValueError from the parser:
+# the notes, Trash and templates files holding one stopped the start; read
+# as damaged, they are copied aside, as settings.json was.
+_bi_dir = tempfile.mkdtemp(prefix="nd_bigint_")
+_bi_prev = _paths.APP_DIR
+_bi_said = {}
+try:
+    _paths.configure(_bi_dir)
+    for _bi_path in (_paths.DATA_FILE, _paths.TRASH_FILE, _paths.TEMPLATES_FILE):
+        with _hs_real_open(_bi_path, "w", encoding="utf-8") as f:
+            f.write('[{"id": %s, "title": "big"}]' % ("9" * 5000))
+    for _bi_name, _bi_load in (("notes", lambda: _storage.load_notes(None)[0]),
+                               ("trash", _storage.load_trash),
+                               ("templates", _storage.load_templates)):
+        try:
+            _bi_said[_bi_name] = _bi_load()
+        except Exception as _bi_exc:
+            _bi_said[_bi_name] = "RAISED %s" % type(_bi_exc).__name__
+    _bi_aside = sorted(p.split("_corrupt_")[0] for p in os.listdir(_bi_dir) if "_corrupt_" in p)
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_bi_prev)
+    shutil.rmtree(_bi_dir, ignore_errors=True)
+check("a number of 5,000 digits reads as a damaged file, copied aside, never a "
+      "stopped start (%s, aside %s)" % (_bi_said, _bi_aside),
+      _bi_said == {"notes": [], "trash": [], "templates": []}
+      and _bi_aside == ["notes_data", "templates", "trash"])
+
+# A format span whose style is a list or an object is unhashable: the set test
+# raised TypeError past every catch, and the app did not start at any launch.
+_fz_odd = [{"start": 0, "end": 1, "style": ["bold"]}, {"start": 0, "end": 1, "style": {"b": 1}},
+           {"start": 0, "end": 2, "style": "bold"}]
+try:
+    _fz_note = _normalize_note({"id": 1, "title": "x", "body": "ab", "formatting": _fz_odd})
+    _fz_tpl = _storage.normalize_template({"name": "t", "body": "ab", "formatting": _fz_odd})
+    _fz_said = (_fz_note.get("formatting"), _fz_tpl.get("formatting"))
+except TypeError as _fz_exc:
+    _fz_said = "RAISED %s" % _fz_exc
+check("a format style that is a list or an object is dropped, the rest kept (%s)" % (_fz_said,),
+      _fz_said == ([{"start": 0, "end": 2, "style": "bold"}],) * 2)
+
+# A held file's refused write is reported once a run: a setting is written at
+# every note opened, and its banner took the place of a delete's Undo.
+_hr_dir = tempfile.mkdtemp(prefix="nd_heldrep_")
+_hr_prev = _paths.APP_DIR
+_hr_calls = []
+_hr_cb = _storage.on_write_failure
+try:
+    _paths.configure(_hr_dir)
+    _paths.hold_writes(_paths.SETTINGS_FILE)
+    _storage.on_write_failure = lambda path, exc: _hr_calls.append(os.path.basename(path))
+    _hr_results = [_storage.save_settings({"theme": "dark_slate"})[0] for _ in range(3)]
+finally:
+    _storage.on_write_failure = _hr_cb
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_hr_prev)
+    shutil.rmtree(_hr_dir, ignore_errors=True)
+check("a held file's refused write is reported once a run, and refused every "
+      "time (%s, %s)" % (_hr_calls, _hr_results),
+      _hr_calls == ["settings.json"] and _hr_results == [False] * 3)
+
+# ---- Every file renamed into place is on the disk first ----
+# A power cut just after a rename can leave the new name pointing at bytes
+# never written. One writer of six waited for them (_write_json_atomic): the
+# backup export over the previous backup, the migrated notes file that marks
+# a copy done and the import's attached files did not. Read in the source,
+# so a seventh cannot be added without it: each
+# os.replace has an fsync, or a call to the copier that has one, in the
+# lines before it.
+_fs_files = ["note_organizer.py"] + sorted(
+    os.path.join(_root, _name)
+    for _root, _dirs, _names in os.walk("noteorganizer") for _name in _names
+    if _name.endswith(".py"))
+_fs_bare = []
+for _fs_file in _fs_files:
+    with open(_fs_file, encoding="utf-8") as _f:
+        _fs_lines = _f.read().split("\n")
+    for _n, _line in enumerate(_fs_lines):
+        if "os.replace(" in _line and not _line.lstrip().startswith("#"):
+            _before = "\n".join(_fs_lines[max(0, _n - 25):_n])
+            if "os.fsync(" not in _before and "copy_file_until_stopped(" not in _before:
+                _fs_bare.append("%s:%d" % (_fs_file, _n + 1))
+with open(os.path.join("noteorganizer", "core", "sharing.py"), encoding="utf-8") as _f:
+    _fs_copier = _f.read().split("def copy_file_until_stopped", 1)[-1].split("\ndef ", 1)[0]
+check("every file renamed into place is written to the disk first (%s)"
+      % (_fs_bare or "all"),
+      not _fs_bare and "os.fsync(" in _fs_copier)
+
+# ---- No change says what it did over a notes write it never checked ----
+# "Pinned to top", "Duplicated as" and "Moved" went on the status line over a
+# refused write, in place of its "Not saved". Read in the source, so another
+# cannot be added: a method that throws away save_notes' answer sets no status.
+import ast as _sv_ast
+_sv_methods = []
+for _sv_file in ["note_organizer.py"] + sorted(
+        os.path.join("noteorganizer", "ui", _n)
+        for _n in os.listdir(os.path.join("noteorganizer", "ui")) if _n.endswith(".py")):
+    with open(_sv_file, encoding="utf-8") as _f:
+        _sv_tree = _sv_ast.parse(_f.read())
+    _sv_methods += [(_sv_file, _fn) for _fn in _sv_ast.walk(_sv_tree)
+                    if isinstance(_fn, _sv_ast.FunctionDef) and _fn.name != "save_notes"]
+
+
+def _sv_calls(fn, name):
+    """Whether *fn* calls self.<name>(...) anywhere in it."""
+    return any(isinstance(_c, _sv_ast.Call) and isinstance(_c.func, _sv_ast.Attribute)
+               and _c.func.attr == name and isinstance(_c.func.value, _sv_ast.Name)
+               and _c.func.value.id == "self" for _c in _sv_ast.walk(fn))
+
+
+# The throwers, then any method that calls one (a helper's write, one level
+# up: _relocate_day's callers said "Moved to" over its refusal) and speaks.
+_sv_throwers = {_fn.name for _file, _fn in _sv_methods if any(
+    isinstance(_s, _sv_ast.Expr) and isinstance(_s.value, _sv_ast.Call)
+    and isinstance(_s.value.func, _sv_ast.Attribute)
+    and _s.value.func.attr == "save_notes" for _s in _sv_ast.walk(_fn))}
+_sv_bare = ["%s:%s" % (_file, _fn.name) for _file, _fn in _sv_methods
+            if _sv_calls(_fn, "set_status")
+            and (_fn.name in _sv_throwers
+                 or any(_sv_calls(_fn, _t) for _t in _sv_throwers))]
+check("no method sets the status line after a notes write whose answer it, or "
+      "a helper it calls, threw away (%s)" % (_sv_bare or "none"), not _sv_bare)
+
+# ============================================================
+# A FIELD THIS VERSION DOES NOT KNOW IS KEPT (the owner's D2, 2026-11-13)
+# ============================================================
+# A newer version, or another program, may write a field this one has never
+# heard of; rebuilt field by field, every load dropped it, and an older app
+# erased what a newer one added. Kept now, within bounds, by both apps alike.
+import re
+from noteorganizer.core import model as _d2
+from noteorganizer.core import duplicates as _d2_dups
+from noteorganizer.core import sharing as _d2_share
+
+_d2_seen = _d2.normalize_note({'id': 1, 'title': 'x', 'mood': 'calm', 'weather': {'t': 3, 'sky': ['sun']},
+                               '_mark': 1, 'deleted_at': '2026-11-01 10:00:00', 'tags': ['old']})
+check(f"a field this version does not know is kept as it came ({ {k: _d2_seen.get(k) for k in ('mood', 'weather')} })",
+      _d2_seen.get('mood') == 'calm' and _d2_seen.get('weather') == {'t': 3, 'sky': ['sun']})
+check("...but not a name starting '_', the Trash's deleted_at, nor the removed tags",
+      '_mark' not in _d2_seen and 'deleted_at' not in _d2_seen and 'tags' not in _d2_seen)
+_d2_raw = {'id': 1, 'title': 'x', 'weather': {'t': 3}}
+_d2_kept = _d2.normalize_note(_d2_raw)
+_d2_raw['weather']['t'] = 99
+check("...as a copy, not the dict it came in", _d2_kept.get('weather') == {'t': 3})
+_d2_many = _d2.normalize_note(dict({'id': 1}, **{'f%02d' % i: i for i in range(40)}))
+check(f"...at most {_d2.MAX_UNKNOWN_FIELDS}, the first by name",
+      sorted(k for k in _d2_many if re.fullmatch(r'f\d\d', k))
+      == ['f%02d' % i for i in range(_d2.MAX_UNKNOWN_FIELDS)])
+_d2_big = _d2.normalize_note({'id': 1, 'big': 'x' * _d2.MAX_UNKNOWN_UNITS, 'small': 'y'})
+check("...a field past the allowance left out, the rest kept",
+      'big' not in _d2_big and _d2_big.get('small') == 'y')
+# ...and a template's, by the owner's decision of 14 November: rebuilt from its known fields,
+# a newer version's field was gone at the next template saved or imported.
+_d2_tpl = NO.normalize_template({'name': 'Weekly', 'body': 'b', 'reminder_time': '09:00', '_mark': 1,
+                                 'many': {'deep': [1, 2]}})
+check(f"a template keeps a field this version does not know "
+      f"({ {k: _d2_tpl.get(k) for k in ('reminder_time', 'many', '_mark')} })",
+      _d2_tpl.get('reminder_time') == '09:00' and _d2_tpl.get('many') == {'deep': [1, 2]}
+      and '_mark' not in _d2_tpl)
+_d2_tpls = NO.normalize_template(dict({'name': 'T'}, **{'f%02d' % i: i for i in range(40)}))
+check(f"...at most {_d2.MAX_UNKNOWN_FIELDS} of them, the first by name, as a note's",
+      sorted(k for k in _d2_tpls if re.fullmatch(r'f\d\d', k))
+      == ['f%02d' % i for i in range(_d2.MAX_UNKNOWN_FIELDS)])
+_d2_tpl_file = os.path.abspath(NO.TEMPLATES_FILE)
+_d2_tpl_had = os.path.exists(_d2_tpl_file)
+_d2_tpl_was = NO.load_templates()
+NO.save_templates([_d2_tpl])
+check(f"...through a save and a load ({[t.get('reminder_time') for t in NO.load_templates()]})",
+      [t.get('reminder_time') for t in NO.load_templates()] == ['09:00'])
+if _d2_tpl_had:
+    NO.save_templates(_d2_tpl_was)
+else:
+    os.remove(_d2_tpl_file)
+
+
+def _d2_nest(depth):
+    value = 'core'
+    for _ in range(depth):
+        value = [value]
+    return value
+
+
+# A thousand levels kept would break the copy that keeps them (a red here
+# stays a red, not a crash before the footer).
+try:
+    _d2_deep = _d2.normalize_note({'id': 1, 'deep': _d2_nest(_d2.MAX_UNKNOWN_DEPTH),
+                                   'deeper': _d2_nest(_d2.MAX_UNKNOWN_DEPTH + 1),
+                                   'nan': float('nan'), 'thousand': _d2_nest(1000)})
+except RecursionError:
+    _d2_deep = {'thousand': 'broke the load'}
+check("...nested to the depth allowed, and not one level past it, a NaN or a thousand levels",
+      'deep' in _d2_deep and 'deeper' not in _d2_deep and 'nan' not in _d2_deep
+      and 'thousand' not in _d2_deep)
+# Through the file: load, save, read the bytes.
+_d2_dir = tempfile.mkdtemp()
+_d2_app_dir = NO_paths.APP_DIR
+try:
+    NO_paths.configure(_d2_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True}, f)
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump([{'id': 1, 'title': 'Kept', 'mood': 'calm'}], f)
+    _d2_loaded, _ = _storage.load_notes()
+    _storage.save_notes(_d2_loaded)
+    with open(NO_paths.DATA_FILE, encoding='utf-8') as f:
+        _d2_disk = json.load(f)
+finally:
+    NO_paths.configure(_d2_app_dir)
+    shutil.rmtree(_d2_dir, ignore_errors=True)
+check(f"...through a load and a save, in the file ({_d2_disk[0].get('mood')!r})",
+      _d2_disk[0].get('mood') == 'calm')
+# Two notes the same but for such a field are two notes, to every judge.
+_d2_a = _d2.normalize_note({'id': 1, 'title': 'Same', 'body': 'b', 'mood': 'calm'})
+_d2_b = _d2.normalize_note({'id': 2, 'title': 'Same', 'body': 'b', 'mood': 'storm'})
+_d2_clean, _d2_stats = _d2.clean_notes([_d2_a, _d2_b])
+check("...two notes differing only in such a field are not duplicates (signature, groups, cleanup)",
+      _d2.content_signature(_d2_a) != _d2.content_signature(_d2_b)
+      and _d2_dups._dup_key(_d2_a) != _d2_dups._dup_key(_d2_b)
+      and not _d2_dups.find_duplicate_groups([_d2_a, _d2_b]) and len(_d2_clean) == 2)
+# A share code stays a closed list: a stranger's code brings no field.
+_d2_code_notes = _d2_share.decode_share_code(_d2_share.encode_share_code([dict(_d2_a, extra='x')]))
+check("...a share code carries none", all('mood' not in n and 'extra' not in n for n in _d2_code_notes))
+# A backup's Update brings its own beside this note's; a code's never does.
+_d2_mine = _d2.normalize_note({'id': 1, 'title': 'Old', 'mood': 'calm', 'mine': 'kept'})
+_d2.apply_shared_update(_d2_mine, {'title': 'New', 'mood': 'storm', 'theirs': 'x'},
+                        _d2.UPDATABLE_FROM_BACKUP)
+check(f"...a backup's Update brings its own, this note's kept ({ {k: _d2_mine.get(k) for k in ('mood', 'mine', 'theirs')} })",
+      _d2_mine.get('title') == 'New' and _d2_mine.get('mood') == 'storm'
+      and _d2_mine.get('mine') == 'kept' and _d2_mine.get('theirs') == 'x')
+_d2_coded = _d2.normalize_note({'id': 1, 'title': 'Old', 'mood': 'calm'})
+_d2.apply_shared_update(_d2_coded, {'title': 'New', 'mood': 'storm'}, _d2.UPDATABLE_FROM_SHARED)
+check("...a share code's Update leaves this note's own as they are",
+      _d2_coded.get('title') == 'New' and _d2_coded.get('mood') == 'calm')
+check("...and such a field alone is no change for an Update to make",
+      not _d2.shared_update_changes(_d2.normalize_note({'id': 1, 'title': 'T', 'mood': 'calm'}),
+                                    {'title': 'T', 'mood': 'storm'}, _d2.UPDATABLE_FROM_BACKUP))
+# ...the note's own kept in the rescue copy, through a load, so Restore
+# previous can put back a value the Update wrote over (qa5 presses it).
+_d2_over = _d2.normalize_note({'id': 1, 'title': 'Mine', 'reminder': '10:00', 'own': 1})
+_d2.apply_shared_update(_d2_over, {'title': 'Older', 'reminder': '09:00'}, _d2.UPDATABLE_FROM_BACKUP)
+_d2_reloaded = _d2.normalize_note(json.loads(json.dumps(_d2_over)))
+check(f"...a backup's Update keeps this note's own in its rescue copy, through a load "
+      f"({(_d2_reloaded.get('_prev') or {}).get('_unknown')})",
+      _d2_over.get('reminder') == '09:00'
+      and (_d2_reloaded.get('_prev') or {}).get('_unknown') == {'reminder': '10:00', 'own': 1})
+_d2_full = _d2.normalize_note(dict({'id': 1, 'title': 'T'}, **{'m%02d' % i: i for i in range(30)}))
+_d2.apply_shared_update(_d2_full, dict({'title': 'U'}, **{'z%02d' % i: i for i in range(7)}),
+                        _d2.UPDATABLE_FROM_BACKUP)
+# The note's own keys, not unknown_fields' reading of them, which bounds them as it reads.
+check("...and the two sets together are held to the bounds at once, chosen by name",
+      sorted(k for k in _d2_full if re.fullmatch(r'[mz]\d\d', k))
+      == sorted(['m%02d' % i for i in range(30)] + ['z00', 'z01']))
+check("...a note holding only such a field is not empty, so the first start's cleanup keeps it",
+      not _d2.note_is_empty(_d2.normalize_note({'id': 1, 'mood': 'calm'})))
+check("...true and 1 in such a field are two notes, as on the phone (1 and 1.0 one)",
+      _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': True}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1}))
+      and _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1}))
+      == _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1.0})))
+check("...an empty object and an empty list in such a field are two notes too",
+      _d2.content_signature(_d2.normalize_note({'id': 1, 'x': {}}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': []})))
+check("...and true is not the list [\"bool\", 1], nor an empty object the list [\"dict\"]",
+      _d2.content_signature(_d2.normalize_note({'id': 1, 'x': True}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': ['bool', 1]}))
+      and _d2.content_signature(_d2.normalize_note({'id': 1, 'x': {}}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': ['dict']})))
+# The copy is spent only when the note holds its own fields again, kinds told
+# apart: its 1 is not the backup's true, and the field the backup added (which
+# no person can remove) does not keep it from being spent.
+_d2_spend = _d2.normalize_note({'id': 1, 'title': 'Old', 'flag': 1})
+_d2.apply_shared_update(_d2_spend, {'title': 'New', 'flag': True}, _d2.UPDATABLE_FROM_BACKUP)
+_d2_spend['title'] = 'Old'
+_d2_added = _d2.normalize_note({'id': 1, 'title': 'Old'})
+_d2.apply_shared_update(_d2_added, {'title': 'New', 'extra': 'x'}, _d2.UPDATABLE_FROM_BACKUP)
+_d2_added['title'] = 'Old'
+check(f"...a copy whose own 1 the backup wrote over as true is not spent; one whose only new field "
+      f"the backup added is ({_d2.rescue_copy_spent(_d2_spend)}, {_d2.rescue_copy_spent(_d2_added)})",
+      not _d2.rescue_copy_spent(_d2_spend) and _d2.rescue_copy_spent(_d2_added))
+# Restore previous puts back the copy's own alone: a field the backup added,
+# or the backup's true over this note's 1, is what the restored version lacks,
+# so it becomes the copy in its turn (an older backup, its words held in
+# this note's). The same fields as the copy's leave nothing to keep.
+def _d2_restore_turn(own, theirs):
+    note = _d2.normalize_note(dict({'id': 1, 'title': 'T', 'body': 'Hello world'}, **own))
+    _d2.apply_shared_update(note, dict({'title': 'T', 'body': 'Hello'}, **theirs),
+                            _d2.UPDATABLE_FROM_BACKUP)
+    return _d2.copy_replaced_by_restore(note, note['_prev'])
+_d2_turns = (_d2_restore_turn({}, {'x_new': 'v'}), _d2_restore_turn({'own': 1}, {'own': True}),
+             _d2_restore_turn({'own': 1}, {'own': 1}))
+check(f"...Restore previous keeps in its turn the field the backup added and the true it wrote "
+      f"over a 1; with the copy's own alone it keeps nothing "
+      f"({[t if t is None else t.get('_unknown') for t in _d2_turns]})",
+      _d2_turns[0] is not None and _d2_turns[0].get('_unknown') == {'x_new': 'v'}
+      and _d2_turns[1] is not None and _d2_turns[1].get('_unknown') == {'own': True}
+      and _d2_turns[2] is None)
+check("...and a list longer than the allowance is left out unwalked",
+      'huge' not in _d2.normalize_note({'id': 1, 'huge': [0] * (_d2.MAX_UNKNOWN_UNITS + 1)}))
+# Out of the Trash: kept, the Trash's own stamp left there.
+_d2_entry = dict(_d2.normalize_note({'id': 7, 'title': 'Binned', 'mood': 'calm'}),
+                 deleted_at='2026-11-01 10:00:00')
+_d2_notes, _d2_trash, _d2_back = _storage.restore_many_from_trash([], [_d2_entry], [_d2_entry])
+check("...and a note back from the Trash keeps it, without the Trash's deleted_at",
+      _d2_back and _d2_back[0].get('mood') == 'calm' and 'deleted_at' not in _d2_back[0])
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

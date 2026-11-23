@@ -1,38 +1,13 @@
-"""The calendar tab, the day panel, and the daily reminder.
+"""The calendar tab, the day panel, and the daily reminder: everything that
+shows notes by date -- the month grid, a day's panel, the hover previews,
+the days' colours and emoji, and the bar saying what is due today, which
+asks the grid's own question of one day. Grouped by the call graph (62% of
+these methods' calls are to each other); the rounded rectangle and the
+colour palette serve more than the calendar and stay on the app class.
 
-WHAT THIS IS FOR
-----------------
-Everything that shows notes by date: the month grid, the panel that opens
-when a day is clicked, the hover tooltips, per-day colours and emoji, and
-the reminder bar that appears when something is due today.
-
-WHY THESE BELONG TOGETHER
--------------------------
-Chosen from the call graph rather than from a heading: about 62% of the
-calls these methods make are to each other, the highest of any group in
-the class once the dialogs had moved out. The comment markers in the
-entry module were no help -- the block headed "Daily reminder bar"
-contained the attachments, the colour picker and the date picker.
-
-The reminder bar is here because it is date-driven: it asks which notes
-land on today and offers to open them, which is the same question the
-month grid asks for every visible day.
-
-WHAT DELIBERATELY STAYED BEHIND
--------------------------------
-``_rounded_rect`` and ``_show_color_palette`` are used by the calendar
-but are not *of* it -- one is a drawing primitive, the other picks
-colours for categories as well as for days. Both stay on the app class.
-
-RECURRING NOTES
----------------
-A repeating note is stored once and appears on many days, so nothing here
-compares stored dates. :func:`~noteorganizer.core.recurrence.expand_occurrences`
-is asked which notes fall in a window instead, which is also why a day can
-show a note whose own ``date`` field says something else entirely.
-
-See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
-keep them working.
+Nothing here compares stored dates: a repeating note is stored once, and
+expand_occurrences says which notes fall in a window. What a mixin is, and
+the two rules that keep them working: :mod:`noteorganizer.ui`.
 """
 
 import calendar as cal_module
@@ -40,8 +15,10 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime, timedelta, date as date_cls
+from types import SimpleNamespace
 
 from ..core.model import (
+    MAX_DAY_DECORATIONS,
     _darken_hex,
     _extract_first_emoji,
     _note_str,
@@ -59,20 +36,19 @@ from ..core.recurrence import (
     show_day,
 )
 from ..core.storage import (
+    count_noun,
     load_settings,
     save_setting,
     save_settings,
 )
 from ..core.themes import contrasting_fg
 from ..core import tables as core_tables
+from .dialogs import one_line
 
 
-# The open day's panel is drawn from the notes at the moment it opens, and
-# render_calendar -- the one signal that the notes changed -- asks whether
-# it still says the same thing. These say what it says, so the drawing and
-# that question cannot disagree. Plain functions rather than methods: they
-# only read, and the app class's method surface is pinned by
-# tools/class_api_baseline.json.
+# What the open day's panel says, for render_calendar to ask whether it
+# still does: one answer for the drawing and the question. Functions, not
+# methods -- they only read, and the class's surface is pinned.
 
 def _day_row_parts(app, base_note, date_str):
     """One row of a day's list as it is drawn: the title (🔁 first for a
@@ -82,7 +58,9 @@ def _day_row_parts(app, base_note, date_str):
     if is_recurring(base_note):
         title_text = "🔁 " + title_text
     icons = ""
-    if date_str in (base_note.get("overrides") or {}):
+    # A series' marks only: a note that no longer repeats keeps its days
+    # unused, for a turn-back-on (effective_note).
+    if is_recurring(base_note) and date_str in (base_note.get("overrides") or {}):
         # This day was edited with "only this occurrence" — it
         # keeps its own content and series edits don't reach it.
         icons += "  ✎"
@@ -114,19 +92,15 @@ def _day_note_key(base_note, date_str):
     return (base_note.get("id"), _note_str(note, "title"), _note_str(note, "body"),
             _note_str(note, "comments"), repr(note.get("checklist")),
             len(note.get("attachments") or []),
-            date_str in (base_note.get("overrides") or {}),
+            is_recurring(base_note) and date_str in (base_note.get("overrides") or {}),
             moved_from(base_note, date_str))
 
 
 def _notes_on_day(app, date_str):
-    """The notes on one day, as the drawn month holds them when it can.
-
-    render_calendar has already asked every note which days of the month
-    it lands on; hovering a day or opening its list asked all of them
-    again, for one day (14 ms at 5,000 notes, at every hover). The month's
-    answer is used when it is the day's month and nothing has changed
-    since it was worked out: no render pending, no refresh deferred, the
-    same list of notes, as many of them. Anything else asks the notes.
+    """The notes on one day, as the drawn month holds them when it can --
+    asked again of every note, a hover cost 14 ms at 5,000 notes. Used when
+    it is the day's month and nothing changed since: no render pending, no
+    refresh deferred, the same notes. Anything else asks the notes.
     """
     data = getattr(app, "_cal_month_data", None)
     if (data is not None
@@ -146,6 +120,9 @@ def _fit_title(app, label, head, title, tail, font):
     is what the label's edge used to cut first. The width is the label's
     own (it is stretched by its row), read each time it changes. A line
     that fits costs one measure, when the row is made."""
+    # One line, and no more of it than can ever show: a name kept whole in
+    # its file -- 3,000 lines, or 60,000 letters -- passed X's limit.
+    title = one_line(title, app.NAME_SHOWN_CHARS)
     whole = head + title + tail
     label.configure(text=whole, font=font)
     inset = 2 * sum(int(str(label.cget(o))) for o in
@@ -196,6 +173,15 @@ def _redraw_open_day(app, notes_by_date, year, month):
         app.show_day_list()
 
 
+def _reminder_words(count, today):
+    """The reminder bar's words: *count* notes for *today*, written out day
+    first, as every date in the app is shown."""
+    noun = "note" if count == 1 else "notes"
+    day = parse_date(today)
+    friendly = show_day(day, year=False) if day else today
+    return f"🔔  You have {count} {noun} for today ({friendly})."
+
+
 class CalendarViewMixin:
     """The calendar tab for :class:`NoteOrganizer`.
 
@@ -217,13 +203,9 @@ class CalendarViewMixin:
             btn.pack(side=side, padx=2)
             return btn
 
-        # Far right, out of the navigation's way: History outermost, with
-        # Today beside it (field feedback: the arrows belong to the title,
-        # the register belongs to the edge).
-        # One toggle, whose label says where the click takes you:
-        # "📋 History" on the grid, "📅 Calendar" on the register. It
-        # replaces the old in-view "← Calendar" button, so there is a
-        # single, unambiguous switch (field feedback).
+        # Far right, History outermost and Today beside it: one toggle whose
+        # label says where it goes -- "📋 History" on the grid, "📅 Calendar"
+        # on the register (field feedback).
         self._history_toggle_btn = nav_button(
             header, "📋 History", self._toggle_calendar_history,
             "right", width=11, font_size=9)
@@ -271,21 +253,16 @@ class CalendarViewMixin:
         def _cal_view_moved(first, last, _set=cal_sb.set):
             _set(first, last)
             self._cal_scroll_moved(first)
-        self.cal_scroll_canvas.configure(yscrollcommand=_cal_view_moved)
         cal_sb.pack(side="right", fill="y")
         self.cal_scroll_canvas.pack(side="left", fill="both", expand=True)
 
-        self.cal_scroll_inner = tk.Frame(self.cal_scroll_canvas)
+        # The month, its day and the register's head in one chunk; the
+        # register's rows below it, in chunks of their own: its pages, each
+        # series unfolded to up to 50 days, grow without end (RowStack).
+        self._cal_stack = self._row_stack(self.cal_scroll_canvas,
+                                          scrolled=_cal_view_moved)
+        self.cal_scroll_inner = self._cal_stack.group(bg="bg").add()
         self.track_theme(self.cal_scroll_inner, bg="bg")
-        self._cal_scroll_win = self.cal_scroll_canvas.create_window(
-            (0, 0), window=self.cal_scroll_inner, anchor="nw")
-
-        def _cal_scroll_config(e):
-            self.cal_scroll_canvas.configure(scrollregion=self.cal_scroll_canvas.bbox("all"))
-        self.cal_scroll_inner.bind("<Configure>", _cal_scroll_config)
-        self.cal_scroll_canvas.bind(
-            "<Configure>",
-            lambda e: self.cal_scroll_canvas.itemconfig(self._cal_scroll_win, width=e.width))
         self._bind_mousewheel_recursive(self.cal_scroll_inner, self.cal_scroll_canvas)
 
         # Day panel: appears only when a day is selected, at the bottom of the
@@ -296,12 +273,8 @@ class CalendarViewMixin:
         self.selected_day = None          # "YYYY-MM-DD" currently shown
         self._day_panel_mode = "empty"    # empty | list | note
 
-        # The panel outlives every note shown in it, so its right-click is
-        # bound once and asks what the panel shows. show_day_note bound it
-        # anew each time -- one more Tcl command at every note opened -- and
-        # the binding outlived the note: back on the day's list, a
-        # right-click on the panel's bare edge offered the menu of the last
-        # note opened.
+        # Bound once, asking what the panel shows: bound per note, it grew a
+        # Tcl command each time and offered the last note's menu on the list.
         def _panel_menu(event):
             shows = getattr(self, "_day_panel_shows", None)
             if self._day_panel_mode == "note" and shows and shows[0] == "note":
@@ -309,16 +282,14 @@ class CalendarViewMixin:
                                             occurrence_date=shows[1])
         self.day_panel.bind("<Button-3>", _panel_menu)
 
-        # History view state. The frame itself is persistent (built once,
-        # track_theme); its ROWS are rebuilt on every render and colour
-        # themselves with plain .configure — the two theming patterns,
-        # each on the right side of the persistent/rebuilt line.
+        # History: the frame persists (track_theme), its ROWS are rebuilt at
+        # every render with plain colours -- the two theming patterns.
         self.history_frame = tk.Frame(self.cal_scroll_inner)
         self.track_theme(self.history_frame, bg="bg")
         self._history_visible = False
         self._history_built = False
         self._history_bucket = "All"
-        self._history_expanded = set()   # note ids the user opened
+        self._history_expanded = set()   # series the user opened (_order_identity)
         self._history_shown = 50         # top-level rows rendered so far
         self._history_search_job = None
         # What each series costs to work out, kept by history_entries while
@@ -332,10 +303,8 @@ class CalendarViewMixin:
         self.cal_grid_frame.pack(side="top", fill="both", expand=True, padx=30, pady=(0, 10))
         self.cal_grid_frame.pack_propagate(False)
 
-        # The month is DRAWN on this canvas: every day cell, its number,
-        # dots, note titles and markers are shapes and text, not widgets
-        # (see _draw_calendar_grid). Built once; render_calendar and every
-        # change of size only redraw what is on it.
+        # The month is DRAWN here, shapes and text rather than widgets
+        # (_draw_calendar_grid); built once, only redrawn.
         self.cal_canvas = tk.Canvas(self.cal_grid_frame, highlightthickness=0,
                                     bg=self.colors["bg"])
         self.track_theme(self.cal_canvas, bg="bg")
@@ -349,6 +318,22 @@ class CalendarViewMixin:
         self.cal_canvas.bind("<Button-3>", self._cal_right_pressed)
         self.cal_canvas.bind("<Motion>", self._cal_pointer_moved)
         self.cal_canvas.bind("<Leave>", self._cal_pointer_left)
+        # The keyboard's way round the month, as the note list has its own:
+        # a ring on one day, the arrows move it, Return opens the day.
+        self.cal_canvas.configure(takefocus=1)
+        self._cal_key_day = None
+        for seq, days in (("<Left>", -1), ("<Right>", 1), ("<Up>", -7), ("<Down>", 7)):
+            self.cal_canvas.bind(seq, lambda e, d=days: self._cal_key_step(d))
+        for seq in ("<Return>", "<space>", "<KP_Enter>"):
+            self.cal_canvas.bind(seq, self._cal_key_open)
+        for seq in ("<Shift-F10>", "<App>", "<Menu>"):
+            try:
+                self.cal_canvas.bind(seq, self._cal_key_menu)
+            except tk.TclError:
+                pass        # a keysym this platform does not have
+        self._cal_has_keyboard = False
+        self.cal_canvas.bind("<FocusIn>", lambda e: self._cal_keyboard_here(True), add="+")
+        self.cal_canvas.bind("<FocusOut>", lambda e: self._cal_keyboard_here(False), add="+")
         # The wheel scrolls the calendar's own area, as it did over the old
         # cells; bound once, since the canvas outlives every render.
         self._bind_mousewheel_recursive(self.cal_grid_frame, self.cal_scroll_canvas)
@@ -359,28 +344,19 @@ class CalendarViewMixin:
         self._cal_last_font_size = None
 
         def _on_resize(event):
-            if getattr(self, "notebook", None) is None:
+            if self.notebook is None:
                 return
             if not self._is_calendar_visible():
                 return  # only when the Calendar tab is actually showing
-            if getattr(self, "_history_visible", False):
+            if self._history_visible:
                 return  # the grid is hidden behind History; nothing to redraw
             size = self._cal_note_font_size()
             if size != self._cal_last_font_size:
                 self._cal_last_font_size = size
                 self.render_calendar()
-        # On the grid's own <Configure>: the grid changes size exactly when
-        # the step can change -- the window resized while the calendar is
-        # showing, AND the calendar shown again after the window was
-        # resized somewhere else (on the Notes tab, for one -- qa4 walks
-        # it), which the window's own Configure never reports. It used to be
-        # bound on the window with self.bind, which also ran it for every
-        # widget laid out anywhere in the app -- 3,882 times for one
-        # rebuild of a 300-note list -- and that storm was what happened
-        # to cover the second case. The drawing sets the grid's height to
-        # fit the month, which brings this back, but the window's width --
-        # and so the step -- has not changed by then, so it cannot feed
-        # itself.
+        # The grid's own <Configure>: it changes size exactly when the step
+        # can, a resize made on another tab included. On the window, it ran
+        # for every widget laid out anywhere -- 3,882 times a list rebuild.
         self.cal_grid_frame.bind("<Configure>", _on_resize, add="+")
 
         self.bind_all("<Prior>", lambda e: self._calendar_key(e, months=-1))
@@ -390,13 +366,9 @@ class CalendarViewMixin:
         self.bind_all("<Home>", lambda e: self._calendar_key(e, today=True))
 
     def _is_calendar_visible(self):
-        """True only if the Calendar tab is both selected AND actually on
-        screen. The notebook's own idea of 'which tab is selected' doesn't
-        change just because the Settings page is currently covering it (they're
-        siblings, and showing one doesn't clear the other's selection) — so
-        checking the tab index alone isn't enough on its own, or calendar
-        keyboard shortcuts and resize-driven relayout could silently act on a
-        calendar the user can't currently see, behind the Settings page."""
+        """True only if the Calendar tab is both selected AND on screen: the
+        Settings page covers it without changing the selected tab, and the
+        calendar's keys and relayout acted on a calendar nobody could see."""
         try:
             if not self.notebook.winfo_ismapped():
                 return False
@@ -414,9 +386,8 @@ class CalendarViewMixin:
         if not self._is_calendar_visible():
             return
 
-        # bind_all delivers the key to whichever widget has focus, so the
-        # event's own widget is the reliable signal. focus_get() is only a
-        # fallback for synthetic calls.
+        # The event's own widget is the signal (focus_get() only for synthetic
+        # calls); every kind of box Tk types into, built here or not.
         typing_widgets = (tk.Text, tk.Entry, tk.Spinbox, ttk.Entry, ttk.Combobox)
         source = getattr(event, "widget", None)
         try:
@@ -426,7 +397,7 @@ class CalendarViewMixin:
         if any(isinstance(w, typing_widgets) for w in (source, focused)):
             return
 
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             # The register covers the month: the keys page the register, and
             # Home goes to its top. They used to move the hidden month, which
             # showed on the way back -- three PgDn from July came back October.
@@ -453,12 +424,24 @@ class CalendarViewMixin:
         if not 1 <= year <= 9999:
             return
         self.cal_year, self.cal_month = year, month
-        self.render_calendar()
+        if not self._leave_history_for_the_month():
+            self.render_calendar()
 
     def go_to_today(self):
         today = datetime.now()
         self.cal_year, self.cal_month = today.year, today.month
-        self.render_calendar()
+        self._cal_key_day = today.strftime("%Y-%m-%d")
+        if not self._leave_history_for_the_month():
+            self.render_calendar()
+
+    def _leave_history_for_the_month(self):
+        """A month asked for by a button is shown, as a History row's date
+        is: moved behind the register, it showed only on the way back. True
+        when it left, the month (set first) drawn by the leaving, once."""
+        if getattr(self, "_history_visible", False):
+            self._hide_calendar_history()
+            return True
+        return False
 
     def _cal_note_font_size(self):
         """Two-step sizing: bigger note previews in a wide window, smaller in a
@@ -469,10 +452,9 @@ class CalendarViewMixin:
             w = self.px(900)
         return 11 if w >= self.px(1150) else 9
 
-    # The month grid's geometry, as the widget grid it replaces laid it out:
-    # seven equal columns, a row of weekday names, and week rows all as tall
-    # as the busiest day needs (never under 90), each cell inset by 3. The
-    # grid's frame starts 520 pixels tall and then takes the month's height.
+    # The grid's geometry: seven equal columns, a row of weekday names, week
+    # rows as tall as the busiest day needs (at least 90), cells inset by 3;
+    # 520 pixels tall until it takes the month's height.
     CAL_GRID_HEIGHT = 520
     CAL_CELL_PAD = 3
     CAL_ROW_MIN = 90
@@ -497,11 +479,8 @@ class CalendarViewMixin:
             return
         font = self._cal_font(("Segoe UI Emoji", 10))[0]
         right = rec["x1"] - self.CAL_CELL_PAD - self.CAL_LABEL_INSET
-        # The corner shares its row with the day's number, centred above it:
-        # three markers at the default window's cell width printed over the
-        # number (the widget grid's opaque badge hid it instead). So the
-        # badge keeps to the room right of the number, and the markers that
-        # do not fit there are counted: "⭐+2" rather than a covered "15".
+        # The badge keeps to the room right of the day's number, and markers
+        # that do not fit are counted -- "⭐+2", not a covered "15".
         number = cv.bbox(rec["items"]["day"]) if "day" in rec["items"] else None
         room = right - (number[2] + 4) if number else right - rec["x0"]
         badge_text = f"+{len(markers)}"
@@ -526,39 +505,16 @@ class CalendarViewMixin:
         self._draw_day_badge(date_str)
 
     def render_calendar(self):
-        if not hasattr(self, "cal_grid_frame"):
-            return
-        # Rebuilding ~35-42 day cells for a month nobody is looking at is
-        # work the user pays for and never sees. Measured from the Notes
-        # tab: 36ms and 98 widgets, on every delete, save, import and
-        # category change -- a quarter of what a delete costs, spent on
-        # the other tab.
-        #
-        # apply_theme has skipped this since the theme-switch flicker
-        # work, with the reasoning written beside it; every OTHER caller
-        # went through regardless. The decision belongs here, once, so
-        # all thirty-one call sites are right by construction rather than
-        # by each having remembered.
-        #
-        # Deferring is only safe because something catches it up before
-        # the calendar can be seen again. There are exactly four ways
-        # back to it, and all four are covered: switching tabs
-        # (_on_tab_changed), leaving Settings (hide_settings_page),
-        # "Back to Calendar" (which selects the tab, so the first), and
-        # already standing on it -- where this guard does not fire at
-        # all. _calendar_is_showing() answers the question from the
-        # notebook's own selection rather than winfo_ismapped(), which
-        # pack() does not update synchronously.
+        # A month nobody sees is not drawn (36 ms at every delete, from the
+        # Notes tab), decided here for every caller; each way back to the
+        # calendar catches up (_on_tab_changed, hide_settings_page).
         if not self._calendar_is_showing():
             self._calendar_needs_render = True
             return
 
-        # Expand every note's occurrences across the visible month only.
-        # Recurring notes are stored once; their dates are computed here.
-        # Worked out BEFORE the title and the month's record change: when
-        # this raised (it did, for December 9999), the new title went up
-        # over the old month's days, and a click opened a day of the month
-        # the title said was gone.
+        # Every note's days in the visible month, worked out BEFORE the title
+        # changes: when this raised (December 9999), the new title stood over
+        # the old month's days.
         month_start = date_cls(self.cal_year, self.cal_month, 1)
         month_end = date_cls(
             self.cal_year, self.cal_month,
@@ -588,20 +544,13 @@ class CalendarViewMixin:
         # A fresh drawing has no selected-day border -- re-mark the open
         # day, if its month is on screen.
         self._update_selected_day_outline()
-        # The open day's panel is one more view of the same data, and it
-        # was drawn when the day opened: a delete's Undo put the note back
-        # on the grid and left the open list without it, a category change
-        # left its stripe in the old colour. So every route that redraws
-        # the month redraws the open day -- when what it shows has changed,
-        # and only then, so paging the months past a busy day costs nothing.
+        # The open day is redrawn with the month, when what it shows changed:
+        # an Undo's note was missing from it, a category's stripe stale.
         _redraw_open_day(self, notes_by_date, self.cal_year, self.cal_month)
-        # render_calendar is the single signal "calendar data changed,
-        # redraw" — every mutation (delete, restore, save, duplicate)
-        # calls it. When the History register is the visible view, it is
-        # a THIRD view of the same data and must refresh here too, or a
-        # delete only showed after a trip out to the grid and back
-        # (field report).
-        if getattr(self, "_history_visible", False):
+        # render_calendar is the one "the data changed" signal: the History,
+        # when shown, refreshes here too -- a delete showed only after a trip
+        # to the grid and back (field report).
+        if self._history_visible:
             self._render_calendar_history()
 
     # ---------- The month grid, drawn ----------
@@ -620,33 +569,21 @@ class CalendarViewMixin:
         return found
 
     def _draw_calendar_grid(self):
-        """Draw the month on the calendar's canvas.
-
-        The grid used to be built of widgets -- a Frame per day, a Label for
-        its number, each dot, each note title, a Frame per divider: 216
-        windows for a month holding 46 notes, every one of which Windows had
-        to place and paint again at each step of a window resize. The same
-        cells are now rectangles and text on one canvas.
-
-        Laid out as the widget grid did, measured on it: seven columns of
-        floor(i * width / 7), a row of weekday names 26 pixels deep, and week
-        rows as tall as the tallest day needs (never under 90), each cell
-        inset by 3. Inside a cell, everything sits where pack put it -- the
-        comments below give the paddings it used. A day's content is drawn
-        at the origin first, because the row height depends on the tallest
-        day, and moved into place once that is known.
+        """Draw the month on the calendar's canvas, as rectangles and text --
+        as widgets, 216 windows for 46 notes were placed again at every step
+        of a resize. Laid out as the widget grid was: columns of
+        floor(i * width / 7), a 26-pixel row of weekday names, week rows as
+        the CAL_* constants say. A day is drawn at the origin, then moved
+        once the tallest day of its row is known.
         """
         cv = self.cal_canvas
         cv.delete("cal")
         self._cal_cells = {}
-        # The hover is forgotten with the drawing it was about, and so is
-        # the preview it put up. Nothing else would take that down: the
-        # pointer has not moved (PgDn changed the month under it), and over
-        # a gap or the weekday names "nothing under the pointer" matched
-        # the forgotten "nothing", so July's preview sat over August.
+        # The hover and its preview go with the drawing: the pointer had not
+        # moved (PgDn changed the month), and July's preview sat over August.
         self._cal_hover_key = None
         self.hide_day_tooltip()
-        data = getattr(self, "_cal_month_data", None)
+        data = self._cal_month_data
         if data is None:
             return
         width = cv.winfo_width()
@@ -712,6 +649,101 @@ class CalendarViewMixin:
                 self.cal_grid_frame.configure(height=total)
         except tk.TclError:
             pass
+        self._cal_paint_key_ring()
+
+    # ---- The keyboard on the month ----
+
+    def _cal_keyboard_here(self, here):
+        """The canvas took or lost the keyboard: its ring follows."""
+        self._cal_has_keyboard = here
+        self._cal_paint_key_ring()
+
+    def _cal_key_date(self):
+        """The day the keyboard is on in the month shown: the one it was
+        left on; after a change of month, the same day of the month; else
+        the open day, today, or the first."""
+        cells = self._cal_cells or {}
+        if not cells:
+            return None
+        key = self._cal_key_day
+        if key in cells:
+            return key
+        days = sorted(cells)
+        was = parse_date(key) if key else None
+        if was is not None:
+            key = days[min(was.day, len(days)) - 1]
+        else:
+            today = datetime.now().strftime("%Y-%m-%d")
+            key = next((d for d in (self.selected_day, today) if d in cells),
+                       days[0])
+        self._cal_key_day = key
+        return key
+
+    def _cal_key_step(self, days):
+        """An arrow: the ring goes a day, or a week, that way -- into the
+        next month or the last one when it runs off this one."""
+        here = self._cal_key_date()
+        day = parse_date(here) if here else None
+        if day is None:
+            return "break"
+        try:
+            to = day + timedelta(days=days)
+        except OverflowError:
+            return "break"
+        self._cal_key_day = to.isoformat()
+        if (to.year, to.month) != (self.cal_year, self.cal_month):
+            self.cal_year, self.cal_month = to.year, to.month
+            self.render_calendar()
+        self._cal_paint_key_ring()
+        rec = self._cal_cells.get(self._cal_key_day)
+        if rec is not None:
+            self._bring_into_sight(self.cal_canvas, part=(rec["y0"], rec["y1"]))
+        return "break"
+
+    def _cal_key_open(self, event=None):
+        """Return or Space: the day opens, as a click on it does. Enter held
+        down opens it once, and the day's own controls do not take the
+        repeats for presses (_enter_repeats)."""
+        if self._enter_repeats(event):
+            return "break"
+        day = self._cal_key_date()
+        if day:
+            self.open_day_popup(day)
+        return "break"
+
+    def _cal_key_menu(self, _event=None):
+        """Shift+F10 or the menu key: the day's right-click menu, at it."""
+        day = self._cal_key_date()
+        rec = self._cal_cells.get(day) if day else None
+        if rec is None:
+            return "break"
+        cv = self.cal_canvas
+        x, y = rec["x0"] + 6, rec["y1"] - 6
+        self.show_day_context_menu(
+            SimpleNamespace(widget=cv, x=x, y=y, x_root=cv.winfo_rootx() + x,
+                            y_root=cv.winfo_rooty() + y), day)
+        return "break"
+
+    def _cal_paint_key_ring(self):
+        """The keyboard's ring round its day, in the gap between the cells,
+        while the canvas holds the keyboard; the open day's own outline
+        is drawn inside the cell, in the accent."""
+        cv = self.cal_canvas
+        if cv is None:
+            return
+        try:
+            cv.delete("cal_key")
+            if not self._cal_has_keyboard:
+                return
+            rec = self._cal_cells.get(self._cal_key_date())
+            if rec is None:
+                return
+            cv.create_rectangle(rec["x0"] - 2, rec["y0"] - 2,
+                                rec["x1"] + 2, rec["y1"] + 2,
+                                outline=self._focus_ring(), width=self.px(2),
+                                tags=("cal_key",))
+        except tk.TclError:
+            pass
 
     def _draw_cal_cell_content(self, date_str, day, day_notes, is_today, w):
         """Draw one day's number, dots, titles and "+N more" with the cell's
@@ -723,10 +755,8 @@ class CalendarViewMixin:
         tag = "calday" + date_str
         tags = ("cal", tag)
         day_color = self.day_colors.get(date_str)
-        # On a painted day, whichever of near-black and white reads on that
-        # paint -- always white made the number, titles and markers all but
-        # vanish on the palette's yellows and light teals (1.3:1). The
-        # theme's own colours otherwise.
+        # On a painted day, near-black or white, whichever reads on it --
+        # white vanished on the yellows (1.3:1); else the theme's colours.
         fg = contrasting_fg(day_color) if day_color else c["text"]
         items = {}
         chips = []
@@ -751,10 +781,8 @@ class CalendarViewMixin:
                     colours.append(colour)
             dot_w = dot_font.measure("●") + 2 * inset   # each dot's Label
             step = dot_w + 2                            # ...and padx 1 either side
-            # As many dots as the cell holds, the last place saying "and
-            # more" when the colours outnumber them. The widget grid clipped
-            # a row of dots at its cell's edge; a drawing clips nothing, and
-            # a day of eight colours spilled its dots into the next days.
+            # As many dots as the cell holds, the last saying "and more": a
+            # drawing clips nothing, and eight colours spilled into the next day.
             fits = max(2, (w - 4) // step)
             shown = colours if len(colours) <= fits else colours[:fits - 1]
             places = len(shown) + (len(shown) < len(colours))
@@ -831,7 +859,7 @@ class CalendarViewMixin:
         frame's height to fit its rows), and needs nothing."""
         if event.width == getattr(self, "_cal_drawn_width", None):
             return
-        if getattr(self, "_cal_month_data", None) is None:
+        if self._cal_month_data is None:
             return
         if not self._calendar_is_showing():
             return
@@ -989,31 +1017,35 @@ class CalendarViewMixin:
         due = self.notes_on_date(today)
         if not due:
             return
-        # Mark as shown for today so it won't reappear on the next launch.
+        self._render_reminder_bar(len(due), today)
+        # Marked once it is on screen, so it won't reappear on the next
+        # launch. Marked first, a bar that failed to draw was spent unseen.
         settings["reminder_last_shown"] = today
         save_settings(settings)
-        self._render_reminder_bar(len(due), today)
 
     def _render_reminder_bar(self, count, today):
+        self._reminder_bar_day = today
         for w in self.reminder_bar.winfo_children():
             w.destroy()
-        self.reminder_bar.pack(fill="x", side="top", before=self.notebook)
+        # Above whichever page is showing: with Settings open the notebook
+        # is not packed, and Tk refused to pack the bar before it.
+        page = (self.settings_page if getattr(self, "_settings_open", False)
+                else self.notebook)
+        self.reminder_bar.pack(fill="x", side="top", before=page)
 
-        noun = "note" if count == 1 else "notes"
-        # Written out day first, as every date in the app is shown.
-        day = parse_date(today)
-        friendly = show_day(day, year=False) if day else today
-        msg = tk.Label(
+        msg = self._reminder_msg = tk.Label(
             self.reminder_bar,
-            text=f"🔔  You have {count} {noun} for today ({friendly}).",
+            text=_reminder_words(count, today),
             bg=self.colors["accent"], fg=self._on_fill("accent"), font=("Segoe UI", 9, "bold"),
             anchor="w", cursor="hand2"
         )
-        msg.pack(side="left", padx=14, pady=6)
-        # Clicking the text jumps to today's notes in the calendar. Kept on
-        # a half-written template ("Save changes?" answered Cancel), the
-        # click stops here: the window's click-outside, still to run for
-        # it, would ask the same question again.
+        # Both words are Tab stops, ringed in the bar's own words' colour;
+        # a pixel of padding each gives the ring its room.
+        self._ring_round(msg, on=self._on_fill("accent"))
+        msg.pack(side="left", padx=13, pady=5)
+        self._pressable(msg, lambda: self._open_today_from_reminder(today))
+        # The text jumps to today's notes. Kept on a half-written template
+        # (Cancel), the click stops here, or click-outside asked again.
         msg.bind("<Button-1>",
                  lambda e: ("break" if self._open_today_from_reminder(today)
                             is False else None))
@@ -1021,8 +1053,10 @@ class CalendarViewMixin:
         close = tk.Label(self.reminder_bar, text="✕", bg=self.colors["accent"],
                          fg=self._on_fill("accent"), font=("Segoe UI", 10, "bold"),
                          cursor="hand2")
-        close.pack(side="right", padx=12)
+        self._ring_round(close, on=self._on_fill("accent"))
+        close.pack(side="right", padx=11)
         close.bind("<Button-1>", lambda e: self.dismiss_reminder())
+        self._pressable(close, self.dismiss_reminder)
 
     def _open_today_from_reminder(self, today):
         """The bar's click lands on the day it names, on screen: on its own
@@ -1035,7 +1069,7 @@ class CalendarViewMixin:
         if not self._leave_settings_for_the_editor():
             return False
         self.notebook.select(self.TAB_CALENDAR)
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             self._hide_calendar_history()
         d = parse_date(today)
         if d is not None:
@@ -1047,16 +1081,38 @@ class CalendarViewMixin:
         """Hide the reminder bar for the rest of the session."""
         self.reminder_bar.pack_forget()
 
-    def show_day_summary_tooltip(self, date_str):
-        """Compact, TITLES-ONLY list for hovering the day cell itself (not a
-        specific note's chip). Deliberately shows no note bodies — with many
-        notes on one day this would otherwise balloon into a huge box, which
-        is exactly what this avoids.
+    def _watch_the_day(self):
+        """Once a minute: when the date has changed since the last look, a
+        bar for an earlier day goes and the new day's is asked for. Asked
+        only at start, an app left open overnight, or woken from sleep the
+        next day, never reminded about the new day's notes."""
+        if not self._still_alive():
+            return
+        today = datetime.now().strftime("%Y-%m-%d")
+        try:
+            if today != self._reminder_day:
+                if getattr(self, "_reminder_bar_day", None) not in (None, today):
+                    self.dismiss_reminder()
+                self.maybe_show_reminder()
+            elif (getattr(self, "_reminder_bar_day", None) == today
+                  and self.reminder_bar.winfo_manager() == "pack"):
+                # Counted once when drawn, it named notes deleted since and
+                # missed ones added: counted again, and gone with the last.
+                due = len(self.notes_on_date(today))
+                if not due:
+                    self.dismiss_reminder()
+                else:
+                    self._reminder_msg.configure(text=_reminder_words(due, today))
+        finally:
+            # Whatever the look met, the next one comes: an error here used
+            # to end the watch for the rest of the session.
+            self._reminder_day = today
+            self.after(60_000, self._watch_the_day)
 
-        Nothing hovers over an open menu. A right-click menu keeps the
-        app's event loop running, so drifting the mouse a few pixels onto
-        a neighbouring cell still fires this -- and the preview drew
-        itself over the menu the user was reading.
+    def show_day_summary_tooltip(self, date_str):
+        """A compact, TITLES-ONLY list for hovering a day cell -- no bodies,
+        or a busy day ballooned. Nothing hovers over an open menu: the mouse
+        drifting onto the next cell drew this over the menu being read.
         """
         if getattr(self, "_context_menu_open", False):
             return
@@ -1080,7 +1136,7 @@ class CalendarViewMixin:
         day = parse_date(date_str)
         friendly = (show_day(day, year=False, short_month=True) if day
                     else date_str)
-        tk.Label(container, text=f"{friendly} — {len(day_notes)} note(s)",
+        tk.Label(container, text=f"{friendly} — {count_noun(len(day_notes), 'note')}",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
 
@@ -1145,16 +1201,12 @@ class CalendarViewMixin:
                      fg=self.colors["accent_text"], font=("Segoe UI", 8, "italic"),
                      anchor="w", justify="left").pack(anchor="w")
 
-        # The raw body used to go straight in here, tables and all, so a
-        # note with a table hovered as a wall of vertical bars -- and
-        # unlike the panel below, this preview never even said a table
-        # was there. It is the same quick look, so it follows the same
-        # rule: the note's words, and a chip for what else it carries.
+        # The panel's rule: the note's words and a chip for what else it
+        # carries -- the raw body hovered as a wall of table pipes.
         preview, tables_here = core_tables.preview_text(_note_str(note, "body"))
         preview = preview.strip()
         if preview:
-            if len(preview) > 150:
-                preview = preview[:150].strip() + "…"
+            preview = core_tables.glimpse(preview, 150)
             tk.Label(inner, text=preview, bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w", justify="left",
                      wraplength=self.px(260)).pack(anchor="w", pady=(3, 0))
@@ -1217,44 +1269,40 @@ class CalendarViewMixin:
         body.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         canvas = tk.Canvas(body, bg=self.colors["sidebar"], highlightthickness=0)
         sb = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
-        inner = tk.Frame(canvas, bg=self.colors["sidebar"])
-        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        win = canvas.create_window((0, 0), window=inner, anchor="nw")
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
-        canvas.configure(yscrollcommand=sb.set)
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        # A day can hold every note there is: past what one frame scrolls.
+        inner = self._row_stack(canvas, scrolled=sb.set).group(bg="sidebar",
+                                                               every=32)
 
         day_notes = _notes_on_day(self, date_str)
         rows = _day_list_rows(self, day_notes, date_str)
         self._day_panel_shows = ("list", date_str, _day_list_key(rows), None)
         if not day_notes:
-            tk.Label(inner, text="No notes for this day yet.",
+            tk.Label(inner.add(), text="No notes for this day yet.",
                      bg=self.colors["sidebar"], fg=self.colors["subtext"],
                      font=("Segoe UI", 10)).pack(pady=10)
-            self._bind_mousewheel_recursive(inner, canvas)
+            for chunk in inner.chunks:
+                self._bind_mousewheel_recursive(chunk, canvas)
             return
 
         for base_note, (title_text, icons, color) in rows:
-            row = tk.Frame(inner, bg=self.colors["card"], cursor="hand2")
+            row = tk.Frame(inner.add(), bg=self.colors["card"], cursor="hand2")
+            # The keyboard's ring rests in the row's own fill; the title's
+            # padding gives back the pixel it takes.
+            self._ring_round(row)
             row.pack(fill="x", pady=3)
             stripe = tk.Frame(row, bg=color, width=4)
             stripe.pack(side="left", fill="y")
 
-            # No per-row delete button here. It was the only one in the
-            # app: a lone grey glyph with no word, packed hard against
-            # the scrollbar, where a slipped click destroys a note. The
-            # rest of the app already says how a list behaves -- the
-            # sidebar's note cards offer their actions through the
-            # right-click menu and carry no button of their own, and a
-            # labelled Delete appears only where a SINGLE note is open.
-            # This row now does the same, and the menu bound below
-            # carries six other actions besides.
+            # No delete button on a row, as on the list's cards: a slipped
+            # click by the scrollbar destroyed a note. Its actions are in the
+            # right-click menu; Delete is labelled where one note is open.
             lbl = tk.Label(row, bg=self.colors["card"], fg=self.colors["text"],
                            anchor="w")
             _fit_title(self, lbl, "", title_text, icons,
                        self._cal_font(("Segoe UI", 10, "bold"))[0])
-            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=7)
 
             def _open(e, n=base_note, d=date_str):
                 self.show_day_note(n, d)
@@ -1265,18 +1313,17 @@ class CalendarViewMixin:
             for w in (row, stripe, lbl):
                 w.bind("<Button-1>", _open)
                 w.bind("<Button-3>", _context)
+            self._pressable(row, lambda n=base_note, d=date_str:
+                            self.show_day_note(n, d), menu=_context)
 
         # Bind the wheel now that every note row exists.
-        self._bind_mousewheel_recursive(inner, canvas)
+        for chunk in inner.chunks:
+            self._bind_mousewheel_recursive(chunk, canvas)
 
     def _open_note_from_grid(self, base_note, date_str):
-        """Land on ONE note from a chip in the month grid.
-
-        The day panel has to be showing that day before a single note can
-        be drawn into it -- show_day_note's own "← Back" returns to the
-        day's list, and that list is whatever open_day_popup last put
-        there. Both calls, in this order, are the same landing the History
-        register's rows already use.
+        """Land on ONE note from a chip in the month grid: the day's list
+        first, which its "← Back" returns to, then the note -- the landing
+        the History's rows use.
         """
         self.open_day_popup(date_str)
         self.show_day_note(base_note, date_str)
@@ -1296,11 +1343,8 @@ class CalendarViewMixin:
                   bg=self.colors["card"], fg=self.colors["text"], relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", ipadx=6, ipady=2)
-        # A repeating note opens two ways, and the panel names both: this
-        # day on its own, or the whole series. One "Open in editor" opened
-        # the day, under the series' date and repeat as fields to change,
-        # and a field test could not find how to edit just one day
-        # (2026-10-12). The right-click menu says the same two things.
+        # A repeating note names both ways to open, this day or the series:
+        # one "Open in editor" hid how to edit one day (field test).
         if is_recurring(base_note):
             tk.Button(top, text="✏ Edit this day",
                       command=lambda: self._open_note_from_calendar(base_note, date_str),
@@ -1334,16 +1378,8 @@ class CalendarViewMixin:
                              anchor="w", wraplength=self.px(700), justify="left")
         title_lbl.pack(fill="x", padx=15, pady=(2, 4))
 
-        # The actions menu, which this panel was the only note surface in
-        # the app to lack. It was not missing "another way to delete" --
-        # it was missing Open/Edit, Pin, Export as file, and, for a
-        # repeating note, editing just this day, editing the whole
-        # series, and resetting this day back to the series content.
-        #
-        # occurrence_date is passed, and that is the whole point of
-        # passing it: this panel is opened ON a date, so the menu must
-        # offer to edit THAT day rather than silently acting on the
-        # series behind it.
+        # The actions menu every note surface has, given the day: the panel
+        # is opened ON a date, so the menu edits THAT day, not the series.
         def _panel_menu(event):
             self.show_note_context_menu(event, base_note,
                                         occurrence_date=date_str)
@@ -1352,26 +1388,15 @@ class CalendarViewMixin:
         for widget in (top, title_lbl):
             widget.bind("<Button-3>", _panel_menu)
 
-        # The preview is a QUICK LOOK, not the editor: it shows the note's
-        # plain text and, like the note-list cards, only SAYS what else the
-        # note carries (a table, a checklist, comments) rather than trying
-        # to render it. Tables drawn here were raw pipe soup, and comments
-        # dumped inline read as part of the body -- both belong in the
-        # editor, which is one "Open in editor" click away.
-        # Both halves from one pass, because the sentence "this note has
-        # N tables" and the text beside it have to be about the same
-        # lines. They were not: the count and the strip both asked
-        # is_table_row(), which is strict on purpose -- it decides what
-        # the EDITOR treats as a row, so a line typed past its last cell
-        # is not one. Such a line was therefore neither counted nor
-        # removed, and the preview announced five tables and then drew a
-        # sixth as pipes. Field-reported: "I only see vertical lines."
+        # A QUICK LOOK: plain text, and only SAYS what else the note carries.
+        # The count and the text from one pass, or "five tables" stood over
+        # a sixth drawn as pipes (field report: "I only see vertical lines").
         note_body = _note_str(note, "body")
         text_only, table_count = core_tables.preview_text(note_body)
         text_only = re.sub(r"\n{3,}", "\n\n", text_only).strip("\n")
 
         chips = []
-        if date_str in (base_note.get("overrides") or {}):
+        if is_recurring(base_note) and date_str in (base_note.get("overrides") or {}):
             chips.append("✎ edited for this day")
         came = moved_from(base_note, date_str)
         if came is not None:
@@ -1403,7 +1428,11 @@ class CalendarViewMixin:
         txt_sb.config(command=txt.yview)
         txt_sb.pack(side="right", fill="y")
         txt.pack(side="left", fill="both", expand=True)
-        txt.insert("1.0", text_only or "(empty note)")
+        # "(empty note)" only of a note with nothing: one holding a checklist, a
+        # table or files was called empty under the chips that named them.
+        carries = bool(table_count or (isinstance(checklist, list) and checklist)
+                       or _note_str(note, "comments").strip() or note.get("attachments"))
+        txt.insert("1.0", text_only or ("(no text)" if carries else "(empty note)"))
         txt.config(state="disabled")
 
     def _open_note_from_calendar(self, base_note, date_str, whole_series=False):
@@ -1416,10 +1445,9 @@ class CalendarViewMixin:
         remembered = {"year": self.cal_year, "month": self.cal_month,
                       "date_str": date_str, "origin": "edit"}
         self.notebook.select(self.TAB_NOTES)
-        # Going back to the note still in the editor -- to fix a date it
-        # could not save -- means this note was not opened, and the way
-        # back must not be re-pointed at it.
-        if not self.open_note_in_tab(
+        # Gone back to fix a date the editor could not save, this note was not
+        # opened; the note on screen is left as it is (_open_unless_shown).
+        if not self._open_unless_shown(
                 base_note, occurrence_date=None if whole_series else date_str):
             return
         self._pending_calendar_return = remembered
@@ -1430,18 +1458,14 @@ class CalendarViewMixin:
         the Notes tab (the editor lives there), but we remember where we came
         from in the calendar so saving (or 'Back to Calendar') returns you to
         the exact same month/day — it shouldn't feel like being sent away."""
-        # Flush before clearing, like every other route into an empty
-        # editor — this path once discarded pending edits silently. And
-        # going back to fix a date the save could not store means stay,
-        # here as on every route that would replace the editor.
+        # Flushed first, as every route into an empty editor is; going back to
+        # fix a date the save could not store means stay.
         if self._flush_autosave() is False:
             return
         self.notebook.select(self.TAB_NOTES)
         self.new_note()
-        # Set AFTER new_note — new_note clears any pending return, since
-        # every other route into a fresh editor means the calendar trip
-        # is over (a pending that outlived a delete once made a later,
-        # unrelated Save yank the user onto a stale calendar day).
+        # Set AFTER new_note, which clears any pending return: one that
+        # outlived a delete made a later Save jump to a stale calendar day.
         self._pending_calendar_return = {
             "year": self.cal_year, "month": self.cal_month,
             "date_str": date_str, "origin": "add",
@@ -1462,14 +1486,14 @@ class CalendarViewMixin:
         bar is a separate device and never changes; a selected today
         simply wears both."""
         selected = (self.selected_day
-                    if getattr(self, "_day_panel_mode", "empty") != "empty"
+                    if self._day_panel_mode != "empty"
                     else None)
-        cv = getattr(self, "cal_canvas", None)
+        cv = self.cal_canvas
         if cv is None:
             return
         try:
             cv.delete("cal_selected")
-            rec = (getattr(self, "_cal_cells", None) or {}).get(selected)
+            rec = (self._cal_cells or {}).get(selected)
             if rec is None:
                 return
             # Two pixels inside the cell's edge, where the Frame's
@@ -1483,7 +1507,7 @@ class CalendarViewMixin:
     def _toggle_calendar_history(self):
         """Swap the month grid (and day panel) for the History register,
         or bring the grid back."""
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             self._hide_calendar_history()
         else:
             self._show_calendar_history()
@@ -1497,19 +1521,18 @@ class CalendarViewMixin:
         self.close_day_panel()
         self.cal_grid_frame.pack_forget()
         self._history_visible = True
-        self.history_frame.pack(side="top", fill="both", expand=True,
-                                padx=30, pady=(0, 10))
-        if hasattr(self, "_history_toggle_btn"):
-            self._history_toggle_btn.configure(text="📅 Calendar")
+        # Its 10 px below go under the rows, which stand under this chunk.
+        self.history_frame.pack(side="top", fill="both", expand=True, padx=30)
+        self._history_toggle_btn.configure(text="📅 Calendar")
         self._render_calendar_history()
 
     def _hide_calendar_history(self):
         self._history_visible = False
         self.history_frame.pack_forget()
+        self._history_rows.clear()
         self.cal_grid_frame.pack(side="top", fill="both", expand=True,
                                  padx=30, pady=(0, 10))
-        if hasattr(self, "_history_toggle_btn"):
-            self._history_toggle_btn.configure(text="📋 History")
+        self._history_toggle_btn.configure(text="📋 History")
         self.render_calendar()
 
     def _build_history_ui(self):
@@ -1530,6 +1553,7 @@ class CalendarViewMixin:
                          insertbackground="text")
         search.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
         self.add_placeholder(search, "Search all calendar entries...")
+        self._history_search_entry = search
         self._add_paste_menu(search)
         self._guard_entry_astral(search)
         self._history_search_var.trace_add(
@@ -1547,13 +1571,10 @@ class CalendarViewMixin:
             b.pack(side="left", padx=(0, 6), ipadx=8, ipady=2)
             self._history_chip_btns[bucket] = b
 
-        self._history_rows = tk.Frame(self.history_frame)
-        self.track_theme(self._history_rows, bg="bg")
-        self._history_rows.pack(fill="both", expand=True)
-        # The frame outlives every render, so its wheel is bound here, once;
-        # each render binds only the rows it makes (see there).
-        self._bind_mousewheel_recursive(self._history_rows,
-                                        self.cal_scroll_canvas)
+        # The rows stand below this chunk, in chunks a render makes and takes
+        # away (RowStack): the wheel goes to each one as it is made.
+        self._history_rows = self._cal_stack.group(bg="bg", padx=30,
+                                                   pady=(0, 10), every=32)
 
     def _history_set_bucket(self, bucket):
         self._history_bucket = bucket
@@ -1572,17 +1593,35 @@ class CalendarViewMixin:
             300, self._render_calendar_history)
 
     def _history_query(self):
-        q = self._history_search_var.get()
-        return "" if q == "Search all calendar entries..." else q.strip()
+        if self._hint_shown(getattr(self, "_history_search_entry", None)):
+            return ""
+        return self._history_search_var.get().strip()
+
+    def _search_history_for(self, query):
+        """The Calendar's History, searching for *query*: it reads a day's own
+        words, which the list's search does not (the empty list's link).
+        Opened once the tab change is handled -- its handler shuts the
+        History, and the link landed on the month grid -- on every year."""
+        self.notebook.select(self.TAB_CALENDAR)
+        self.after_idle(lambda: self._open_history_searching(query))
+
+    def _open_history_searching(self, query):
+        self._history_bucket = "All"
+        if not getattr(self, "_history_visible", False):
+            self._show_calendar_history()
+        entry = self._history_search_entry
+        # The list's words, even if they are the hint's own.
+        entry.hint_shown = False
+        entry.delete(0, "end")
+        entry.insert(0, query)
+        entry.config(fg=self.colors["text"])
 
     def _render_calendar_history(self):
         """The rebuilt half: rows re-created per render, coloured with
         plain .configure so they always wear the CURRENT theme."""
-        # Cancelled, not forgotten: a render run directly (a bucket chosen
-        # while a typed search waits) makes the waiting one redundant, and
-        # a timer only forgotten stayed scheduled with nothing tracking it
-        # -- see _autosave_now.
-        job = getattr(self, "_history_search_job", None)
+        # Cancelled, not forgotten: a direct render makes the waiting one
+        # redundant, and a forgotten timer ran untracked (_autosave_now).
+        job = self._history_search_job
         self._history_search_job = None
         if job is not None:
             try:
@@ -1591,8 +1630,7 @@ class CalendarViewMixin:
                 pass
         if not (self._history_visible and self._history_built):
             return
-        for w in self._history_rows.winfo_children():
-            w.destroy()
+        self._history_rows.clear()
 
         # Active-chip styling rides every render (including theme ones).
         for bucket, b in self._history_chip_btns.items():
@@ -1607,7 +1645,7 @@ class CalendarViewMixin:
         entries = self._history_entries_now()
 
         if not entries:
-            lbl = tk.Label(self._history_rows,
+            lbl = tk.Label(self._history_rows.add(),
                            text=("No calendar entries match." if query or
                                  self._history_bucket != "All" else
                                  "Nothing on the calendar yet — give a note "
@@ -1615,6 +1653,8 @@ class CalendarViewMixin:
                            font=("Segoe UI", 10), bg=self.colors["bg"],
                            fg=self.colors["subtext"])
             lbl.pack(pady=20)
+            for chunk in self._history_rows.chunks:
+                self._bind_mousewheel_recursive(chunk, self.cal_scroll_canvas)
             return
         self._history_draw_rows(entries, 0)
 
@@ -1626,22 +1666,24 @@ class CalendarViewMixin:
     def _history_draw_rows(self, entries, first):
         """The rows for entries[first:] up to the page's end, under any
         already drawn, and the button for the rest."""
-        before = set(self._history_rows.winfo_children())
+        before = set(self._history_rows.chunks) | set(self._history_rows.rows())
 
         def one_row(parent, parts, fg, command, context_cmd=None, indent=0,
                     bold=False):
             """`parts` is (before the title, the title, after it): only the
             title gives way when the row is too narrow for all three."""
-            row = tk.Frame(parent, bg=self.colors["card"], cursor="hand2")
+            row = tk.Frame(parent.add(), bg=self.colors["card"], cursor="hand2")
+            self._ring_round(row)       # the title's padding holds its pixel
             row.pack(fill="x", pady=1, padx=(indent, 0))
             lbl = tk.Label(row, anchor="w", bg=self.colors["card"], fg=fg)
             _fit_title(self, lbl, *parts, self._cal_font(
                 ("Segoe UI", 9, "bold" if bold else "normal"))[0])
-            lbl.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
+            lbl.pack(side="left", fill="x", expand=True, padx=10, ipady=3)
             for w in (row, lbl):
                 w.bind("<Button-1>", lambda e: command())
                 if context_cmd is not None:
                     w.bind("<Button-3>", context_cmd)
+            self._pressable(row, command, menu=context_cmd)
             return row
 
         # Each row's note, found once for the whole render rather than by a
@@ -1666,20 +1708,27 @@ class CalendarViewMixin:
                 expandable = bool(entry["children"])
                 expanded = expandable and (
                     entry["auto_expand"]
-                    or entry["note_id"] in self._history_expanded)
+                    or (note is not None
+                        and self._order_identity(note) in self._history_expanded))
+                # With a search or a year, of how many: the edited days it
+                # leaves out were not counted, as if the series had none.
+                left = entry.get("n_edited_left_out", 0)
+                edited_of = (f"{entry['n_edited']} of {entry['n_edited'] + left}" if left
+                             else str(entry["n_edited"]))
                 if entry["children_kind"] == "occurrences":
                     suffix = f" · {entry['n_occurrences']} occurrences"
-                    if entry["n_edited"]:
-                        suffix += f" · {entry['n_edited']} edited (✎)"
+                    if entry["n_edited"] or left:
+                        suffix += f" · {edited_of} edited (✎)"
                 else:
-                    n_kids = entry["n_edited"]
-                    suffix = (f" · {n_kids} edited day"
+                    n_kids = entry["n_edited"] + left
+                    suffix = (f" · {edited_of} edited day"
                               f"{'s' if n_kids != 1 else ''} (✎)"
                               if n_kids else "")
-                if entry.get("n_off"):
-                    suffix += f" · {entry['n_off']} off the schedule"
-                if entry.get("n_moved"):
-                    suffix += f" · {entry['n_moved']} moved (↷)"
+                # ...and the days off the schedule and the moved ones the same.
+                for key, said in (("n_off", "off the schedule"), ("n_moved", "moved (↷)")):
+                    shown, out = entry.get(key, 0), entry.get(key + "_left_out", 0)
+                    if shown or out:
+                        suffix += f" · {f'{shown} of {shown + out}' if out else shown} {said}"
                 if expandable:
                     glyph = "▾" if expanded else "▸"
                     row_cmd = (lambda i=entry["note_id"]:
@@ -1705,10 +1754,8 @@ class CalendarViewMixin:
                         mark = ("✎" if child.get("edited")
                                 else "↷" if child.get("moved_from") else "•")
                         if child.get("off_schedule"):
-                            # A day the series no longer lands on: opened as
-                            # one, it was a day no calendar could show, and
-                            # its menu offered to delete a day that was not
-                            # there. It opens the walk through such days.
+                            # A day the series no longer lands on opens the walk
+                            # through such days, not a day no calendar shows.
                             one_row(
                                 self._history_rows,
                                 (f"{mark} {show_date(child['date'])}   ",
@@ -1737,9 +1784,13 @@ class CalendarViewMixin:
                             indent=26)
                     if entry["children_kind"] == "edited":
                         info = tk.Label(
-                            self._history_rows,
+                            self._history_rows.add(),
                             text=("    …every other day of this series shows "
-                                  "the series content"),
+                                  "the series content"
+                                  + (", or is one this search or year leaves out"
+                                     if any(entry.get(k) for k in (
+                                         "n_edited_left_out", "n_off_left_out",
+                                         "n_moved_left_out")) else "")),
                             font=("Segoe UI", 8), anchor="w",
                             bg=self.colors["bg"], fg=self.colors["subtext"])
                         info.pack(fill="x", padx=(26, 0))
@@ -1747,7 +1798,7 @@ class CalendarViewMixin:
         self._history_more_btn = None
         if len(entries) > self._history_shown:
             more = tk.Button(
-                self._history_rows,
+                self._history_rows.add(),
                 text=f"Show more ({len(entries) - self._history_shown} left)",
                 relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
                 bg=self.colors["card"], fg=self.colors["accent_text"],
@@ -1757,18 +1808,28 @@ class CalendarViewMixin:
             more.pack(fill="x", pady=(6, 2))
             self._history_more_btn = more
 
-        # The rows are new; the frame holding them is bound once, where it
-        # is built -- binding it again here left one more Tcl command
+        # Only what is new: a chunk and all in it, and a row added to an old
+        # chunk -- binding again what was bound left one more Tcl command
         # behind at every render, for as long as the app ran.
-        for row in self._history_rows.winfo_children():
-            if row not in before:
-                self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
+        for chunk in self._history_rows.chunks:
+            if chunk not in before:
+                self._bind_mousewheel_recursive(chunk, self.cal_scroll_canvas)
+                continue
+            for row in chunk.winfo_children():
+                if row not in before:
+                    self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
 
     def _history_toggle_group(self, note_id):
-        if note_id in self._history_expanded:
-            self._history_expanded.discard(note_id)
+        # Kept by uid: a series deleted frees its id, and the next note
+        # given that id would open unfolded.
+        note = self.find_note(note_id)
+        if note is None:
+            return
+        key = self._order_identity(note)
+        if key in self._history_expanded:
+            self._history_expanded.discard(key)
         else:
-            self._history_expanded.add(note_id)
+            self._history_expanded.add(key)
         self._render_calendar_history()
 
     def _history_off_schedule(self, note):
@@ -1786,7 +1847,7 @@ class CalendarViewMixin:
         first = self._history_shown
         self._history_shown += 50
         more = getattr(self, "_history_more_btn", None)
-        if (getattr(self, "_history_search_job", None) is not None
+        if (self._history_search_job is not None
                 or not (self._history_visible and self._history_built)
                 or more is None or not more.winfo_exists()):
             self._render_calendar_history()
@@ -1796,14 +1857,11 @@ class CalendarViewMixin:
         self._history_draw_rows(self._history_entries_now(), first)
 
     def _history_open_day(self, note, date_str):
-        """Back to the grid, on that exact month, with the day panel
-        showing this note's preview — the chosen landing for a row click.
-
-        A landing only navigates; it never writes into the editor. The
-        tail of _add_note_for_date -- the new note's date prefill -- was
-        once left here by an insertion, and it wrote the row's date into
-        whatever note the editor held, which the next flush then saved:
-        clicking a row silently re-dated another note, or moved a series.
+        """Back to the grid, on that exact month, with the day panel showing
+        this note's preview -- the landing for a row click. It only
+        navigates, never writes into the editor: a date prefill left here
+        re-dated whatever note was open (ISSUES_LOG: "The History row that
+        re-dated the open note").
         """
         d = parse_date(date_str)
         self._hide_calendar_history()
@@ -1856,7 +1914,7 @@ class CalendarViewMixin:
         self.hide_day_tooltip()
         self._context_menu_open = True
         try:
-            menu.tk_popup(event.x_root, event.y_root)
+            self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
         finally:
             menu.grab_release()
             self._context_menu_open = False
@@ -1870,17 +1928,22 @@ class CalendarViewMixin:
 
         def on_pick(color):
             old = self.day_colors.get(date_str)
+            # The most a start or a backup keeps (MAX_DAY_DECORATIONS): a
+            # day past it is refused here, never dropped at the next start.
+            if (color and old is None
+                    and len(self.day_colors) >= MAX_DAY_DECORATIONS):
+                self._show_toast(
+                    f"You have coloured {MAX_DAY_DECORATIONS:,} days, which is "
+                    "the most the app keeps. Clear one first.", kind="info")
+                return
             if color:
                 self.day_colors[date_str] = color
             else:
                 self.day_colors.pop(date_str, None)
             self._persist_day_colors()
             self.render_calendar()
-            # "No color" on this palette discards the day's colour exactly
-            # as the menu's own Clear entry does: the same loss reached by
-            # a second route, so it gets the same way back. Missing this
-            # would have left one of the two doors unguarded, which is the
-            # shape a sibling sweep exists to catch.
+            # "No color" here is the menu's Clear by another route, and gets
+            # the same way back.
             if not color and old:
                 self._show_toast(
                     "Day colour cleared",
@@ -1891,7 +1954,8 @@ class CalendarViewMixin:
         else:
             anchor_xy = (self.winfo_rootx() + 100, self.winfo_rooty() + 100)
         self._show_color_palette(None, current, on_pick, allow_reset=True,
-                                 anchor_xy=anchor_xy, reset_label="No color")
+                                 anchor_xy=anchor_xy, reset_label="No color",
+                                 keyboard_from=getattr(event, "widget", None))
 
     def _clear_day_color(self, date_str):
         if date_str in self.day_colors:
@@ -1918,25 +1982,11 @@ class CalendarViewMixin:
             action=lambda: self._undo_day_clear(date_str, "markers", old))
 
     def _undo_day_clear(self, date_str, kind, value):
-        """Put back a day's colour, or its markers, after a clear.
-
-        Four routes discarded a day's decoration and none of them asked:
-        the two "Clear day …" menu entries, which sit directly under the
-        entries that CREATE the same thing, the palette's own "No color",
-        and the marker popup saved empty (Clear, then Save). A mis-aim by
-        one menu row turned "change this" into "discard it", permanently.
-        No confirmation added, deliberately —
-        the app's rule is that a destructive action is confirmed in
-        proportion to how recoverable it is, and a question in front of
-        every colour change would cost more than the loss it guards. So
-        the loss stopped being permanent instead.
-
-        One method for both kinds, because they are the same act on two
-        stores; a second copy of this reasoning would drift from the first.
-        `value` is what was there, captured by the caller before it went.
-
-        The markers are named, not echoed: they are astral emoji, and the
-        sentence does not need them to say what happened.
+        """Put back a day's colour, or its markers, after a clear -- four
+        routes discarded them unasked, one menu row from the entries that
+        make them. Not a question before every change but an Undo after, in
+        proportion to the loss. One method for both stores; `value` is what
+        was there, taken before it went. The markers are named, not echoed.
         """
         store, persist, done, occupied = {
             "color": (self.day_colors, self._persist_day_colors,
@@ -1944,37 +1994,30 @@ class CalendarViewMixin:
             "markers": (self.day_emoji, self._persist_day_emoji,
                         "Day markers put back", "That day has markers again"),
         }[kind]
-        # The clear left this slot EMPTY, so an empty slot is the only
-        # state this offer still fits. Anything there now is either the
-        # same value back (a second click on a toast that has not faded)
-        # or something chosen by hand in the seconds since -- and a stale
-        # memory must not overwrite either. The weaker test, "is it equal
-        # to what I am about to restore?", let a marker picked in between
-        # be clobbered; found by probing rather than by review.
-        #
-        # No guard on an empty `value`: every caller establishes it, the
-        # two clears by returning early, the palette and the marker popup
-        # by asking. A branch nothing can reach is a branch no check can
-        # defend.
+        # Only an EMPTY slot takes it back: anything there now is the same
+        # value or one chosen since, which a stale memory must not overwrite.
+        # No guard on an empty `value`: every caller makes sure of it.
         if store.get(date_str):
             self._show_toast(occupied, kind="info")
             return
         store[date_str] = list(value) if isinstance(value, list) else value
-        persist()
+        # Refused, "put back" said over a file without it, gone at the next start.
+        if persist() is False:
+            # The live store: persisting the markers rebinds day_emoji.
+            (self.day_colors if kind == "color" else self.day_emoji).pop(date_str, None)
+            self._say_by_the_box(self, "Not put back: the settings file could not be written")
+            return
         self.render_calendar()
-        self.set_status(done)
+        # On the banner from the Calendar: the status line is the Notes tab's.
+        self._say_by_the_box(self, done)
 
     def _persist_day_colors(self):
-        save_setting("day_colors", dict(self.day_colors))
+        return save_setting("day_colors", dict(self.day_colors))
 
     def _mark_day_emoji(self, date_str, event=None):
-        """Small anchored popup for flagging a calendar day with one or more
-        emoji markers — independent of whether it has a note. Click any number
-        of chips to toggle them; nothing is written to disk or redrawn on the
-        calendar until you press Save. ✕ discards whatever you changed here.
-        This is deliberate: writing to disk and rebuilding the whole calendar
-        on every single click was both slow (visible lag) and confusing (felt
-        like nothing had "saved" until you clicked away)."""
+        """A small anchored popup marking a day with emoji, note or not:
+        chips toggle, and nothing is written or redrawn until Save (✕
+        discards) -- written at every click, it lagged and never felt saved."""
         self._dismiss_mini_popup()
         pop = tk.Toplevel(self)
         self._mini_popup = pop
@@ -1998,17 +2041,9 @@ class CalendarViewMixin:
         colours = {}
         MAX_DAY_MARKERS = 3
 
-        # The header says "up to 3" once, at the top, and the rule was then
-        # enforced by silence: the fourth click simply did nothing, which
-        # reads as the app being broken rather than as a limit being kept.
-        # Every other ceiling in this app speaks when it is reached -- the
-        # title cap sets a status line, the attachment cap raises a warning
-        # -- so this one was the outlier.
-        #
-        # Two things rather than one, because they answer different halves.
-        # The unpicked chips go flat once three are chosen, so the fourth
-        # click is visibly unavailable BEFORE it is made; and a line under
-        # the grid says why, for anyone who clicks anyway.
+        # A silent fourth click read as broken: at three, the other chips go
+        # flat (unavailable BEFORE the click) and a line says why when one is
+        # clicked anyway, as every ceiling in the app speaks.
         capped = {"now": False}
 
         def refresh_cell(em):
@@ -2040,11 +2075,8 @@ class CalendarViewMixin:
             elif len(pending) < MAX_DAY_MARKERS:
                 pending.append(em)
             else:
-                # Clicked anyway -- the chip is flat but a flat chip is not a
-                # disabled one, and saying nothing here is what the row was
-                # about. Keeps the calendar cell readable: more than three
-                # would show as an anonymous "+N" nobody could identify
-                # without reopening this same popup.
+                # Clicked anyway: said. More than three would show in the cell
+                # as an anonymous "+N".
                 cap_note.configure(
                     text="Three is the most a day can show — unpick one first.")
             refresh_all_cells()
@@ -2076,6 +2108,12 @@ class CalendarViewMixin:
                       None if (capped["now"] and em not in pending)
                       else w.configure(bg=h))
             cell.bind("<Leave>", lambda e, em=em: refresh_cell(em))
+            # From the keyboard: the chip it is on wears the pointer's
+            # darker shade, as the ring is already the sign of a pick.
+            self._pressable(cell, lambda em=em: toggle(em), walk=True)
+            cell.bind("<FocusIn>", lambda e, w=cell, h=hover_color:
+                      w.configure(bg=h))
+            cell.bind("<FocusOut>", lambda e, em=em: refresh_cell(em))
 
         # Under the grid, and given a blank line's worth of height from the
         # start so that reaching the cap does not shove the buttons down.
@@ -2094,6 +2132,12 @@ class CalendarViewMixin:
 
         def save_and_close():
             had = list(self.day_emoji.get(date_str) or [])
+            if (pending and not had
+                    and len(self.day_emoji) >= MAX_DAY_DECORATIONS):
+                self._show_toast(
+                    f"You have marked {MAX_DAY_DECORATIONS:,} days, which is "
+                    "the most the app keeps. Clear one first.", kind="info")
+                return
             if pending:
                 self.day_emoji[date_str] = list(pending)
             else:
@@ -2101,10 +2145,8 @@ class CalendarViewMixin:
             self._persist_day_emoji()
             self._mini_popup_on_close = None  # already handled below
             self._dismiss_mini_popup()
-            # Only this one day's badge needs to change — a full
-            # render_calendar() here was heavy enough (destroying/rebuilding
-            # every day cell) to cause a visible flicker right after the
-            # popup closes.
+            # Only this day's badge changes: a full render flickered as the
+            # popup closed.
             self._refresh_day_badge(date_str)
             # Saved empty over markers that were there: the same loss as the
             # menu's "Clear day markers", by a fourth door, so the same way
@@ -2116,18 +2158,23 @@ class CalendarViewMixin:
 
         btn_row = tk.Frame(outer, bg=self.colors["card"])
         btn_row.pack(fill="x", pady=(8, 0))
-        tk.Button(btn_row, text="Clear", command=clear_pending, relief="flat",
-                  cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
-                  font=("Segoe UI", 8)).pack(side="left", fill="x", expand=True,
-                                             padx=(0, 4), ipady=4)
-        tk.Button(btn_row, text="✓ Save", command=save_and_close, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg=self._on_fill("accent"),
-                  font=("Segoe UI", 8, "bold")).pack(side="left", fill="x", expand=True,
-                                                     padx=(4, 0), ipady=4)
+        clear = tk.Button(btn_row, text="Clear", command=clear_pending, relief="flat",
+                          cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
+                          font=("Segoe UI", 8))
+        clear.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=4)
+        save = tk.Button(btn_row, text="✓ Save", command=save_and_close, relief="flat",
+                         cursor="hand2", bg=self.colors["accent"], fg=self._on_fill("accent"),
+                         font=("Segoe UI", 8, "bold"))
+        save.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=4)
+        for button in (clear, save):
+            self._button_choice(button)
 
+        # The day's menu opened from the keyboard hands the keyboard on.
+        opener = getattr(event, "widget", None)
         if event is not None:
             anchor_xy = (event.x_root, event.y_root)
-            self._place_dropdown_popup(pop, None, anchor_xy=anchor_xy)
+            self._place_dropdown_popup(pop, None, anchor_xy=anchor_xy,
+                                       keyboard_from=opener)
         else:
             self._place_dropdown_popup(pop, None,
                                        anchor_xy=(self.winfo_rootx() + 100, self.winfo_rooty() + 100))
@@ -2135,4 +2182,4 @@ class CalendarViewMixin:
     def _persist_day_emoji(self):
         # Drop any None/empty entries (from Clear) rather than persisting them.
         self.day_emoji = {d: e for d, e in self.day_emoji.items() if e}
-        save_setting("day_emoji", dict(self.day_emoji))
+        return save_setting("day_emoji", dict(self.day_emoji))

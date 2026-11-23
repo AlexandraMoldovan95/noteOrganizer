@@ -11,17 +11,22 @@ duplicate it keeps. docs/CODE_TOUR.md walks through it.
 """
 
 import copy
+import functools
 import math
 import os
 import re
+import unicodedata
 import uuid
-from datetime import datetime
+from collections import Counter
 
 from .categories import CATEGORY_COLORS
+from .storage import now_stamp
 from .formatting import (normalize_formatting, normalize_paragraphs,
-                         clamp_spans_per_line)
-from .tables import with_caret_line
+                         clamp_spans_per_line, strip_list_markers,
+                         day_paragraphs, list_lines)
+from .tables import glimpse, with_caret_line
 from .recurrence import (
+    effective_note,
     normalize_recurrence,
     parse_date,
     format_date,
@@ -29,7 +34,45 @@ from .recurrence import (
     expand_occurrences,
     OVERRIDABLE_FIELDS,
     MAX_OCCURRENCES,
+    day_as_kept,
+    is_recurring,
+    off_schedule_days,
+    _rule_days_among,
 )
+
+
+# ---- What a search compares ----
+
+@functools.lru_cache(maxsize=1)
+def _search_fold_table():
+    """Each character of the basic plane as a search compares it: its base
+    letter, the diacritic dropped, then lowered -- always one character for
+    one, so a match's place in the text is its place in the folded text.
+    Only marks are dropped: a Korean syllable comes apart into letters, and
+    cut to its first it found every syllable that starts with the same one."""
+    table = {}
+    for code in range(0x10000):
+        if 0xD800 <= code <= 0xDFFF:
+            continue
+        ch = chr(code)
+        parts = unicodedata.normalize("NFD", ch)
+        marks = all(unicodedata.category(m) == "Mn" for m in parts[1:])
+        base = parts[0] if marks else ch
+        low = base.lower()
+        folded = low if len(low) == 1 else base
+        if folded != ch:
+            table[code] = folded
+    return table
+
+
+def fold_for_search(text):
+    """*text* as every search in the app compares it -- the list, Find in
+    note, the History: case and diacritics gone, so "creme brulee" finds
+    "Crème brûlée", and an s with a comma below finds one with a cedilla."""
+    if text.isascii():
+        return text.lower()          # the same answer, without the table
+    return text.translate(_search_fold_table())
+
 
 # ---- Note schema + one-time cleanup ----
 
@@ -38,10 +81,31 @@ from .recurrence import (
 # kill the app with a pasted share code (see normalize_note).
 MAX_CHECKLIST_ITEMS = 1000
 
+# And the longest item a box adds: each is drawn as one wrapped label, as tall
+# as its text, and a pasted page made one tens of thousands of pixels tall. One
+# already longer is kept whole, and drawn cut (checklist_shown).
+MAX_CHECKLIST_ITEM_CHARS = 2_000
+# The lines of one item its row draws: a line break is a line however short.
+CHECKLIST_SHOWN_LINES = 100
+
 # The same ceiling for attachments, which render a row of widgets each and
 # arrive by the same untrusted routes. 200 paint in about 0.6 s on a fast
 # machine; real notebooks hold tens of files, so none is ever cut short.
 MAX_ATTACHMENTS = 200
+
+# Days coloured, or marked with emoji, on the calendar: every day of 54 years.
+# Each rides every settings write, and a backup's million made every note take
+# seconds to open (ISSUES_LOG: "Limits that held at the door but not after it").
+MAX_DAY_DECORATIONS = 20_000
+# A marker is one emoji from the picker; the longest, joiners in, is far less.
+MAX_DAY_MARKER_CHARS = 16
+
+
+def is_calendar_day(value):
+    """Whether *value* names a day as the calendar writes and looks one up:
+    a real date, spelled ``YYYY-MM-DD``. Any other key was never drawn."""
+    day = parse_date(value) if isinstance(value, str) else None
+    return day is not None and format_date(day) == value
 
 
 NOTE_DEFAULTS = {
@@ -67,6 +131,112 @@ NOTE_DEFAULTS = {
     "checklist": [],    # list of {"text": str, "done": bool} items
     "paragraphs": [],       # list lines: {"line": int, "kind": "bullet"|"number"}
 }
+
+# Any other field a note holds is kept as it came, so an older app never drops
+# what a newer one added: bounded, and chosen as the phone chooses (the owner's
+# D2, 2026-11-13; the phone's docs/DATA_FORMAT.md, "Fields a version does not know").
+KNOWN_NOTE_FIELDS = frozenset(NOTE_DEFAULTS) | {"id", "order", "_prev", "_set_aside",
+                                                 "tags", "deleted_at"}
+MAX_UNKNOWN_FIELDS = 32
+MAX_UNKNOWN_UNITS = 65536
+MAX_UNKNOWN_DEPTH = 20
+
+
+def _utf16_units(text):
+    """*text*'s length as Kotlin counts it: UTF-16 code units."""
+    return len(text.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def _json_units(value):
+    """What *value* costs against MAX_UNKNOWN_UNITS, or None when it is not
+    a JSON value, nests past MAX_UNKNOWN_DEPTH, or costs more than the whole
+    allowance. Walked without recursion: a field nested a few hundred deep
+    must not stop a load."""
+    total, stack = 0, [(value, 1)]
+    while stack:
+        item, level = stack.pop()
+        # Longer than the allowance by its count alone: not walked, so a
+        # crafted list of millions costs nothing (each item is a unit at least).
+        if isinstance(item, (str, list, dict)) and len(item) > MAX_UNKNOWN_UNITS:
+            return None
+        if isinstance(item, str):
+            total += _utf16_units(item)
+        elif item is None or isinstance(item, (bool, int)):
+            total += 1
+        elif isinstance(item, float):
+            if not math.isfinite(item):
+                return None
+            total += 1
+        elif isinstance(item, (dict, list)):
+            if level > MAX_UNKNOWN_DEPTH:
+                return None
+            total += 1
+            if isinstance(item, dict):
+                for key, inner in item.items():
+                    if not isinstance(key, str):
+                        return None
+                    total += _utf16_units(key)
+                    stack.append((inner, level + 1))
+            else:
+                stack.extend((inner, level + 1) for inner in item)
+        else:
+            return None
+        if total > MAX_UNKNOWN_UNITS:
+            return None
+    return total
+
+
+def _typed(value):
+    """A JSON value as something hashable that tells its kinds apart, as the
+    phone's stable does: true is not 1, {} is not [] (1 and 1.0 are one number)."""
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, dict):
+        return ("dict",) + tuple(sorted((str(k), _typed(v)) for k, v in value.items()))
+    if isinstance(value, list):
+        return ("list",) + tuple(_typed(v) for v in value)
+    return value
+
+
+def unknown_signature(note):
+    """*note*'s fields this version does not know, signed for the two signatures."""
+    return _typed(unknown_fields(note))
+
+
+def unknown_fields_lacked(theirs, mine):
+    """Whether *theirs* holds a field this version does not know that *mine*
+    lacks or holds otherwise, kinds told apart: what taking *theirs* would
+    bring that *mine* has not. A share code holds none (SHAREABLE_FIELDS)."""
+    held = unknown_fields(mine)
+    return any(name not in held or _typed(held[name]) != _typed(value)
+               for name, value in unknown_fields(theirs).items())
+
+
+def unknown_fields(note, known=None):
+    """The fields of *note* this version does not know, as normalize_note
+    keeps them: copies, at most MAX_UNKNOWN_FIELDS of them and
+    MAX_UNKNOWN_UNITS in all, names and values counted together. *known* is
+    the names a version knows (a note's by default; a template's for
+    normalize_template, by the owner's decision of 14 November)."""
+    if not isinstance(note, dict):
+        return {}
+    known = KNOWN_NOTE_FIELDS if known is None else known
+    names = sorted((name for name in note if isinstance(name, str)
+                    and name not in known and not name.startswith("_")),
+                   key=lambda name: name.encode("utf-16-be", "surrogatepass"))
+    kept, units = {}, 0
+    for name in names:
+        if len(kept) >= MAX_UNKNOWN_FIELDS:
+            break
+        size = _json_units(note[name])
+        if size is None:
+            continue
+        size += _utf16_units(name)
+        if units + size > MAX_UNKNOWN_UNITS:
+            continue
+        kept[name] = copy.deepcopy(note[name])
+        units += size
+    return kept
 
 
 
@@ -126,10 +296,22 @@ def _truncate(text, limit=60):
     changed — this is display-only."""
     if not isinstance(text, str):
         return ""
-    flat = " ".join(text.split())
-    if len(flat) <= limit:
-        return flat
-    return flat[:limit].rstrip() + "…"
+    return glimpse(" ".join(text.split()), limit)
+
+
+def checklist_shown(text):
+    """A checklist item as its row draws it: as it is, unless longer than
+    MAX_CHECKLIST_ITEM_CHARS or CHECKLIST_SHOWN_LINES, then cut there with an
+    ellipsis. Display only: an item saved before the limit, or brought by a
+    share code, keeps every word in the note."""
+    if not isinstance(text, str):
+        return ""
+    lines = text.split("\n")
+    if (len(text) <= MAX_CHECKLIST_ITEM_CHARS
+            and len(lines) <= CHECKLIST_SHOWN_LINES):
+        return text
+    shown = "\n".join(lines[:CHECKLIST_SHOWN_LINES])[:MAX_CHECKLIST_ITEM_CHARS]
+    return shown.rstrip() + "…"
 
 
 def _note_str(note, key, default=""):
@@ -188,6 +370,415 @@ UPDATABLE_FROM_BACKUP = UPDATABLE_FROM_SHARED + [
 # an update, and "↩ Restore previous" puts that back as well.
 PREV_TEXT_FIELDS = ("title", "body", "formatting", "paragraphs", "comments")
 
+# A series' own days, which hang on its repeat and mean nothing without one.
+DAY_FIELDS = ("exceptions", "overrides", "moved")
+
+
+def days_to_rescue(before, recurrence):
+    """The days of *before* that writing *recurrence* over it takes away:
+    none unless it repeats now and will not after, and only the kinds it
+    holds. Whatever ends a repeat COPIES these into its rescue copy and
+    leaves the note's own: one copy slot, and the next copy erased days
+    moved there."""
+    if not is_recurring(before) or is_recurring({"recurrence": recurrence}):
+        return {}
+    return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
+
+
+# A day's words, which go with a repeat turned off; the rest of a day's edit,
+# its look, says nothing the person typed (spend_series_days keeps both).
+DAY_WORDS = ("title", "body", "comments")
+_DAY_LOOK = tuple(key for key in OVERRIDABLE_FIELDS if key not in DAY_WORDS)
+
+
+def _same_word(word, a, b):
+    """Whether two of a day's words say the same: a title without the spaces
+    around it, as day_matches_series reads one; a text with the line under a
+    closing table on both sides or neither (with_caret_line) -- a copy the
+    phone made keeps its series' text as typed and its days with the line,
+    and a colour-only day read as words."""
+    a, b = str(a or ""), str(b or "")
+    if word == "title":
+        return a.strip() == b.strip()
+    if word == "body":
+        return with_caret_line(a) == with_caret_line(b)
+    return a == b
+
+
+def day_has_words(note, day):
+    """Whether *note*'s edit of *day* holds a title, text or comments of its
+    own -- what the day holds (day_as_kept), not what it shows."""
+    shown = day_as_kept(note, day)
+    return any(not _same_word(key, shown.get(key), note.get(key)) for key in DAY_WORDS)
+
+
+def days_hold_own_text(note):
+    """Whether a day of *note* shows a title, text or comments of its own --
+    asked of a note that may no longer repeat, so of what each day holds
+    (day_as_kept), not of what it shows."""
+    return any(day_has_words(note, day) for day in (note.get("overrides") or {}))
+
+
+# What only an update's copy holds (apply_shared_update, the phone's too): a
+# series' own copy -- a turn-off's, on either app -- holds the text, the date,
+# the repeat and the days, and nothing of these.
+_UPDATE_COPY_ONLY = ("category", "color", "checklist", "pinned")
+
+
+def _series_own_copy(prev):
+    """Whether *prev* is the copy a repeat's turn-off made of its series."""
+    return (isinstance(prev, dict) and is_recurring(prev)
+            and not any(key in prev for key in _UPDATE_COPY_ONLY))
+
+
+def update_copy(prev):
+    """Whether *prev* is the copy an import's Update made: the note as it
+    was here before the backup's version replaced it."""
+    return isinstance(prev, dict) and any(key in prev for key in _UPDATE_COPY_ONLY)
+
+
+def comments_kept_by_copy(copy_comments, comments):
+    """Which comments a waiting copy keeps when a save clears *comments*
+    over a copy that holds *copy_comments*: the ones whose loss would be
+    the larger, counted by what is gone (_lost). Two letters cleared after
+    a long comment was deleted lose to it, as the body's words do; a long
+    comment cleared over a short one takes its place."""
+    if _lost(comments, copy_comments) < _lost(copy_comments, comments):
+        return copy_comments
+    return comments
+
+
+def _same_series(day, rule, other_day, other_rule):
+    """Whether two starts and rules are one series. A weekly rule's start
+    weekday lit, or left to the start, is the same rule -- as a monthly
+    rule's day: the editor stores both, and a series turned back on as it
+    was read as another."""
+    if day != other_day:
+        return False
+    rules = (normalize_recurrence(rule), normalize_recurrence(other_rule))
+    when = parse_date(day)
+    for rec in rules if when is not None else ():
+        if rec["freq"] == "weekly" and not rec["weekdays"]:
+            rec["weekdays"] = [when.weekday()]
+        if rec["freq"] == "monthly" and not rec["month_days"]:
+            rec["month_days"] = [when.day]
+    # A field the frequency never reads changes no day: kept hidden (the
+    # phone's sheet stores all three), it made a series turned back on as it
+    # was read as another.
+    for rec in rules:
+        if rec["freq"] != "weekly":
+            rec["weekdays"] = []
+        if rec["freq"] != "monthly":
+            rec["month_days"] = []
+        # "Skip that month" is read only where a month can lack the day.
+        if not (rec["freq"] == "monthly" and any(day > 28 for day in rec["month_days"])
+                or rec["freq"] == "yearly" and when is not None and (when.month, when.day) == (2, 29)):
+            rec["month_day_policy"] = "clamp"
+    return rules[0] == rules[1]
+
+
+def _repeats_as(note, prev):
+    """Whether *note* repeats as the series *prev* holds: its date and rule."""
+    return (is_recurring(note) and _same_series(prev.get("date"), prev.get("recurrence"),
+                                                note.get("date"), note.get("recurrence")))
+
+
+def copy_holds_this_series(note):
+    """Whether *note*'s rescue copy is the copy a turn-off made of the very
+    series the note repeats as again: same date, same rule."""
+    prev = note.get("_prev")
+    return _series_own_copy(prev) and _repeats_as(note, prev)
+
+
+def _dates_held(note):
+    """The dates *note*'s own days speak for: a day edited, deleted or
+    moved, and the dates days are moved to."""
+    moved = note.get("moved") or {}
+    return (set(note.get("overrides") or {}) | set(note.get("exceptions") or [])
+            | set(moved) | set(moved.values()))
+
+
+def spend_series_days(note):
+    """Once the note repeats as its series' copy again, the copy's days come
+    back into the note and are spent from the copy. A copy's day is dropped
+    only where the note deleted that day; one whose words a day already
+    holding words lacks is set aside, to be a note of its own (_set_aside).
+    ISSUES_LOG: "Round ten: the days a date held without a word" and
+    ISSUES_LOG: "Round fifteen: four ways of adding"."""
+    if not copy_holds_this_series(note):
+        return
+    prev = note["_prev"]
+    held = _dates_held(note)
+    moved = dict(note.get("moved") or {})
+    moved.update(_copy_moves_taken(prev.get("moved") or {}, held, len(moved)))
+    overrides, aside = _copy_days_placed(note, prev, moved)
+    exceptions = set(note.get("exceptions") or [])
+    exceptions.update(day for day in prev.get("exceptions") or [] if day not in held)
+    note["overrides"], note["exceptions"], note["moved"] = overrides, sorted(exceptions), moved
+    for key in DAY_FIELDS:
+        prev.pop(key, None)
+    if aside:
+        note["_set_aside"] = (note.get("_set_aside") or []) + aside
+
+
+def _copy_moves_taken(theirs, held, room):
+    """The copy's moves *theirs* the note takes: of a day its own days
+    leave alone, onto a date they leave free, while it holds fewer than a
+    series' most (*room* its own) -- and none onto a day whose own move
+    stays behind: that day stays on its date, and two days on one date were
+    drawn as one."""
+    taken = {}
+    for day, to in sorted(theirs.items()):
+        # Never onto a date the note holds: normalize_note keeps one day a
+        # date, and the first in order -- the copy's -- would push the note's out.
+        if day not in held and to not in held and room + len(taken) < MAX_OCCURRENCES:
+            taken[day] = to
+    onto = {to: day for day, to in taken.items()}
+    home = [day for day in theirs if day not in taken]
+    while home:
+        day = onto.pop(home.pop(), None)
+        if day is not None:
+            del taken[day]
+            home.append(day)
+    return taken
+
+
+def _own_words_held(prev, key, note, at):
+    """Whether *note*'s day *at* holds every word *prev*'s day *key* has of
+    its own: each title, text or comments it holds unlike its series'
+    (day_as_kept, _same_word) -- the series' words are not the day's."""
+    theirs, mine = day_as_kept(prev, key), day_as_kept(note, at)
+    return all(_same_word(word, theirs.get(word), prev.get(word))
+               or _same_word(word, theirs.get(word), mine.get(word)) for word in DAY_WORDS)
+
+
+def _aside_entry(prev, key, at):
+    """*prev*'s day *key*, drawn on *at*, as the copy kept it: what a note of
+    its own is made of (notes_set_aside)."""
+    kept = day_as_kept(prev, key)
+    entry = {word: str(kept.get(word) or "") for word in OVERRIDABLE_FIELDS}
+    entry["day"] = at
+    return entry
+
+
+def copy_days_set_aside(note, incoming=None):
+    """Before *note*'s rescue copy is replaced: the days with words of their
+    own of a series' copy the note no longer repeats as, set aside to be
+    notes of their own. The copy was the only place they were kept, and the
+    next turn-off or big delete erased them. An Update's copy too,
+    as a restore leaves it; held by the note, or by the *incoming*
+    note whose days a backup's Update is about to write."""
+    prev = note.get("_prev")
+    if not isinstance(prev, dict) or not is_recurring(prev) or _repeats_as(note, prev):
+        return
+    came = {to: day for day, to in (prev.get("moved") or {}).items()}
+
+    def held(key):
+        # A holder's day for it: on its date, on the day the copy moved there
+        # from, or where the holder has moved that day since -- by date alone, a
+        # day the note moved was set aside as words it still held.
+        day = came.get(key, key)
+        for holder in (note, incoming) if incoming is not None else (note,):
+            mine, moved = holder.get("overrides") or {}, holder.get("moved") or {}
+            if any(at in mine and _own_words_held(prev, key, holder, at)
+                   for at in {key, day, moved.get(day, day)}):
+                return True
+        return False
+
+    aside = [_aside_entry(prev, key, key) for key in sorted(prev.get("overrides") or {})
+             if day_has_words(prev, key) and not held(key)]
+    if aside:
+        note["_set_aside"] = (note.get("_set_aside") or []) + aside
+    for key in DAY_FIELDS:
+        prev.pop(key, None)
+
+
+def notes_set_aside(note):
+    """The notes made of *note*'s days set aside (_set_aside), each on its
+    date with its words, look and the series' title marked "(earlier text)",
+    taken off the note. Shown on its day, they were read four ways, each
+    leaving a case; a note of its own is seen and kept as it is
+    (the owner's choice)."""
+    made = []
+    # Shaped as a read shapes them: an entry with no words made an empty
+    # note at a save, and none at the start.
+    for entry in _shaped_aside(note.pop("_set_aside", None)):
+        title = entry.get("title") or note.get("title") or ""
+        made.append({"title": (title + " (earlier text)").strip(), "body": entry.get("body", ""),
+                     "comments": entry.get("comments", ""),
+                     "category": entry.get("category") or note.get("category") or "",
+                     "color": entry.get("color", ""), "date": entry.get("day", "")})
+    return made
+
+
+def settle_set_aside(notes):
+    """Each note of *notes* whose days were set aside given them as notes of
+    their own (notes_set_aside), added at the end and numbered on from the
+    highest, worked out once -- asked for each, the whole notebook was walked
+    for every note made. Returns how many. At the start (core load_notes,
+    which writes them at once: left for the next save, each start made them
+    again under new identities) and at every save."""
+    stamp = now_stamp()
+    made, next_id, held = 0, None, set()
+    for note in list(notes):
+        if not isinstance(note, dict) or not note.get("_set_aside"):
+            continue
+        if next_id is None:
+            next_id = max([n["id"] for n in notes], default=0) + 1
+            # A note already holding the same words on the same day is that
+            # note: a backup's Update made it again at every import.
+            held = {(n.get("title"), n.get("date"), n.get("body"), n.get("comments"))
+                    for n in notes if isinstance(n, dict)}
+        for fresh in notes_set_aside(note):
+            made_note = normalize_note(dict(fresh, id=next_id, created=stamp, updated=stamp))
+            # Its comments among its words: other comments are another note.
+            key = (made_note["title"], made_note["date"], made_note["body"], made_note["comments"])
+            if key in held:
+                continue
+            held.add(key)
+            notes.append(made_note)
+            next_id += 1
+            made += 1
+    return made
+
+
+def _shaped_aside(entries):
+    """A note's days set aside, as a load reads them: each with a real date,
+    written as the calendar keys one, and a word, every field text."""
+    kept = []
+    for entry in entries if isinstance(entries, list) else []:
+        when = parse_date(entry.get("day")) if isinstance(entry, dict) else None
+        if when is None:
+            continue
+        shaped = {key: entry.get(key) if isinstance(entry.get(key), str) else ""
+                  for key in OVERRIDABLE_FIELDS}
+        shaped["day"] = format_date(when)
+        if any(shaped[word].strip() for word in DAY_WORDS):
+            kept.append(shaped)
+            # Capped as moved days are: each becomes a note at the next start,
+            # and a file can say anything. A save empties the list each time.
+            if len(kept) >= MAX_OCCURRENCES:
+                break
+    return kept
+
+
+def _copy_days_placed(note, prev, moved):
+    """*note*'s days' edits with *prev*'s put in on the dates the note draws
+    their days (*moved*, the copy's moves taken), not where it deleted the
+    day; an edit with no words of its own takes the copy's, its look kept.
+    Returns those edits, and the copy's days whose words a day holding words
+    lacks, or the note deleted, set aside (_aside_entry)."""
+    mine = note.get("overrides") or {}
+    overrides = dict(mine)
+    deleted = set(note.get("exceptions") or [])
+    came = {}
+    for day, to in (prev.get("moved") or {}).items():
+        came.setdefault(to, day)
+    # An edit the copy draws on no day -- off its schedule, or under a date
+    # its day left or it deleted -- stays on its date, as the app keys one.
+    undrawn = set(off_schedule_days(prev)) | {
+        day for day in prev.get("exceptions") or [] if day not in came}
+    wanted, gone = [], []
+    for key, patch in (prev.get("overrides") or {}).items():
+        day = key if key in undrawn else came.get(key, key)
+        if day not in deleted:
+            at = key if key in undrawn else moved.get(day, day)
+            rank = 2 if key in undrawn else 0 if at == day else 1
+            wanted.append((not day_has_words(prev, key), rank, at, key, patch))
+        elif day_has_words(prev, key):
+            gone.append(key)
+    # Two of the copy's edits for one date: the one with words goes in, then
+    # the one its day is drawn on there; the other is set aside. A day moved
+    # onto a day off the schedule wrote one.
+    taken, aside = set(), []
+    # A day the note deleted stays deleted, but the copy's words for it are
+    # set aside, not dropped: the phone's older build showed such a day blank,
+    # its words in the copy alone (the owner's choice).
+    for key in sorted(gone):
+        if not _own_words_held(prev, key, note, key):
+            aside.append(_aside_entry(prev, key, key))
+    for no_words, _rank, at, key, patch in sorted(wanted, key=lambda want: want[:3]):
+        look = mine.get(at)
+        if at in taken or (look is not None and not no_words and day_has_words(note, at)):
+            if not no_words and not _own_words_held(prev, key, dict(note, overrides=overrides), at):
+                aside.append(_aside_entry(prev, key, at))
+            taken.add(at)
+            continue
+        taken.add(at)
+        if look is None:
+            overrides[at] = copy.deepcopy(patch)
+        elif not no_words:
+            look = look if isinstance(look, dict) else {}
+            overrides[at] = dict(copy.deepcopy(patch),
+                                 **{key: look[key] for key in _DAY_LOOK if key in look})
+    return overrides, aside
+
+
+def drop_hidden_moves(note):
+    """Each move of *note* onto a date its rule now gives -- the day drawn
+    nowhere there, a delete there taking it -- dropped; its words stay where
+    they showed, on the rule's day there. Words never move on their own (the
+    owner's choice). Not off a date whose own day stays deleted or moved
+    away; each chain walked once. At every read, save, update and restore of
+    the series (ISSUES_LOG: "Round seventeen")."""
+    moved = note.get("moved")
+    if not moved or not isinstance(moved, dict) or not is_recurring(note):
+        return
+    deleted = set(note.get("exceptions") or [])
+    gives = _rule_days_among(note, list(moved.values()))
+    goes = {}
+    for start in moved:
+        path, on_path, at = [], set(), start
+        while at in moved and at not in goes and at not in on_path:
+            path.append(at)
+            on_path.add(at)
+            at = moved[at]
+        # The chain's end, a day already settled, or a loop -- none of whose
+        # days is ever free to come back to.
+        after = False if at in on_path else goes.get(at, True)
+        for orig in reversed(path):
+            new = moved[orig]
+            after = after and new in gives and new not in deleted
+            goes[orig] = after
+    for orig in [day for day, leaving in goes.items() if leaving]:
+        del moved[orig]
+
+
+def _days_back_from_copy(note):
+    """A note that no longer repeats keeps its days' own text in itself, as
+    a turn-off here does; a turn-off by the phone, or by an older version of
+    this app, kept them only in the series' copy, which the next copy
+    erased. Brought back into the note once, as it is read -- and
+    into a note the phone turned back on as it was, which got none of them
+    back, the copy's days then spent (spend_series_days)."""
+    prev = note.get("_prev")
+    # Only the series' own copy: an update's holds days it replaced on
+    # purpose, and taken in they made the same backup read as changed.
+    if not _series_own_copy(prev):
+        return
+    if is_recurring(note) and not _repeats_as(note, prev):
+        return              # another series now: its days are not these
+    if not any(note.get(key) for key in DAY_FIELDS) and days_hold_own_text(prev):
+        for key in DAY_FIELDS:
+            note[key] = copy.deepcopy(prev.get(key) or NOTE_DEFAULTS[key])
+    spend_series_days(note)
+
+
+def kept_days_fit(note, date_value, recurrence):
+    """Whether the days a turned-off *note* kept belong to it turned back on
+    with *date_value* and *recurrence*: only when both are as the series had
+    them, which its rescue copy holds. True when it kept none, or nothing
+    says what the series was: kept, they lose nothing. An old deleted day
+    hid a series restarted on it."""
+    if is_recurring(note) or not is_recurring({"recurrence": recurrence}):
+        return True
+    kept = {key: note.get(key) for key in DAY_FIELDS if note.get(key)}
+    prev = note.get("_prev")
+    if not kept or not (isinstance(prev, dict) and is_recurring(prev)
+                        and all(prev.get(key) == value for key, value in kept.items())):
+        return True
+    return _same_series(prev.get("date"), prev.get("recurrence"), date_value, recurrence)
+
 
 def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Overwrite *note*'s *fields* from *incoming* (normalised first),
@@ -209,10 +800,44 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     for field in fields:
         if field not in prev:
             prev[field] = copy.deepcopy(note.get(field, NOTE_DEFAULTS.get(field)))
+    # A share code's repeat turned off: this device's days are copied beside
+    # the repeat they hang on, and stay in the note -- moved, the next copy
+    # erased them. A backup brings its own (UPDATABLE_FROM_BACKUP).
+    restarted = ("overrides" not in fields and "recurrence" in fields
+                 and not kept_days_fit(note, fresh.get("date"), fresh["recurrence"]))
+    if "overrides" not in fields and "recurrence" in fields:
+        prev.update(days_to_rescue(note, fresh["recurrence"]))
+    # Turned back on another way: the old series' deleted days, which hold
+    # nothing, go with this copy instead of hiding the new series' own.
+    if restarted and note.get("exceptions"):
+        prev["exceptions"] = copy.deepcopy(note["exceptions"])
+    # The copy this one replaces may hold another series' days alone: set
+    # aside once kept_days_fit has read them -- held by the days
+    # a backup brings, too.
+    copy_days_set_aside(note, fresh if "overrides" in fields else None)
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
-    note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # ...and a backup's fields this version does not know, beside this note's
+    # own: a share code carries none (SHAREABLE_FIELDS), so a stranger's code
+    # cannot add one. Restore previous puts back the known fields only.
+    if fields is UPDATABLE_FROM_BACKUP:
+        # The note's own kept in the copy (an Update overwrote one, and
+        # Restore previous could not put it back); the two held to the bounds.
+        mine, theirs = unknown_fields(note), unknown_fields(fresh)
+        if mine or theirs:
+            note["_prev"]["_unknown"] = copy.deepcopy(mine)
+            for name in mine:
+                note.pop(name, None)
+            note.update(unknown_fields(dict(mine, **theirs)))
+    # A backup's note sets aside what its own copy kept, as it is read: an
+    # Add kept those, an Update dropped them.
+    if "overrides" in fields and fresh.get("_set_aside"):
+        note["_set_aside"] = (note.get("_set_aside") or []) + copy.deepcopy(fresh["_set_aside"])
+    if restarted:
+        note["exceptions"] = []
+    drop_hidden_moves(note)
+    note["updated"] = now_stamp()
     return note
 
 
@@ -238,8 +863,36 @@ def rescue_copy_spent(note):
     if (normalize_paragraphs(note.get("paragraphs") or [], lines)
             != normalize_paragraphs(prev.get("paragraphs") or [], lines)):
         return False
-    return all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
-               for key in prev if key not in PREV_TEXT_FIELDS)
+    return all(_copy_field_held(note, prev, key) for key in prev if key not in PREV_TEXT_FIELDS)
+
+
+def _copy_field_held(note, prev, key):
+    """Whether *note* holds *prev*'s field *key* again: a repeat rule by the
+    days it gives (_same_series), any other as it is. Compared as stored, a
+    rule with its weekday lit was never the same, and the copy never spent
+   ."""
+    if key == "recurrence":
+        day = note.get("date")
+        return _same_series(prev.get("date", day), prev[key], day, note.get(key, NOTE_DEFAULTS.get(key)))
+    if key == "_unknown":
+        # Held when the note holds each of its own again, kinds told apart; a
+        # field the backup added it cannot remove by hand, so it does not count.
+        mine = unknown_fields(note)
+        return all(name in mine and _typed(mine[name]) == _typed(value)
+                   for name, value in prev[key].items())
+    return prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
+
+
+def _unknown_kept_by_restore(note, prev):
+    """Whether "↩ Restore previous" keeps each field this version does not
+    know that *note* holds now. The restore puts back the copy's alone, so
+    each must be the copy's, kinds told apart: the reverse of the spending
+    rule above, where a field the backup added does not count."""
+    theirs = prev.get("_unknown")
+    if not isinstance(theirs, dict):
+        return True
+    return all(name in theirs and _typed(theirs[name]) == _typed(value)
+               for name, value in unknown_fields(note).items())
 
 
 def text_lost(old, new):
@@ -257,52 +910,122 @@ def text_lost(old, new):
     return len(old) - start - end
 
 
-def rescue_copy_due(old_title, old_body, title, body):
-    """Whether a save of *title* and *body* over *old_title* and *old_body*
-    keeps the old text as the rescue copy "↩ Restore previous" brings back:
-    emptied; more than 40 characters gone, 30% of it or 200; or most of a
-    short note, 70% and 15 characters at least. Counted by what is gone, not
-    by how much shorter the text got. ISSUES_LOG: "The safety net that
-    measured the wrong thing"."""
+def words_lost(old, new):
+    """How many characters of the words in *old* are not in *new*, each word
+    counted as often as it appears, with the space it went with: the bars
+    rescue_copy_due sets count spaces too. A word moved, or a cell padded
+    wider, is not lost; a word with one letter changed is lost whole. A
+    list's markers are no words: numbers turned to bullets lost none."""
+    gone = Counter(_words(old))
+    gone.subtract(_words(new))
+    return sum((len(word) + 1) * count for word, count in gone.items() if count > 0)
+
+
+def _words(text):
+    """*text*'s words, each line's list marker left out (strip_list_markers)."""
+    return strip_list_markers(text).split()
+
+
+def _lost(old, new):
+    """What a save of *new* over *old* takes away: the smaller of two counts
+    that each never come out under it. text_lost read a column added to every
+    row, or a list renumbered, as the whole span lost; words_lost reads one
+    letter changed in a paragraph with no spaces (Chinese, Japanese) as the
+    paragraph lost."""
+    return min(text_lost(old, new), words_lost(old, new))
+
+
+def _measured(text):
+    """*text*'s length as words_lost counts it: each word with one space."""
+    return sum(len(word) + 1 for word in _words(text))
+
+
+def rescue_copy_due(old_title, old_body, title, body, old_comments="", comments=""):
+    """Whether a save keeps the old text as the rescue copy "↩ Restore
+    previous" brings back: emptied; more than 40 characters gone, 30% of it
+    or 200; or most of a short note, 70% and 15 characters at least -- for
+    the title and body, or for the comments as a text of their own.
+    Counted by what is gone. ISSUES_LOG: "The safety
+    net that measured the wrong thing"."""
+    return (_text_rescue_due(old_title, old_body, title, body)
+            or _text_rescue_due("", old_comments, "", comments))
+
+
+def _text_rescue_due(old_title, old_body, title, body):
+    """rescue_copy_due's bars, for one text: a title and a body, or the
+    comments alone."""
     old_len = len(old_title) + len(old_body)
     if old_len == 0:
         return False
     if len(title) + len(body) == 0:
         return True
-    lost = text_lost(old_title, title) + text_lost(old_body, body)
-    if lost > 40 and (lost >= old_len * 0.3 or lost >= 200):
+    lost = _lost(old_title, title) + _lost(old_body, body)
+    # The shares in the units the loss is counted in: set against a length
+    # with a table's padding in it, half a table deleted read as a quarter.
+    size = _measured(old_title) + _measured(old_body) or old_len
+    if lost > 40 and (lost >= size * 0.3 or lost >= 200):
         return True
-    return lost >= 15 and lost >= old_len * 0.7
+    return lost >= 15 and lost >= size * 0.7
 
 
 def copy_replaced_by_restore(note, prev):
     """What "↩ Restore previous" keeps of the version it replaces, to be
-    the rescue copy in its turn -- its text, and each other field *prev*
-    brings back -- so the same button brings it back; spent, the copy took
-    everything written since the deletion with no way back. None when it
-    holds nothing the restored version lacks (an emptied note, words the
-    restored text contains): a button offering that back would mislead."""
+    the rescue copy in its turn: its text, each other field *prev* brings
+    back, and a copy of the series' days when the restore ends the repeat
+    (days_to_rescue; the note keeps its own). None when it holds nothing
+    the restored version lacks: a button offering that would mislead."""
     title = note.get("title") or ""
-    nothing_lost = ((note.get("body") or "").strip() in (prev.get("body") or "")
+    body = note.get("body") or ""
+    taken = {key: days for key, days in
+             (days_to_rescue(note, prev["recurrence"]) if "recurrence" in prev else {}).items()
+             if key not in prev}
+    # Everything the restore writes over is weighed: the comments too, and
+    # the styles of the same words. Comments typed since the copy went to no
+    # file, the question saying nothing.
+    same_words = body == (prev.get("body") or "")
+    lines = len(body.split("\n"))
+    styles = (normalize_formatting(note.get("formatting") or []),
+              normalize_paragraphs(note.get("paragraphs") or [], lines))
+    # Words held in the copy's but not the same: their styles cannot be laid
+    # beside the copy's, so any style is weighed as lost -- a part made bold
+    # since went to no file.
+    styles_kept = (styles == (normalize_formatting(prev.get("formatting") or []),
+                              normalize_paragraphs(prev.get("paragraphs") or [], lines))
+                   if same_words else not any(styles))
+    nothing_lost = (body.strip() in (prev.get("body") or "")
                     and (not title.strip() or title == (prev.get("title") or ""))
-                    and all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
-                            for key in prev if key not in PREV_TEXT_FIELDS))
+                    and (note.get("comments") or "").strip() in (prev.get("comments") or "")
+                    and styles_kept
+                    and all(_copy_field_held(note, prev, key)
+                            for key in prev if key not in PREV_TEXT_FIELDS and key != "_unknown")
+                    and _unknown_kept_by_restore(note, prev)
+                    and not taken)
     if nothing_lost:
         return None
-    return {key: copy.deepcopy(note.get(key, NOTE_DEFAULTS.get(key)))
+    kept = {key: copy.deepcopy(note.get(key, NOTE_DEFAULTS.get(key)))
             for key in list(PREV_TEXT_FIELDS) + [k for k in prev if k not in PREV_TEXT_FIELDS]}
+    if "_unknown" in prev:
+        kept["_unknown"] = unknown_fields(note)
+    kept.update(taken)
+    return kept
 
 
 def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Whether updating *note* from *incoming* would change any of *fields*,
-    both compared as a load shapes them.
-
-    A no-change update would replace the rescue copy with a duplicate and
-    lose the one earlier version. ISSUES_LOG: "Importing the same backup
-    twice, the second time"; smaller lessons: shared_update_changes."""
-    fresh = normalize_note(dict(incoming))
-    mine = normalize_note(dict(note))
-    return any(mine[field] != fresh[field] for field in fields)
+    both compared as a load shapes them. A no-change update would replace the
+    rescue copy and lose the one earlier version (ISSUES_LOG: "Importing the
+    same backup twice, the second time"); so would an Update for a field this
+    version does not know alone, which it cannot restore (DATA_FORMAT, D2)."""
+    # The arriving note read as a load reads it, its copy's days taken back,
+    # then both compared bare; this side, held in memory, is not read again
+    # (ISSUES_LOG: "Round seven: a copy taken"; ISSUES_LOG: "Round nine: days").
+    fresh = {key: value for key, value in normalize_note(dict(incoming)).items() if key != "_prev"}
+    mine = normalize_note({key: value for key, value in note.items() if key != "_prev"})
+    # The repeat by the days it gives (_same_series): a start weekday lit or
+    # not read as changed, and the Update spent the only earlier version.
+    # Another start still changes "date".
+    return any(not _same_series(mine["date"], mine[field], mine["date"], fresh[field])
+               if field == "recurrence" else mine[field] != fresh[field] for field in fields)
 
 
 def split_by_identity(notes, incoming):
@@ -319,11 +1042,21 @@ def split_by_identity(notes, incoming):
     for note in notes:
         if isinstance(note, dict) and isinstance(note.get("uid"), str):
             mine_by_uid.setdefault(note["uid"], note)
+    # The first arrival claims an identity; a second comes in as a note of
+    # its own, as the phone's Importing.plan has it. Paired twice, one note
+    # was updated twice and the person's words kept in no copy.
+    claimed = set()
     known, fresh = [], []
     for note in incoming:
         if not isinstance(note, dict):
             continue
-        mine = mine_by_uid.get(_uid_wanted(note.get("uid")))
+        uid = _uid_wanted(note.get("uid"))
+        if uid is not None and uid in claimed:
+            fresh.append({k: v for k, v in note.items() if k != "uid"})
+            continue
+        if uid is not None:
+            claimed.add(uid)
+        mine = mine_by_uid.get(uid)
         if mine is None:
             fresh.append(note)
         else:
@@ -357,7 +1090,21 @@ def clean_override(patch):
             # always read as unsaved.
             v = with_caret_line(v)
         out[k] = v
+    # ...and the day's own list lines, kept even empty: a day saved since
+    # keeps its lists' structure, one saved before takes the series' by line
+    # (day_paragraphs; the owner's choice).
+    if isinstance(patch.get("paragraphs"), list):
+        out["paragraphs"] = list_lines(patch["paragraphs"], out.get("body"))
     return out
+
+
+def day_paragraphs_shown(note, day):
+    """The lines' looks *note*'s *day* shows (day_paragraphs): what the day
+    view puts on, a day's save compares with, and Make it a note keeps."""
+    shown = effective_note(note, day)
+    own = ((note.get("overrides") or {}).get(day) or {}).get("paragraphs")
+    return day_paragraphs(note.get("paragraphs"), shown.get("body"),
+                          shown.get("body") == note.get("body"), own)
 
 
 def _bare_file_name(name):
@@ -367,6 +1114,138 @@ def _bare_file_name(name):
     drops the trailing dots and spaces Windows ignores when opening, so
     "invoice.lnk. " cannot pass the warn-before-opening gate as harmless."""
     return os.path.basename(name.replace("\\", "/")).rstrip(". ")
+
+
+# What changes how a name reads without being seen -- controls, bidi marks
+# and overrides (U+202E shows "Invoice<U+202E>fdp.exe" as "Invoiceexe.pdf"),
+# line separators, the BOM -- out of every name shown and every name written.
+HIDDEN_IN_NAMES = re.compile(
+    r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069"
+    r"\u2028\u2029\ufeff]")
+
+
+def _type_suffix(name):
+    """The last dot and what follows it, as typed; "" when there is none."""
+    name = name.rstrip(". ")
+    dot = name.rfind(".")
+    return name[dot:] if dot >= 0 else ""
+
+
+def file_type_of(name):
+    """The kind of file *name* is as Windows opens it: what follows the last
+    dot, lower-case, once the trailing dots and spaces Windows ignores are
+    gone; "" when there is none. Not os.path.splitext, for which ".rdp" has
+    no extension: to Windows it is an .rdp file, and the app's stamp_ prefix
+    made "stamp_.bashrc" a .bashrc where the person's own name was not."""
+    if not isinstance(name, str):
+        return ""
+    return _type_suffix(os.path.basename(name.replace("\\", "/"))).lower()
+
+
+# The pictures the app shows itself, large, instead of handing them to
+# Windows (ui/attachments.py, _show_image_preview). Asked of the stored file,
+# never of the label: the row's icon, its hint and the click all agree.
+PREVIEWED_IN_APP = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"})
+
+# Kinds whose usual app only shows what is in them: handed to Windows at once.
+# Every other kind asks first, since a list of the dangerous ones is never
+# complete. ISSUES_LOG: "The photo that was a remote connection".
+OPENS_WITHOUT_ASKING = PREVIEWED_IN_APP | frozenset({
+    ".jfif", ".tif", ".tiff", ".heic", ".heif", ".avif", ".ico",
+    # Formats that cannot carry macros or scripts: not .doc, .xls, .ppt or
+    # OpenDocument, which can, nor web pages, .svg or .xml, which a browser runs.
+    ".pdf", ".txt", ".md", ".markdown", ".csv", ".log", ".rtf",
+    ".docx", ".xlsx", ".pptx",
+    # Sound and video; not .wma, .wmv or .asf, whose container can carry
+    # script commands and web addresses, nor playlists, which are addresses.
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus",
+    ".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm",
+})
+
+# Kinds Windows runs, or that run code or reach out when opened: these ask with
+# the stronger warning. Missing one costs only the wording -- it still asks.
+DANGEROUS_EXTENSIONS = frozenset({
+    # Programs and scripts Windows runs outright.
+    ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp", ".mst",
+    ".ps1", ".ps2", ".psm1", ".psd1", ".ps1xml", ".ps2xml", ".psc1", ".psc2",
+    ".msh", ".msh1", ".msh2", ".mshxml", ".msh1xml", ".msh2xml",
+    ".vbs", ".vbe", ".vb", ".bas", ".js", ".jse", ".wsf", ".wsh", ".ws",
+    ".wsc", ".sct", ".hta", ".cpl", ".jar", ".jnlp", ".reg", ".msc",
+    ".gadget", ".py", ".pyw", ".pyz", ".pyzw", ".pyc", ".pyo",
+    # Shortcuts, installers, disk images and settings files that hand Windows
+    # a command, a package, a remote connection or a theme to apply.
+    ".lnk", ".url", ".website", ".scf", ".iso", ".img", ".vhd", ".vhdx",
+    ".chm", ".hlp", ".inf", ".ins", ".isp", ".appref-ms", ".application",
+    ".settingcontent-ms", ".library-ms", ".search-ms", ".appcontent-ms",
+    ".msix", ".msixbundle", ".appx", ".appxbundle", ".appinstaller", ".msu",
+    ".cab", ".diagcab", ".diagpkg", ".diagcfg", ".xbap", ".rdp", ".theme",
+    ".themepack", ".deskthemepack", ".cer", ".crt", ".der", ".mht", ".mhtml",
+    ".shs", ".shb", ".mcf", ".xnk", ".glk", ".wiz", ".wsb",
+    # Documents and add-ins that carry macros or fetch data when opened.
+    ".docm", ".dotm", ".xlsm", ".xltm", ".xlsb", ".xlam", ".xla", ".xll",
+    ".pptm", ".potm", ".ppsm", ".ppam", ".sldm", ".iqy", ".slk",
+    ".one", ".onepkg", ".pub", ".mdb", ".accdb", ".accde", ".mde", ".mda",
+    ".ade", ".adp",
+})
+
+
+def how_to_open(name):
+    """How the attachment stored as *name* opens -- judged from the stored
+    file, never from its label: "preview" (the app shows it), "open" (handed
+    to Windows at once), "warn" (asks, saying it can run programs) or "ask"
+    (asks, saying the app does not know the kind)."""
+    kind = file_type_of(name)
+    if kind in PREVIEWED_IN_APP:
+        return "preview"
+    if kind in OPENS_WITHOUT_ASKING:
+        return "open"
+    if kind in DANGEROUS_EXTENSIONS:
+        return "warn"
+    return "ask"
+
+
+# What Windows refuses in a file name: its reserved punctuation and every
+# control character. A title holding a control character could not be exported.
+_FORBIDDEN_IN_FILE_NAMES = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def export_file_stem(title):
+    """A file name made from a note's title, before its extension: what Windows
+    refuses becomes "_", what hides or reorders text goes, the ends lose their
+    dots and spaces, and 60 characters are kept -- "note" when none are left.
+    The single-note export and the bulk one both name their files by it."""
+    stem = HIDDEN_IN_NAMES.sub("", _FORBIDDEN_IN_FILE_NAMES.sub("_", title))
+    return stem.strip(" ._")[:60] or "note"
+
+
+def attachment_display_name(filename, stored_as):
+    """The name a person is shown for an attachment: *filename*, a label a
+    backup can write over any file, cleaned of HIDDEN_IN_NAMES and made to
+    end in the type of *stored_as*, the file that opens ("Holiday photo.jpg"
+    over an .rdp shows "Holiday photo.rdp"). The app's own records already
+    agree, so they show as they were; a second pass changes nothing.
+    ISSUES_LOG: "The photo that was a remote connection"."""
+    stored = stored_as if isinstance(stored_as, str) else ""
+    stored_name = HIDDEN_IN_NAMES.sub("", os.path.basename(stored.replace("\\", "/")))
+    name = HIDDEN_IN_NAMES.sub("", filename if isinstance(filename, str) else "")
+    if not name.strip(". "):
+        name = stored_name
+    if not stored:
+        return name
+    # Cleaned too, so the name shown never carries a hidden character the
+    # stored one has. A type that held one is no type Windows knows.
+    real = HIDDEN_IN_NAMES.sub("", file_type_of(stored))
+    if file_type_of(name) == real:
+        return name
+    stem = name.rstrip(". ")
+    if real:
+        stem = stem[:len(stem) - len(_type_suffix(stem))]
+    else:
+        # A file with no type shows none: "photo.tar.jpg" over a file that
+        # has none would still read as a .tar.
+        while _type_suffix(stem):
+            stem = stem[:len(stem) - len(_type_suffix(stem))].rstrip(". ")
+    return (stem + real) or stored_name
 
 
 def normalize_note(note):
@@ -411,6 +1290,9 @@ def normalize_note(note):
             shaped = normalize_note(extra)
             for key in extra:
                 clean["_prev"][key] = shaped[key]
+        # The fields this version did not know, as a backup's Update found them.
+        if isinstance(prev.get("_unknown"), dict):
+            clean["_prev"]["_unknown"] = unknown_fields(prev["_unknown"])
     for key, default in NOTE_DEFAULTS.items():
         value = note.get(key, default)
         if isinstance(default, str) and not isinstance(value, str):
@@ -427,12 +1309,14 @@ def normalize_note(note):
     if not clean["updated"]:
         # Includes seconds (not just minutes) so two notes saved in the same
         # minute still sort correctly by "Recently updated" instead of tying.
-        clean["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean["updated"] = now_stamp()
     # Old notes predate the 'created' field — approximate it with 'updated' so
     # they still show a sensible creation date.
     if not clean["created"]:
         clean["created"] = clean["updated"]
-    clean["pinned"] = bool(clean.get("pinned"))
+    # Only true pins: bool() read a hand-edited "false" as pinned, and the
+    # phone, which reads true alone, filed the same note unpinned.
+    clean["pinned"] = clean.get("pinned") is True
     # The place in Custom order, absent until a person moves the note: "not
     # placed yet" is its own answer, so it is not in NOTE_DEFAULTS. Kept only
     # if a finite number -- True, "3" or NaN would reach the sort comparator.
@@ -466,10 +1350,21 @@ def normalize_note(note):
     # the same one, no two days on one date, and no move of a deleted day.
     # Capped as a rule's days are: each is worked out on every calendar draw.
     moved, held_on = {}, set()
-    for orig, new in sorted((k, v) for k, v in clean["moved"].items()
-                            if isinstance(k, str) and isinstance(v, str)):
+    # A set: the sorted list, walked whole for every moved day, took the
+    # square of their number to load.
+    deleted = set(clean["exceptions"])
+    pairs = sorted((k, v) for k, v in clean["moved"].items()
+                   if isinstance(k, str) and isinstance(v, str))
+    # Of two moves onto one date, the one the calendar draws -- its own date
+    # the rule's -- is kept: by date alone the read kept a dead one, and a
+    # meeting moved under the phone's older build jumped back.
+    twins = {new for new, count in Counter(v for _k, v in pairs).items() if count > 1}
+    if twins and is_recurring(clean):
+        live = _rule_days_among(clean, [k for k, v in pairs if v in twins])
+        pairs.sort(key=lambda kv: (kv[1] not in twins or kv[0] not in live, kv[0], kv[1]))
+    for orig, new in pairs:
         if (parse_date(orig) and parse_date(new) and orig != new
-                and new not in held_on and orig not in clean["exceptions"]):
+                and new not in held_on and orig not in deleted):
             moved[orig] = new
             held_on.add(new)
             if len(moved) >= MAX_OCCURRENCES:
@@ -491,7 +1386,7 @@ def normalize_note(note):
         for d, patch in clean["overrides"].items()
         if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
     }
-
+    drop_hidden_moves(clean)
 
     # Tags were removed as a feature — drop any leftover "tags" key from
     # notes saved before this cleanup, so old data doesn't keep carrying it
@@ -507,7 +1402,9 @@ def normalize_note(note):
             text = item.get("text", "")
             if not isinstance(text, str):
                 text = ""
-            checklist.append({"text": text, "done": bool(item.get("done"))})
+            # Any length kept: an item saved before the box had a limit is
+            # the person's words. Its row draws it cut (checklist_shown).
+            checklist.append({"text": text, "done": item.get("done") is True})
         if len(checklist) >= MAX_CHECKLIST_ITEMS:
             break
     clean["checklist"] = checklist
@@ -544,6 +1441,9 @@ def normalize_note(note):
             item["stored_as"] = _bare_file_name(display)
             if not item["stored_as"]:
                 continue
+        # The label agrees with the file that opens, and hides nothing.
+        # ISSUES_LOG: "The photo that was a remote connection".
+        item["filename"] = attachment_display_name(display, item["stored_as"])
         attachments.append(item)
         if len(attachments) >= MAX_ATTACHMENTS:
             # Same class as the checklist cap above: an unbounded list a
@@ -562,6 +1462,14 @@ def normalize_note(note):
     # a crash on every subsequent launch.
     clean["color"] = sanitize_color(clean.get("color"))
 
+    # A copy's days set aside, kept until the notebook makes them notes of
+    # their own (notes_set_aside): written to the file meanwhile, not lost.
+    aside = _shaped_aside(note.get("_set_aside"))
+    if aside:
+        clean["_set_aside"] = aside
+    # What a newer version (or another program) wrote, kept: see KNOWN_NOTE_FIELDS.
+    clean.update(unknown_fields(note))
+    _days_back_from_copy(clean)
     return clean
 
 
@@ -614,6 +1522,9 @@ def note_is_empty(note):
         or (isinstance(checklist, list) and checklist)
         or repeats
         or _s(note.get("date"))
+        # A newer version's field is content too: blank to this one, the
+        # first start's cleanup deleted a note that held only that.
+        or unknown_fields(note)
     )
 
 
@@ -639,7 +1550,7 @@ def _checklist_signature(checklist):
         if isinstance(item, dict):
             text = item.get("text")
             out.append(((text.strip() if isinstance(text, str) else ""),
-                        bool(item.get("done"))))
+                        item.get("done") is True))
     return tuple(out)
 
 
@@ -689,8 +1600,11 @@ def content_signature(note):
         _stable(note.get("overrides")),
         _stable(note.get("exceptions")),
         _stable(note.get("moved")),
-        bool(note.get("pinned")),
+        note.get("pinned") is True,
         _text(note.get("color")),
+        # Two notes differing only in a field this version does not know are
+        # two notes: signed alike, a cleanup kept one and the field went.
+        unknown_signature(note),
     )
 
 

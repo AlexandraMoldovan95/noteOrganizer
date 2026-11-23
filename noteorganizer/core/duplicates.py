@@ -1,41 +1,20 @@
-"""Finding notes that are effectively the same note.
+"""Finding notes that are effectively the same note -- a backup imported
+twice, a Duplicate never edited -- for Settings to offer to clean up.
 
-WHAT THIS MODULE IS FOR
------------------------
-Duplicates appear easily - importing a backup twice, or using "Duplicate"
-and then editing neither copy. This module decides what counts as a
-duplicate so Settings can offer to clean them up.
-
-HOW "THE SAME" IS DECIDED
--------------------------
-:func:`_dup_key` builds a comparison key from title, body, comments and
-category — after two deliberate normalisations — plus the checklist and
-the repeat rule, compared exactly:
-
-* :func:`_strip_copy_suffix` removes any number of trailing ``" (copy)"``
-  markers, so a note and its duplicate still match even though the app
-  renamed one of them.
-* :func:`_normalize_ws` collapses runs of whitespace and trims, so notes
-  differing only by a stray blank line or trailing space still match.
-* The checklist and recurrence join the key un-fuzzed, because cleanup
-  does not merge them: whichever copy is dropped takes its checklist and
-  its series with it, so notes that differ there must never group.
-
-Date, colour, attachments and pinned state are ignored on purpose. Two
-notes with identical text are the same note to a person even if one is
-pinned — and attachments are safe to ignore because the cleanup hands
-the kept note the group's combined files.
-
-(The signature helpers are imported inside :func:`_dup_key`, not at module
-top: storage imports this module while model is still half initialised —
-model → categories → storage → here — so a top-level import of model
-closes that loop and crashes the package.)
-
-Grouping is then a dict of key -> list of notes, keeping only groups with
-more than one member. Using a dict rather than comparing every note with
-every other note keeps this linear in the number of notes instead of
-quadratic, which starts to matter at a few thousand notes.
+:func:`_dup_key` compares title, body, comments and category with case,
+spacing and a trailing " (copy)" set aside, and the checklist, the repeat
+rule and a series' own days exactly, as the cleanup merges none of them.
+Date, colour, pinning and attachments are left out on purpose. Grouping by
+key in a dict keeps it linear in the number of notes. The model's helpers
+are imported inside :func:`_dup_key`: at the top, model -> categories ->
+storage -> here closed an import loop. The walk is in docs/CODE_TOUR.md.
 """
+
+# What _dup_key compares, as every text about duplicates says it (three of
+# five hand-written copies missed parts), but a newer version's fields, unseen.
+SAME_AS = ("same title, text, comments, category, checklist, repeat rule "
+           "and a series' own days")
+
 
 def _strip_copy_suffix(title):
     """Remove any number of trailing ' (copy)' markers from a title, so a note
@@ -55,22 +34,15 @@ def _normalize_ws(text):
 
 
 def _dup_key(note):
-    """The signature used to decide whether two notes are 'the same' —
-    text compared case/whitespace-insensitively, ignoring a trailing
-    ' (copy)' in the title. Shared by duplicate-group detection and by
-    the import flow's duplicate check, so both agree on what counts as a
-    match.
-
-    The checklist and the repeat rule are part of the key: neither is
-    merged when a duplicate group is cleaned up (only attachments are),
-    so treating two notes that differ there as 'the same' silently
-    destroyed whichever copy the cleanup dropped — and on the import
-    routes it skipped the incoming note outright, with no user in the
-    loop at all. Attachments stay OUT of the key on purpose: the cleanup
-    gives the kept note the group's combined attachments, so differing
-    files are preserved, not lost. Date stays out too — a copy carrying
-    a different date is still, to a person, the same note twice."""
-    from .model import _checklist_signature, _recurrence_signature
+    """The signature deciding whether two notes are 'the same', shared by
+    the duplicate groups and the import's check so both agree. The
+    checklist, the repeat rule and a series' own days are in it, as no
+    cleanup merges them -- left out, the dropped copy took them along.
+    Attachments stay out (the cleanup gives the kept note the group's
+    files, up to the cap); a date does too."""
+    from .model import _checklist_signature, _recurrence_signature, _stable, unknown_signature
+    exceptions, overrides, moved = (note.get("exceptions"), note.get("overrides"),
+                                    note.get("moved"))
     return (
         _normalize_ws(_strip_copy_suffix(note.get("title") or "")).lower(),
         _normalize_ws(note.get("body") or "").lower(),
@@ -78,17 +50,23 @@ def _dup_key(note):
         note.get("category") or "",
         _checklist_signature(note.get("checklist")),
         _recurrence_signature(note.get("recurrence")),
+        # The days a series keeps of its own: a copy holding a deleted, an
+        # edited or a moved day grouped with one that did not, and the
+        # cleanup could drop it.
+        (tuple(sorted(str(d) for d in exceptions)) if isinstance(exceptions, list) else (),
+         _stable(overrides if isinstance(overrides, dict) else {}),
+         _stable(moved if isinstance(moved, dict) else {})),
+        # A field this version does not know: the cleanup keeps one copy, and
+        # grouped by the rest it dropped the other's field with it.
+        unknown_signature(note),
     )
 
 
 def find_duplicate_groups(notes):
-    """Group notes that are the same in title, body, comments, category,
-    checklist and repeat rule. Text matching ignores case and normalizes
-    whitespace, and a trailing ' (copy)' in the title is ignored; the
-    checklist and recurrence compare exactly, because cleanup does not
-    merge them. Date, attachments, color and IDs are IGNORED — attachments
-    safely so: when the user cleans up, the kept copy inherits the group's
-    combined attachments so nothing is lost."""
+    """Group notes the same by :func:`_dup_key` (SAME_AS says it in words):
+    only groups of more than one. Date, attachments, colour and ids are
+    ignored -- the kept copy inherits the group's files, up to the cap,
+    and the rest stay with their copies in the Trash."""
     groups = {}
     for n in notes:
         groups.setdefault(_dup_key(n), []).append(n)

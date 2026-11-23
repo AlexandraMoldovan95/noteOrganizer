@@ -1,32 +1,16 @@
-"""Files attached to a note, and previewing them.
+"""Files attached to a note, and previewing them: adding and removing, the
+list under the editor, and the in-app preview -- animated GIFs among them,
+which is why Pillow is the app's one runtime dependency. Grouped by the call
+graph (67% of these methods' calls are to each other; ARCHITECTURE).
 
-WHAT THIS IS FOR
-----------------
-Adding and removing attachments, the list shown under the editor, and the
-in-app preview -- including animated GIFs, which is why Pillow is the
-app's one runtime dependency.
-
-WHY THESE BELONG TOGETHER
--------------------------
-Chosen from the call graph: 67% of the calls these methods make are to
-each other, the highest of any remaining group once dialogs and the
-calendar had moved out. That number rose from 38% when the dialogs left,
-which is the useful part -- much of what looked like outside traffic was
-this group asking for a confirmation box.
-
-DELETING A FILE IS NOT THE SAME AS REMOVING A REFERENCE
--------------------------------------------------------
-Removing an attachment from a note removes the *reference*. Whether the
-file on disk goes too depends on where the note is heading: a note moved
-to the trash keeps its files, because restoring it has to restore them
-as well. Only the permanent-deletion paths call
-``_delete_attachment_files``. See ``docs/ISSUES_LOG.md``, "The
-attachments that were never deleted".
-
-See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
-keep them working.
+A note in the Trash keeps its files, for a restore to bring back. Deleting
+for good, and removing one attachment, go through _delete_attachment_files,
+which spares a file another note or Trash entry still names (ISSUES_LOG:
+"Files that outlived the notes they belonged to"). What a mixin is, and the
+two rules that keep them working: :mod:`noteorganizer.ui`.
 """
 
+import filecmp
 import os
 import shutil
 import tkinter as tk
@@ -37,9 +21,48 @@ from datetime import datetime
 from PIL import Image, ImageTk
 
 from ..core import paths
-from ..core.model import MAX_ATTACHMENTS
+from ..core.model import (MAX_ATTACHMENTS, attachment_display_name,
+                          file_type_of, how_to_open)
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
-                            attachment_names_in)
+                            attached_files_kept, attachment_names_in, count_noun)
+from .calendar_view import _fit_title
+from .dialogs import one_line
+
+
+def _name_and_type(display_name):
+    """*display_name* as (the name, its type) -- "Holiday photo", ".rdp" --
+    or (display_name, "") when it shows no type. Cut by length from the end,
+    never by an index found in a lower-cased copy: "İ" lower-cases to two
+    characters, and each one moved the cut a letter into the type."""
+    kind = file_type_of(display_name)
+    cut = len(display_name.rstrip(". ")) - len(kind)
+    if kind and cut > 0 and display_name[cut:cut + len(kind)].lower() == kind:
+        return display_name[:cut], display_name[cut:]
+    return display_name, ""
+
+
+def _quoted(display_name):
+    """An attachment's name as a question quotes it: one line, and a long
+    name cut before its type, which always shows -- a backup's label of
+    60,000 letters made the question taller than X can draw."""
+    stem, kind = _name_and_type(display_name)
+    return one_line(stem, 100) + kind
+
+
+def _stored_name_for(original_name):
+    """The name a new attachment's copy is stored under: the moment, then the
+    file's own name. No colon, which the resolver refuses as a stream
+    (_attachment_path_within): only Linux allows one in a name."""
+    return (f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_"
+            f"{original_name.replace(':', '_')}")
+
+
+def _shown_when_attached(src_path, stored_as=None):
+    """The name *src_path* shows once attached, as every other route shows
+    it, so the save's normalize_note finds nothing to change."""
+    original_name = os.path.basename(src_path)
+    return attachment_display_name(original_name,
+                                   stored_as or _stored_name_for(original_name))
 
 
 class AttachmentsMixin:
@@ -50,16 +73,37 @@ class AttachmentsMixin:
     """
 
     def add_attachment(self):
-        filepaths = filedialog.askopenfilenames(title="Choose file(s) to attach")
+        filepaths = self._while_native(
+            lambda: filedialog.askopenfilenames(title="Choose file(s) to attach"))
         if not filepaths:
             return
-        # The ceiling exists because a note carrying thousands of
-        # attachment records is a way to make the app unopenable (see
-        # MAX_ATTACHMENTS) -- but normalize_note enforces it by
-        # TRUNCATING, which is right for a hostile share code and wrong
-        # for a person adding their own files: they would be copied to
-        # disk, shown in the list, and then silently dropped on the next
-        # load. Refuse here instead, and say so.
+        # The same file picked again made a second attachment, and a second
+        # copy on the disk, without a word: asked once for all of them, No
+        # chosen. The note asked about is held across the answer, as below.
+        repeats = [p for p in filepaths if self._attached_already(p)]
+        if repeats:
+            asked_about = (self.selected_note_id, self.current_attachments)
+            names = [_quoted(_shown_when_attached(p)) for p in repeats]
+            if len(names) == 1:
+                ask = (f"“{names[0]}” is already attached to this note, exactly "
+                       "as it is.\n\nAttach it again?")
+            else:
+                listed = "\n".join(f"  • {n}" for n in names[:10])
+                if len(names) > 10:
+                    listed += f"\n  … and {len(names) - 10:,} more"
+                ask = ("These files are already attached to this note, exactly "
+                       f"as they are:\n{listed}\n\nAttach them again?")
+            again = self.ask_yes_no("Already attached", ask, icon="question",
+                                    default="no")
+            if asked_about != (self.selected_note_id, self.current_attachments):
+                return
+            if not again:
+                filepaths = [p for p in filepaths if p not in repeats]
+                if not filepaths:
+                    return
+        # normalize_note enforces MAX_ATTACHMENTS by truncating -- right for
+        # a share code, wrong for a person's own files, which went at the
+        # next load. Refused here instead, and said.
         room = MAX_ATTACHMENTS - len(self.current_attachments)
         if room <= 0:
             self.show_warning(
@@ -71,8 +115,7 @@ class AttachmentsMixin:
             # The note the question is about, held across the answer: the
             # editor can move on while a question waits, and the files
             # would then land in whichever note is open by then.
-            asked_about = (getattr(self, "selected_note_id", None),
-                           self.current_attachments)
+            asked_about = (self.selected_note_id, self.current_attachments)
             if not self.ask_yes_no(
                     "More files than this note can hold",
                     f"A note can keep {MAX_ATTACHMENTS} attached files, and "
@@ -80,162 +123,207 @@ class AttachmentsMixin:
                     f"Attach the first {room} and leave the rest?",
                     icon="question", default="no"):
                 return
-            if asked_about != (getattr(self, "selected_note_id", None),
-                               self.current_attachments):
+            if asked_about != (self.selected_note_id, self.current_attachments):
                 return
             filepaths = filepaths[:room]
         added_any = False
+        empty = []
         for src_path in filepaths:
-            original_name = os.path.basename(src_path)
-            unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{original_name}"
+            unique_name = _stored_name_for(os.path.basename(src_path))
+            shown = _shown_when_attached(src_path, unique_name)
             dest_path = os.path.join(paths.ATTACHMENTS_DIR, unique_name)
             try:
                 shutil.copy2(src_path, dest_path)
             except (IOError, OSError) as e:
-                self.show_error("Couldn't attach file", f"Failed to attach '{original_name}':\n{e}")
+                # Half a copy is no attachment: it stayed in the folder, named by
+                # nothing. A full disk said in words, as the exports say it.
+                try:
+                    os.remove(dest_path)
+                except OSError:
+                    pass
+                self.show_error("Couldn't attach file", (
+                    f"“{_quoted(shown)}” wasn't attached: the disk is full. Free up "
+                    "some space and try again." if self._disk_was_full(e)
+                    else f"Failed to attach '{shown}':\n{e}"))
                 continue
-            self.current_attachments.append({"filename": original_name, "stored_as": unique_name})
+            self.current_attachments.append({"filename": shown, "stored_as": unique_name})
             added_any = True
+            try:
+                if os.path.getsize(dest_path) == 0:
+                    empty.append(shown)
+            except OSError:
+                pass
         self.refresh_attachments_list()
         if added_any:
             self._schedule_autosave()
+        if empty:
+            # Attached as asked, and said: an empty file went in without a
+            # remark, and opened to nothing.
+            text = (f"“{_quoted(empty[0])}” is empty (0 bytes) — attached anyway"
+                    if len(empty) == 1 else
+                    f"{count_noun(len(empty), 'file')} are empty (0 bytes) — "
+                    "attached anyway")
+            self._banner_after_undo(text, lambda: self._show_toast(text, kind="info"))
+
+    def _attached_already(self, src_path):
+        """Whether this note already holds *src_path* as it is: the name it
+        would show, then its size, then its bytes. A file that cannot be read
+        counts as new; the copy says why it failed."""
+        try:
+            size = os.path.getsize(src_path)
+            shown = os.path.normcase(_shown_when_attached(src_path))
+        except (OSError, ValueError):
+            return False
+        for held in self.current_attachments:
+            if not isinstance(held, dict):
+                continue
+            name = attachment_display_name(held.get("filename"), held.get("stored_as"))
+            if os.path.normcase(name) != shown:
+                continue
+            path = _attachment_path_within(held.get("stored_as"))
+            try:
+                if path and os.path.getsize(path) == size and filecmp.cmp(
+                        src_path, path, shallow=False):
+                    return True
+            except (OSError, ValueError):
+                continue
+        return False
 
     def remove_attachment(self, index):
         if not (0 <= index < len(self.current_attachments)):
             return
         target = self.current_attachments[index]
-        note_id = getattr(self, "selected_note_id", None)
-        # This deletes the STORED FILE, permanently — the one destructive
-        # gesture the audit's confirm sweep missed (it bypassed the
-        # dialogs entirely, so no sweep of ask_yes_no callers could see
-        # it). Same contract as every irreversible confirm: warning
-        # glyph, No pre-selected, Escape backs out.
+        files = self.current_attachments
+        # Deletes the STORED FILE for good: asked as every irreversible step
+        # is -- the warning glyph, No chosen, Escape backs out. A run that keeps
+        # every file (attached_files_kept) does not promise this one gone.
         if not self.ask_yes_no(
                 "Remove attachment",
-                f"Remove “{target.get('filename', 'this file')}” from the "
-                "note?\n\nThe stored copy is deleted with it — this can't "
-                "be undone.",
+                f"Remove “{_quoted(attachment_display_name(target.get('filename'), target.get('stored_as'))) or 'this file'}” from the "
+                "note?\n\n" + ("Its stored copy stays on the disk this time: your notes "
+                               "or the Trash could not be read when Note Organizer started."
+                               if attached_files_kept() else
+                               "The stored copy is deleted with it — this can't be undone."),
                 icon="warning", default="no"):
             return
-        # The file asked about, found again: while the question waited the
-        # editor could move on to another note, and the index would then
-        # name ANOTHER attachment -- of another note -- whose stored file
-        # this deletes for good. Gone or moved on means nothing is removed.
-        if getattr(self, "selected_note_id", None) != note_id:
+        # The file found again: under the question the editor can move on,
+        # and the index named another note's file. Moved on (its list rebuilt),
+        # nothing goes -- a new note's first save is no move.
+        if self.current_attachments is not files:
             return
+        note_id = self.selected_note_id
         stored = target.get("stored_as")
         index = next((i for i, a in enumerate(self.current_attachments)
                       if a is target
                       or (stored and a.get("stored_as") == stored)), None)
         if index is None:
             return
-        removed = self.current_attachments.pop(index)
-        # Not a file another note or a Trash entry still shows -- a
-        # duplicate or an import that could not copy it kept its name --
-        # nor one this note lists twice. This note's own saved copy is left
-        # out: it names the file until the autosave below, and would spare
-        # it for ever.
-        others = [n for n in self.notes
-                  if not (isinstance(n, dict) and n.get("id") == note_id)]
-        _delete_attachment_files(
-            [{"attachments": [removed]}],
-            spare=attachment_names_in(
-                others + list(self.trash)
-                + [{"attachments": self.current_attachments}]))
+        self.current_attachments.pop(index)
+        # A preview still reading it holds it open, and Windows deletes no
+        # open file: the record went and the file stayed for good.
+        source = getattr(self, "_preview_source", None)
+        held = _attachment_path_within(stored) if stored else None
+        if source is not None and held and os.path.normcase(os.path.abspath(
+                str(getattr(source, "filename", "")))) == os.path.normcase(held):
+            self._release_preview_source()
         self.refresh_attachments_list()
-        self._schedule_autosave()
+        if stored:
+            self.__dict__.setdefault("_files_to_drop", set()).add(stored)
+        if note_id is None or self.find_note(note_id) is None:
+            # No saved note names it: a new note's file goes at once.
+            self._drop_detached_files()
+        else:
+            # The file goes after the save that stops naming it lands
+            # (save_notes): first, a refused save left the note naming it.
+            self._autosave_now()
+
+    def _drop_detached_files(self):
+        """Delete the files Remove took off a note that nothing names any
+        more -- no note, Trash entry or open editor. Run once the notes on
+        disk agree (after a save that landed); a file still named waits."""
+        waiting = getattr(self, "_files_to_drop", None)
+        # A save that failed left the disk naming what memory dropped.
+        if not waiting or getattr(self, "_notes_unsaved", False):
+            return
+        named = attachment_names_in(
+            list(self.notes) + list(self.trash)
+            + [{"attachments": self.current_attachments}])
+        gone = sorted(name for name in waiting if name not in named)
+        if gone:
+            _delete_attachment_files(
+                [{"attachments": [{"stored_as": name} for name in gone]}])
+        # One a viewer held open, or a run that may not delete, waits for the
+        # next save that lands: let go of at once, it stayed on disk for good.
+        waiting.difference_update(
+            name for name in gone
+            if not os.path.isfile(_attachment_path_within(name) or ""))
 
     def open_attachment(self, index):
         if 0 <= index < len(self.current_attachments):
             attachment = self.current_attachments[index]
-            # Resolve through the same containment guard the delete side
-            # uses: a crafted stored_as ("../../x", "C:\\...", UNC) must
-            # never let os.startfile open — and possibly EXECUTE — a file
-            # outside the attachments folder. None => refuse.
+            # The delete side's containment guard: a crafted stored_as must
+            # never let startfile open -- or RUN -- a file outside the folder.
             stored_as = attachment.get("stored_as")
             path = _attachment_path_within(stored_as) if stored_as else None
             if path is None or not os.path.isfile(path):
                 self.show_warning("File missing", "This attached file can't be found on disk.")
                 return
 
-            original_name = attachment.get("filename", stored_as)
-            # The safety decision keys off the REAL on-disk file's
-            # extension (stored_as preserves the original extension — see
-            # add_attachment), NOT the display filename a crafted note
-            # controls separately, so a ".exe" masquerading as "doc.pdf"
-            # can't skip the warning. Trailing dots/spaces come off first,
-            # because Windows strips them when it OPENS a path: to
-            # splitext, "invoice.lnk. " has no extension at all, while
-            # os.startfile on that same string executes invoice.lnk —
-            # normalize_note already stores clean names, and this repeats
-            # the rstrip at the sink so the two can never disagree even
-            # for a record that predates that rule.
-            ext = os.path.splitext(stored_as.rstrip(". "))[1].lower()
-
-            # Pillow decodes all of these — shown large, right in the app,
-            # instead of handing off to whatever image viewer Windows has
-            # associated with the file type. Anything else still opens
-            # externally below.
-            if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"):
+            # The name the question quotes ends in the type of the file
+            # that opens, whatever label the record carries.
+            original_name = attachment_display_name(attachment.get("filename"), stored_as)
+            # Decided by the REAL file on disk, read as Windows reads a type
+            # ("invoice.lnk. " runs invoice.lnk), never the label a note sets:
+            # a picture is previewed here, anything else asks at the one gate.
+            if how_to_open(os.path.basename(path)) == "preview":
                 self._show_image_preview(path, original_name)
                 return
-
-            # Warn before opening anything Windows would execute as a program
-            # or script — opening it runs code, not just views a file.
-            if ext in self.DANGEROUS_EXTENSIONS:
-                proceed = self.ask_yes_no(
-                    "⚠ Potentially unsafe file",
-                    f"“{original_name}” is a type of file that can run programs "
-                    "or commands on your computer.\n\n"
-                    "Only open it if you completely trust where it came from. "
-                    "Opening an unsafe file can harm your computer.\n\n"
-                    "Open it anyway?",
-                    icon="warning", default="no"
-                )
-                if not proceed:
-                    return
-
-            try:
-                os.startfile(path)  # Windows-only, matches this app's target platform
-            except (AttributeError, OSError):
-                self.show_info("Can't open automatically", f"File is located at:\n{path}")
+            self._open_externally(path, original_name)
 
     def _show_image_preview(self, path, filename):
-        """A large, in-app image preview — most of the window, not a tiny
-        thumbnail and not handed off to an external program. Uses Pillow
-        (not plain Tk) for two reasons: plain Tk only decodes PNG/GIF, and
-        for animated GIFs it only ever shows each frame's own raw pixels at
-        that frame's own size — many GIFs only store the part of the frame
-        that CHANGED from the previous one, at whatever size that patch
-        happens to be, relying on the viewer to composite it onto a fixed
-        canvas in the right place. Plain Tk doesn't do that compositing, so
-        the image visibly jumped and resized itself every frame. Pillow
-        handles this correctly and gives real per-frame timing too, instead
-        of a guessed fixed delay.
+        """The preview, or nothing: one that fails half built -- its file
+        kept open, its overlay never placed, as every animated PNG's did --
+        is taken down before the error is reported, so no file stays held
+        and no hidden popup is left for Escape to look for."""
+        try:
+            self._build_image_preview(path, filename)
+        except Exception:
+            self._dismiss_mini_popup()
+            raise
 
-        Quick to appear, which it was not: every frame of an animation was
-        decoded, composited and rescaled before the first was shown -- a
-        second and a quarter of nothing for a 60-frame GIF, and again on
-        every opening. Now the first frame is shown at once and the rest
-        are decoded as the animation reaches them; a JPEG photo is decoded
-        straight at the size it will be shown rather than at full size;
-        and a preview already seen comes back from memory
-        (_cached_preview) instead of from the file."""
+    @staticmethod
+    def _frame_delay(info):
+        """A frame's time on screen in whole milliseconds, as Tk's after()
+        takes it: Pillow gives an animated PNG's as a float (40.0), and
+        after() refuses anything but an integer. None, junk or 10 ms and
+        less is 100, as browsers play them: a frame of 0.6 ms ticked every
+        millisecond, half a core while the preview was open."""
+        try:
+            delay = int(round(float(info.get("duration") or 0)))
+        except (TypeError, ValueError, OverflowError):
+            delay = 0
+        return delay if delay > 10 else 100
+
+    def _build_image_preview(self, path, filename):
+        """A large in-app image preview, most of the window. Pillow, not Tk:
+        Tk decodes only PNG and GIF, and drew a GIF's partial frames without
+        compositing them, so the image jumped every frame. The first frame
+        shows at once and the rest decode as the animation reaches them (a
+        60-frame GIF waited 1.25 s); a JPEG decodes at the size shown; a
+        preview seen before comes from memory (_cached_preview)."""
         self.update_idletasks()
         target_w = max(int(self.winfo_width() * 0.7), 200)
         target_h = max(int(self.winfo_height() * 0.7), 200)
         cache_key = self._preview_cache_key(path, target_w, target_h)
         cached = self._cached_preview(cache_key)
 
-        def _scaled(frame):
+        def _scaled(frame, grow=True):
             w, h = frame.size
             if w > target_w or h > target_h:
                 frame = frame.copy()
                 frame.thumbnail((target_w, target_h), Image.LANCZOS)
-            elif w > 0 and h > 0 and w < target_w * 0.6 and h < target_h * 0.6:
-                # Small image, room to spare — enlarge so it's actually easy
-                # to see. Capped so a tiny icon doesn't get blown up absurdly
-                # large just because the window happens to be big.
+            elif grow and w > 0 and h > 0 and w < target_w * 0.6 and h < target_h * 0.6:
+                # A small image grows to be easy to see -- at most eightfold.
                 scale = min(min(target_w / w, target_h / h), 8)
                 frame = frame.resize((max(1, int(w * scale)), max(1, int(h * scale))),
                                      Image.LANCZOS)
@@ -248,31 +336,38 @@ class AttachmentsMixin:
             frames, delays = list(cached[0]), list(cached[1])
         else:
             try:
-                pil_img = Image.open(path)
+                # Pillow knows a file by its contents: a ".png" could be an
+                # EPS handed to Ghostscript. Only the preview's decoders read.
+                pil_img = Image.open(path, formats=self.PREVIEW_DECODERS)
             except Exception:
-                self.show_warning("Can't preview this file",
-                                 "This file couldn't be read as an image.")
+                # Not a picture the preview reads -- a scanner's TIFF saved
+                # as .jpg -- or no picture at all: offered to Windows, not
+                # called unreadable with no way to open it.
+                self._cannot_preview(path)
                 return
             try:
                 animated = bool(getattr(pil_img, "is_animated", False))
                 if not animated:
-                    # A JPEG can be decoded straight at a half, a quarter or
-                    # an eighth of its size, and draft() asks for the
-                    # smallest that is still at least as big as the preview
-                    # -- _scaled() then fits it exactly, as before. Every
-                    # other format ignores the request.
+                    # draft(): a JPEG decodes at the smallest of 1/2, 1/4, 1/8
+                    # still as big as the preview (others ignore it).
                     pil_img.draft(pil_img.mode, (target_w, target_h))
-                # Pillow composites disposal-method-aware frames onto the
-                # right canvas internally as you seek — converting to RGBA
-                # here is what actually captures that composited result,
-                # not just this frame's own raw (possibly partial) pixels.
-                frames = [ImageTk.PhotoImage(_scaled(pil_img.convert("RGBA")))]
-                delays = [(pil_img.info.get("duration", 100) or 100)
-                          if animated else 100]
+                w, h = pil_img.size
+                if w * h > self.PREVIEW_PIXEL_BUDGET:
+                    # A 439 KB PNG decoded to 12000x12000 peaked at 1.7 GB;
+                    # left to the program Windows opens it with.
+                    pil_img.close()
+                    self._too_big_to_preview(path)
+                    return
+                if not animated and (w > target_w or h > target_h):
+                    pil_img.thumbnail((target_w, target_h), Image.LANCZOS)
+                # Converted to RGBA, the frame is Pillow's composited one,
+                # not its raw, possibly partial, pixels.
+                frames = [ImageTk.PhotoImage(
+                    _scaled(pil_img.convert("RGBA"), grow=not animated))]
+                delays = [self._frame_delay(pil_img.info) if animated else 100]
             except Exception:
-                # A file that opens and then fails to decode -- truncated,
-                # say -- is the same news to the user as one that never
-                # opened at all.
+                # One that opens and fails to decode (truncated, say) is the
+                # same news as one that never opened.
                 pil_img.close()
                 self.show_warning("Can't preview this file",
                                  "This file couldn't be read as an image.")
@@ -297,17 +392,25 @@ class AttachmentsMixin:
 
         header = tk.Frame(overlay, bg=self.colors["bg"])
         header.pack(fill="x", padx=12, pady=(10, 4))
-        tk.Label(header, text=filename, font=("Segoe UI", 10, "bold"),
-                 bg=self.colors["bg"], fg=self.colors["text"]).pack(side="left")
-        tk.Button(header, text="✕ Close", command=self._dismiss_mini_popup,
-                  relief="flat", cursor="hand2", bg=self.colors["card"],
-                  fg=self.colors["text"], font=("Segoe UI", 9)
-                  ).pack(side="right", ipadx=6, ipady=2)
-        tk.Button(header, text="Open externally",
-                  command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
-                  relief="flat", cursor="hand2", bg=self.colors["accent"],
-                  fg=self._on_fill("accent"), font=("Segoe UI", 9)
-                  ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
+        # The overlay is as wide as what it holds: a long name drawn whole
+        # made it wider than the window, Close past its edge. Cut to a room
+        # no wider than the picture may be, beside the two buttons.
+        name_font = self._cal_font(("Segoe UI", 10, "bold"))[0]
+        name_lbl = tk.Label(header, font=name_font, anchor="w",
+                            bg=self.colors["bg"], fg=self.colors["text"],
+                            text=self._fit_name(filename, name_font, max(
+                                self.px(120), target_w - self.px(220))))
+        close_btn = tk.Button(header, text="✕ Close", command=self._dismiss_mini_popup,
+                              relief="flat", cursor="hand2", bg=self.colors["card"],
+                              fg=self.colors["text"], font=("Segoe UI", 9))
+        close_btn.pack(side="right", ipadx=6, ipady=2)
+        open_btn = tk.Button(
+            header, text="Open externally",
+            command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
+            relief="flat", cursor="hand2", bg=self.colors["accent"],
+            fg=self._on_fill("accent"), font=("Segoe UI", 9))
+        open_btn.pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
+        name_lbl.pack(side="left", fill="x", expand=True)   # after the buttons
 
         img_lbl = tk.Label(overlay, image=frames[0], bg=self.colors["bg"])
         img_lbl.pack(padx=16, pady=(4, 16))
@@ -317,35 +420,64 @@ class AttachmentsMixin:
         # when an animation actually starts — any code checking it directly
         # (rather than via getattr with a default) can rely on that.
         if source is not None or len(frames) > 1:
-            state = {"i": 0}
+            # What the frames kept hold, and the canvas pixels decoded so far:
+            # counted as each frame comes, not summed again on every tick.
+            state = {"i": 0,
+                     "held": sum(f.width() * f.height() * 4 for f in frames),
+                     "decoded": (source.size[0] * source.size[1]
+                                 if source is not None else 0)}
 
             def _next_frame():
                 if not img_lbl.winfo_exists():
                     return
                 nxt = state["i"] + 1
                 if nxt >= len(frames) and self._preview_source is source \
+                        and source is not None and (
+                            state["held"] > self.PREVIEW_MEMORY_BYTES
+                            or len(frames) >= self.PREVIEW_MAX_FRAMES):
+                    # Kept frames past what the cache may hold: a 33 KB GIF
+                    # ran the app out of memory. It plays the part that fits.
+                    self._release_preview_source()
+                    nxt = 0
+                elif nxt >= len(frames) and self._preview_source is source \
                         and source is not None:
                     # First time round: this frame is not decoded yet. In
                     # order, one per tick, because Pillow composites each
                     # frame onto the one before as it seeks.
                     try:
                         source.seek(nxt)
-                        frames.append(ImageTk.PhotoImage(
-                            _scaled(source.convert("RGBA"))))
-                        delays.append(source.info.get("duration", 100) or 100)
+                        # Judged before it decodes (a later frame can be any
+                        # size), and with the frames before it, as each is
+                        # composited onto the whole canvas.
+                        canvas_px = source.size[0] * source.size[1]
+                        past_budget = (
+                            canvas_px > self.PREVIEW_PIXEL_BUDGET
+                            or state["decoded"] + canvas_px
+                            > self.ANIMATION_PIXEL_BUDGET)
+                        if not past_budget:
+                            shown = ImageTk.PhotoImage(
+                                _scaled(source.convert("RGBA"), grow=False))
+                            frames.append(shown)
+                            delays.append(self._frame_delay(source.info))
+                            state["decoded"] += canvas_px
+                            state["held"] += shown.width() * shown.height() * 4
                     except EOFError:
-                        # The last frame has been seen: from here on the
-                        # animation plays from memory, and so does the next
-                        # opening of this file.
+                        # The last frame seen: it plays from memory now, and
+                        # the next opening of this file too.
                         self._release_preview_source()
                         self._remember_preview(cache_key, frames, delays)
                         nxt = 0
                     except Exception:
                         # A frame that will not decode ends the animation
-                        # where it is, playing what it has, rather than
-                        # stopping the app.
+                        # there, playing what it has.
                         self._release_preview_source()
                         nxt = 0
+                    else:
+                        if past_budget:
+                            # A frame past the budget ends it the same way
+                            # (ISSUES_LOG: "The preview that kept every frame").
+                            self._release_preview_source()
+                            nxt = 0
                 elif nxt >= len(frames):
                     nxt = 0
                 state["i"] = nxt
@@ -356,12 +488,49 @@ class AttachmentsMixin:
 
         overlay.place(relx=0.5, rely=0.5, anchor="center")
         overlay.lift()
-        # Click-outside-to-dismiss, matching every other in-app overlay —
-        # bound on a short delay so the click that OPENED this preview isn't
-        # also immediately seen as a click "outside" it. Bound for THIS
-        # preview and only while it is still the one open: closed within
-        # the delay, it used to bind anyway, a handler nothing would ever
-        # take off again -- one more on the window per quick close.
+        # Escape closes it, as it closes every popup.
+        if getattr(self, "_mini_popup_escape_bind", None) is None:
+            self._mini_popup_escape_bind = self.bind(
+                "<Escape>", self._escape_backs_out, add="+")
+        # On Close however it was opened, and back on the way out: a frame
+        # over the window, not a window, so a click left the caret in the
+        # note under it and Tab walked there -- keys edited a hidden note.
+        opener = getattr(self, "_key_pressing", None)
+        if opener is None:
+            try:
+                opener = self.nametowidget(
+                    str(self.tk.call("focus", "-lastfor", self)))
+            except (KeyError, tk.TclError):
+                opener = None
+        self.update_idletasks()            # placed now, so it can take it
+        close_btn.focus_set()
+        buttons = (close_btn, open_btn)
+
+        def cycle(button, step):
+            buttons[(buttons.index(button) + step) % len(buttons)].focus_set()
+            return "break"
+
+        # Tab and Shift+Tab walk its two buttons round (<<PrevWindow>>: X11's
+        # ISO_Left_Tab); Enter presses the one holding the keyboard, pressed
+        # not held -- held, it closed the preview and reopened it.
+        for b in buttons:
+            b.bind("<Tab>", lambda e, b=b: cycle(b, 1))
+            for seq in ("<Shift-Tab>", "<<PrevWindow>>"):
+                b.bind(seq, lambda e, b=b: cycle(b, -1))
+            for seq in ("<Return>", "<KP_Enter>"):
+                b.bind(seq, lambda e, b=b: (
+                    None if self._enter_repeats(e) else b.invoke(), "break")[1])
+        if opener is not None and opener is not self:
+            # Not named *path*: Open externally's command reads the picture's
+            # path when pressed, and it opened the overlay's name instead.
+            shown_at, place = str(overlay), self._place_of(opener)
+            clicks = getattr(self, "_pointer_presses", 0)
+            overlay.bind("<Destroy>", lambda e: (
+                self._keyboard_back(shown_at, place, clicks)
+                if str(e.widget) == shown_at else None), add="+")
+        # A click outside closes it, bound after a moment so the opening click
+        # is not one -- and only while THIS preview is open: closed sooner, a
+        # handler nothing took off was left on the window.
         def _bind_click_outside():
             if not self._still_alive():
                 return
@@ -370,11 +539,40 @@ class AttachmentsMixin:
             self._bind_click_outside(overlay)
         self.after(50, _bind_click_outside)
 
-    # How much decoded preview is kept for reopening, in bytes of pixels
-    # (four to a pixel). A photo at preview size is about two megabytes,
-    # so this holds a good many; one long animation can fill it, and one
-    # bigger than all of it is simply not kept.
+    # Decoded previews kept for reopening, in bytes (four to a pixel): a
+    # photo at preview size is about 2 MB; one larger than all is not kept.
     PREVIEW_MEMORY_BYTES = 64 * 1024 * 1024
+    # The largest image decoded, in pixels, asked of every frame before it
+    # decodes: past it, the program Windows opens images with shows it.
+    PREVIEW_PIXEL_BUDGET = 50_000_000
+    # One animation's canvas pixels, all frames together: a wide canvas shown
+    # as a thin strip never fills the memory above. 4K still plays 24 frames.
+    ANIMATION_PIXEL_BUDGET = 4 * PREVIEW_PIXEL_BUDGET
+    # And the frames kept: one of a single pixel still costs Tk an image.
+    PREVIEW_MAX_FRAMES = 1_000
+    # The only decoders the preview lets Pillow use: those of the pictures
+    # it shows (PREVIEWED_IN_APP). A JPEG holding several pictures (MPO)
+    # comes through the JPEG decoder, and its frames are judged one by one.
+    PREVIEW_DECODERS = ("PNG", "JPEG", "GIF", "BMP", "WEBP")
+
+    def _cannot_preview(self, path):
+        """Offer a file the preview's decoders do not read to the program
+        Windows opens its kind with, as one too large to show is offered."""
+        if self.ask_yes_no(
+                "Can't preview this file",
+                "Note Organizer can't show this file itself. Open it in the "
+                "program your computer uses for it?", icon="question",
+                default="yes"):
+            self._open_externally(path)
+
+    def _too_big_to_preview(self, path):
+        """Offer the image to the program Windows opens it with, rather
+        than decode it whole here."""
+        if self.ask_yes_no(
+                "Too large to preview",
+                "This image is too large to show here. Open it in the program "
+                "your computer uses for images?", icon="question", default="yes"):
+            self._open_externally(path)
 
     @staticmethod
     def _preview_cache_key(path, width, height):
@@ -416,12 +614,9 @@ class AttachmentsMixin:
             total -= forgotten[2]
 
     def _release_preview_source(self):
-        """Close the file an animation was still decoding frames from.
-
-        An animation is read a frame at a time, so its file stays open
-        while it plays the first time round -- and an open file cannot be
-        deleted or replaced on Windows. Closed when the last frame has
-        been read, and when the preview goes away before that."""
+        """Close the file an animation was still decoding frames from --
+        open while it first plays, and Windows deletes no open file. Closed
+        at the last frame, or when the preview goes before that."""
         source = getattr(self, "_preview_source", None)
         self._preview_source = None
         if source is not None:
@@ -430,23 +625,44 @@ class AttachmentsMixin:
             except Exception:
                 pass
 
-    def _open_externally(self, path):
-        """Hand a file off to whatever program Windows has associated with
-        it — the plain, no-preview fallback used for file types this app
-        can't show inline itself."""
+    def _open_externally(self, path, shown=None):
+        """Hand a file to whatever program Windows has for its kind -- the
+        one way an attachment leaves the app, so the one place that asks: a
+        kind that only shows opens at once, one that runs code asks with the
+        warning, any other calmly, as no list of dangerous kinds is complete
+        (how_to_open). *shown* is the name the question quotes."""
+        shown = _quoted(shown or os.path.basename(path))
+        kind = how_to_open(os.path.basename(path))
+        if kind == "warn":
+            if not self.ask_yes_no(
+                    "⚠ Potentially unsafe file",
+                    f"“{shown}” is a type of file that can run programs "
+                    "or commands on your computer.\n\n"
+                    "Only open it if you completely trust where it came from. "
+                    "Opening an unsafe file can harm your computer.\n\n"
+                    "Open it anyway?",
+                    icon="warning", default="no"):
+                return
+        elif kind == "ask":
+            # Cancel first: Escape answers it, and Enter lands on it.
+            if not self._themed_dialog(
+                    "Open this file?",
+                    "Note Organizer doesn't know this kind of file, so it "
+                    f"can't tell you whether “{shown}” is safe to open.\n\n"
+                    "Windows will open it with whatever app it has for files "
+                    "like this. Only open it if you trust where it came from.",
+                    kind="question",
+                    buttons=[("Cancel", False), ("Open", True)],
+                    default="Cancel"):
+                return
         try:
-            os.startfile(path)
+            os.startfile(path)  # Windows-only, matches this app's target platform
         except (AttributeError, OSError):
             self.show_info("Can't open automatically", f"File is located at:\n{path}")
 
     def refresh_attachments_list(self):
-        # Direct .configure() calls, not self.track_theme(): this list is
-        # destroyed and rebuilt on every note switch (load_note runs this
-        # every single time you open a different note), so it always picks
-        # up the current theme fresh anyway. Same leak as the note list and
-        # calendar had — track_theme() never prunes entries for widgets that
-        # get destroyed, so this ran up fast given how often switching notes
-        # happens in a normal session.
+        # Plain colours, not track_theme(): rebuilt at every note switch, it
+        # takes the theme fresh (ARCHITECTURE, the two theming patterns).
         for widget in self.attachments_frame.winfo_children():
             widget.destroy()
 
@@ -458,16 +674,13 @@ class AttachmentsMixin:
             return
 
         for i, att in enumerate(self.current_attachments):
-            # .get, not [ ]: normalize_note now guarantees every stored
-            # record carries string names, but this render runs mid
-            # load_note — a KeyError here once aborted the load halfway
-            # and left the editor holding the PREVIOUS note's checklist,
-            # which the next save wrote onto the wrong note. A blank name
-            # draws an odd row; a crash here corrupts data.
-            display_name = att.get("filename") or att.get("stored_as") or ""
-            ext = os.path.splitext(display_name)[1].lower()
-            icon = "🖼" if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else "📄"
-            can_preview_inline = ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
+            # .get, not [ ]: this runs mid load_note, where a KeyError left the
+            # previous note's checklist to be saved onto this one. Name, icon
+            # and hint from the file that opens, not a backup's label.
+            display_name = attachment_display_name(att.get("filename"), att.get("stored_as"))
+            can_preview_inline = how_to_open(
+                att.get("stored_as") or display_name) == "preview"
+            icon = "🖼" if can_preview_inline else "📄"
 
             row = tk.Frame(self.attachments_frame, bg=self.colors["card"])
             row.pack(fill="x", pady=2)
@@ -475,11 +688,21 @@ class AttachmentsMixin:
             top_row = tk.Frame(row, bg=self.colors["card"])
             top_row.pack(fill="x")
 
-            name_lbl = tk.Label(top_row, text=f"{icon} {display_name}", font=("Segoe UI", 9),
+            name_lbl = tk.Label(top_row, font=("Segoe UI", 9),
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
-            name_lbl.pack(side="left", fill="x", expand=True, padx=8, pady=4)
+            # A Tab stop that Space and Return open, as a click does: the ✕
+            # beside it was all the keyboard could reach. Its ring rests in
+            # its own fill, a pixel taken from the padding round it.
+            self._ring_round(name_lbl)
+            # The type always shows: a long name gives way before it, not at
+            # the row's edge, where blank-looking characters hid ".rdp". Ringed
+            # first: the fit reads the border it leaves room for.
+            stem, kind = _name_and_type(display_name)
+            _fit_title(self, name_lbl, f"{icon} ", stem, kind,
+                       self._measuring_font(("Segoe UI", 9)))
             name_lbl.bind("<Button-1>", lambda e, idx=i: self.open_attachment(idx))
+            self._pressable(name_lbl, lambda idx=i: self.open_attachment(idx))
 
             remove_btn = tk.Button(
                 top_row, text="✕", command=lambda idx=i: self.remove_attachment(idx),
@@ -487,13 +710,12 @@ class AttachmentsMixin:
                 bg=self.colors["danger"], fg=self._on_fill("danger")
             )
             remove_btn.pack(side="right", padx=4, pady=2)
+            # Packed after the ✕, so a long name cannot squeeze it out of the
+            # row; made before it, so Tab still reaches the name first.
+            name_lbl.pack(side="left", fill="x", expand=True, padx=7, pady=3)
 
             if not can_preview_inline:
-                # Common image formats show large, right in the app (see
-                # _show_image_preview) — everything else still opens in
-                # whatever program the system has for that file type. Said
-                # generically on purpose, since the app can't know for sure
-                # which program that'll actually be (varies per computer).
+                # Said generically: which program opens it varies by computer.
                 hint_lbl = tk.Label(row, text="Opens in your default app for this file type",
                                     font=("Segoe UI", 7), anchor="w",
                                     bg=self.colors["card"], fg=self.colors["subtext"])

@@ -1,0 +1,14 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **D:\Projects\NoteOrganizer\note_organizer.py, lines 1 to 11000** (the desktop app's entry file and UI hub, Python + Tkinter). Read ALL of those lines, in order, with the Read tool (2000 lines per call), keeping short running notes as you go.
+
+Context: Note Organizer is an offline Windows notes app. `noteorganizer/core/` holds data and rules (never imports tkinter); `noteorganizer/ui/` holds mixins; `note_organizer.py` is the hub (class NoteOrganizer, ~685 methods). Design docs: D:\Projects\NoteOrganizer\docs\ARCHITECTURE.md and docs\CODE_TOUR.md — consult them only to check a claim, not to read whole. Current state: APP_VERSION 0.100.513, branch audit/d-val5, the final audit is closed; we are looking for what is TRUE now, not for style.
+
+Hard rules: read only. Never edit, write, or run anything (no python, no tests, no git that changes state). Never open the real data: notebook_location.txt, any notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments/, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer. Grep is fine.
+
+Already known, do NOT report: the phone repo's docs lag behind the desktop's 10–11 Nov fixes; ISSUES_LOG index says "next" for the newest story until the version is cut.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: the main areas in your slice and how they connect (name methods).
+2. MISMATCHES — a comment or docstring that says something the code does not do, or a doc claim (ARCHITECTURE/CODE_TOUR/USER_GUIDE) your code contradicts. Each: file:line — what it says — what the code does (file:line). Concrete only.
+3. SUSPECTED BUGS — only real behaviour a person could reach, with the mechanism and the road (what the person does). Mark each "suspected, not run". No refactors, no taste, no "could be cleaner".
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

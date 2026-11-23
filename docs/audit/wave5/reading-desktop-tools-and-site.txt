@@ -1,0 +1,14 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **the desktop repository's tools, build and website, D:\Projects\NoteOrganizer**.
+Read IN FULL (these touch the owner's machine or data, or ship): tools\guest.py, tools\run_tests.py, tools\linux_ci.py, tools\mutate.py, tools\check_guest.py, tools\msix\* (all files), NoteOrganizer.spec, .github\workflows\*.yml, qa\_qa_support.py (its safety parts: hermetic_seed, as_a_guest, photograph), site\build.py.
+Read as a MAP only (top docstring + function names): the other tools\*.py, and the rest of site\ (site\tools\, the demo .js/.html/.css — note what they are for).
+
+Context: Note Organizer is an offline Windows notes app. Tests must never run in the project folder (they wipe *.json); tools/guest.py gives every run the machine's turn, a memory ceiling and an empty APPDATA of its own; the Linux CI image runs only through tools/linux_ci.py; the MSIX is packed and proved in Windows Sandbox via tools/msix. The site is kept apart from the apps: nothing the apps' users see may point at it. Current state: APP_VERSION 0.100.513, branch audit/d-val5. CLAUDE.md (read its "QA testing safety" and "What runs without asking" sections) states the rules these tools enforce — check the tools really enforce what it says.
+
+Hard rules: read only. Never edit, write, or run anything (no python, no docker, no tests). Never open the real data: notebook_location.txt, any notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments/, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what the tools, build and site do.
+2. MISMATCHES — a rule in CLAUDE.md/qa\README/RELEASE_WINDOWS/site\README a tool does not enforce, or a docstring the code contradicts. Each: file:line — what it says — what the code does (file:line). Concrete only.
+3. SUSPECTED BUGS — a way a tool could touch real data, leave something running, or a build/site step that could ship something wrong; mechanism + road. Mark each "suspected, not run". No refactors, no taste.
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

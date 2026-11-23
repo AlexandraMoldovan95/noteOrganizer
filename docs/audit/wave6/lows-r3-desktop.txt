@@ -1,0 +1,17 @@
+# lows-r3-desktop, on Sonnet: the lows wave's third round
+# started 2026-11-21 23:29 UTC
+
+You are an adversarial reviewer. Attack one small commit on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: 5cad18d8. Read it with `git -C D:/Projects/NoteOrganizer show 5cad18d8`, and the function it guards, `_transpose_keeping_styles` in note_organizer.py (near line 566), with its caller in `_caret_out_of_hidden` (search "Made here, each letter keeping its own style"). Read only; change nothing.
+
+The commit adds a qa1 check (search qa/qa1.py for "Ctrl+T inside a selection keeps the selection whole") and a mutant TX02 in tools/mutants.json, and its message says getboolean in place of bool() is equivalent because Tk returns autoseparators as an int.
+
+Look for:
+- Does the new check read what it claims, and would it fail with the fix taken out (TX02's edit)? Is its setup what a person makes (a selection, the caret inside it, Ctrl+T) — or does a real key press with a selection take another road in the app first (the formatting journal's look-ahead for Tk's own deletes, `_tk_control_delete_range`, the selection guards around tables), so that the check passes through a road a person never takes?
+- Is the commit message's every claim true (TX01 measures only that the function runs; the int; line 8479; line 22301's bool() right for the same reason; the site renderer's two left deviations appear in no document; cases 875, 929, 937, 949)?
+- Anything the selection kept over the swapped pair breaks: the next keystroke typed over a selection, Ctrl+Z after the swap, the format buttons' state read from the selection.
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims, a claim in the message that is untrue in a way that misleads; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict line; then "Not covered".

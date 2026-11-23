@@ -7,7 +7,14 @@ this needs no window and no Windows. The real checker is asked in qa6.
 Check descriptions stay ASCII-only, for the same reason test_calculator.py
 does: printing a bullet crashes a plain Windows console on cp1252.
 """
-from noteorganizer.core import spelling
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+from noteorganizer.core import spelling  # noqa: E402
 
 fails = []
 
@@ -133,6 +140,55 @@ check("a line's sentences cover the whole of it, in UTF-16 units",
       == [(0, 8), (8, 23), (23, 28)])
 check("...and a line with no sentence end is one sentence",
       spelling.sentence_spans("no full stop here") == [(0, 17)])
+check("...and a run of ends is one end, only with a space or the line's end after it",
+      spelling.sentence_spans("e.g. this... and that?!x end…")
+      == [(0, 4), (4, 12), (12, 29)])
+# A run of ends with no space after it was tried at each of its dots: 24,000
+# took 4.5 s at every look the editor takes. Timed in this run
+# against the same run with a space after it, the quickest of three each.
+import gc as _gc
+import time as _time
+
+
+def _quickest(fn, *args):
+    """The quickest of three calls, in seconds."""
+    best = None
+    for _ in range(3):
+        _gc.collect()
+        started = _time.perf_counter()
+        fn(*args)
+        took = _time.perf_counter() - started
+        best = took if best is None else min(best, took)
+    return best
+
+
+_se_run = _quickest(spelling.sentence_spans, "xqzt" + "." * 12000 + "zqtx")
+_se_ended = _quickest(spelling.sentence_spans, "xqzt" + "." * 12000 + " zqtx")
+check("a run of 12,000 dots with no space after it takes what the same run ending "
+      "a sentence takes (%.1f ms against %.1f ms)" % (_se_run * 1000, _se_ended * 1000),
+      _se_run < 4 * _se_ended + 0.25)
+
+# Each range goes to its sentence, in the order it came, with an emoji before
+# it counted two units; a range outside the line is no one's.
+_vo_line = "Teh \U0001F389 cat sat on the mat. Xqzt the brede and the milk was fresh today! Zorp"
+check("a line's ranges are shown sentence by sentence, each sentence's in the order "
+      "they came, a repeated one twice, one outside the line not at all",
+      spelling.visible_errors([_vo_line], [[(36, 5), (27, 4), (36, 5), (-1, 2), (79, 2),
+                                            (72, 4), (0, 3)]])
+      == {0: [(0, 3), (36, 5), (27, 4), (36, 5), (72, 4)]})
+# A look measured the line again for each sentence and walked every range for
+# each: 358 ms at 24,000 characters, four times that for twice the line, at
+# every pause in typing. Timed against the line's half, in one run.
+_vo_long = "xqzt. " * (80_000 // 6)
+_vo_half = "xqzt. " * (40_000 // 6)
+_vo_long_s = _quickest(spelling.visible_errors, [_vo_long],
+                       [[(i * 6, 4) for i in range(len(_vo_long) // 6)]])
+_vo_half_s = _quickest(spelling.visible_errors, [_vo_half],
+                       [[(i * 6, 4) for i in range(len(_vo_half) // 6)]])
+check("a line of 80,000 characters of short misspelled sentences takes twice what "
+      "its half takes, not four times (%.1f ms against %.1f ms)"
+      % (_vo_long_s * 1000, _vo_half_s * 1000),
+      _vo_long_s < 2.6 * _vo_half_s + 0.005)
 check("a line not checked at all (a table row) counts for nothing",
       spelling.visible_errors(["| a | b |", _en], [None, _en_errors]) == {1: [(2, 7), (10, 3)]})
 check("the judgement is in words, not in characters: three short unknown words "
@@ -156,6 +212,27 @@ check("...and each piece's offset is where it starts, in units",
       all(spelling.utf16_slice(_long, o, spelling.utf16_units(p)) == p for o, p in _parts))
 check("a short line is one piece at 0", spelling.pieces("short line") == [(0, "short line")])
 check("an empty line is no piece", spelling.pieces("") == [])
+# The rest of the line was measured again for every piece: 200,000 characters
+# in 50 pieces measured five million. Counted, never timed.
+_measured = [0]
+_real_units = spelling.utf16_units
+
+
+def _counting_units(text):
+    _measured[0] += len(text)
+    return _real_units(text)
+
+
+spelling.utf16_units = _counting_units
+try:
+    _pc_line = "word " * 40_000
+    _pc_parts = spelling.pieces(_pc_line)
+finally:
+    spelling.utf16_units = _real_units
+check("a line of 200,000 characters is cut into pieces measuring it about twice, "
+      "not once for every piece (%d characters measured, %d pieces)"
+      % (_measured[0], len(_pc_parts)),
+      _measured[0] <= 3 * len(_pc_line) and "".join(p for _o, p in _pc_parts) == _pc_line)
 
 # --- the word being typed -------------------------------------------------
 check("the caret anywhere in a range, or at either end, is that range",
@@ -163,6 +240,40 @@ check("the caret anywhere in a range, or at either end, is that range",
       and spelling.range_at([(4, 3)], 5) == (4, 3))
 check("...and away from it, none", spelling.range_at([(4, 3)], 8) is None
       and spelling.range_at([(4, 3)], 3) is None)
+
+# --- no more underlines than a box may hold ------------------------------
+# Each is two toggles of a tag, and Tk reads a line in about the square of
+# its toggles: one long line of typos made every save at a pause cost
+# seconds. Those nearest the caret stay.
+_nu_line = [(6 * i, 3) for i in range(1200)]
+_nu = spelling.nearest_underlines({0: list(_nu_line)}, 0, 6 * 900, per_line=500)
+check("a line keeps no more underlines than a line may hold",
+      len(_nu[0]) == 500)
+check("...those around the caret's column, where words are being written",
+      _nu[0][0][0] <= 6 * 900 <= _nu[0][-1][0] and _nu[0] == sorted(_nu[0]))
+check("...one beside another, none skipped among them",
+      all(b[0] - a[0] == 6 for a, b in zip(_nu[0], _nu[0][1:])))
+check("...the caret at the line's start keeps its first ones",
+      spelling.nearest_underlines({0: list(_nu_line)}, 0, 0, per_line=500)[0]
+      == _nu_line[:500])
+check("...and at its end, its last ones",
+      spelling.nearest_underlines({0: list(_nu_line)}, 0, 10 ** 6, per_line=500)[0]
+      == _nu_line[-500:])
+_nu_many = {i: [(0, 3), (6, 3), (12, 3)] for i in range(40)}
+_nu_cut = spelling.nearest_underlines(_nu_many, 20, 0, per_line=500, total=30)
+check("a box keeps no more underlines than it may hold, in all",
+      sum(len(v) for v in _nu_cut.values()) == 30)
+check("...those on the lines nearest the caret's",
+      sorted(_nu_cut) == list(range(15, 25)))
+_nu_edge = spelling.nearest_underlines({3: list(_nu_line), 9: list(_nu_line)}, 6, 0,
+                                       per_line=500, total=700)
+check("a line above the caret keeps its last, one below its first",
+      _nu_edge[3] == _nu_line[-500:] and _nu_edge[9] == _nu_line[:200])
+_nu_small = {2: [(0, 3), (8, 4)], 5: [(1, 2)]}
+check("under both bounds nothing is taken away",
+      spelling.nearest_underlines(_nu_small, 0, 0) == _nu_small)
+check("the bounds are the ones the editor uses",
+      spelling.MAX_UNDERLINES_PER_LINE == 500 and spelling.MAX_UNDERLINES == 2000)
 
 # --- one dictionary per language -----------------------------------------
 _en19 = ["en-029", "en-AU", "en-CA", "en-GB", "en-IN", "en-US", "en-ZA"]

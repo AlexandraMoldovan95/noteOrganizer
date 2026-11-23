@@ -17,9 +17,10 @@ from datetime import datetime
 
 from ..core import tables as core_tables
 from ..core.categories import CATEGORY_COLORS
-from ..core.model import _truncate
+from ..core.model import _truncate, fold_for_search
 from ..core.recurrence import (
     describe_recurrence,
+    history_entries,
     is_recurring,
     next_occurrence_on_or_after,
     parse_date,
@@ -43,7 +44,7 @@ class NoteListMixin:
         fits sits AT the top, and the origin never rests above the first card
         (which showed as unexplained space under the top bar). The editor's
         canvas carries the same guard."""
-        canvas = getattr(self, "canvas", None)
+        canvas = self.canvas
         if canvas is None:
             return
         try:
@@ -73,7 +74,7 @@ class NoteListMixin:
         as it is now; content that fits pins to the top. The region is set
         from the list's own extent first: content that just shrank under a
         view scrolled past its new end would leave it in blank space."""
-        canvas = getattr(self, "canvas", None)
+        canvas = self.canvas
         if canvas is None:
             return
         try:
@@ -159,6 +160,125 @@ class NoteListMixin:
         self._list_hand_scrolled = (rec is None
                                     or self._row_on_screen(rec) == "none")
 
+    def _what_hides_notes(self, note=None):
+        """In words, what keeps notes off the list now -- the search, Show,
+        *note*'s folded group, and of those only what keeps *note* off when
+        one is given -- or '' when nothing does. A new note filed under
+        General vanished as it was written, with Show picked once and
+        forgotten, and the empty list blamed a search nobody had typed."""
+        # *note* may be a list, said of them all: what keeps any of them off. Of
+        # the first alone, the others' folded groups and filters went unsaid.
+        group = note if isinstance(note, list) else ([] if note is None else [note])
+        parts = []
+        query, show = self._search_query(), self.filter_var.get()
+        if query and (note is None or any(not self._query_matches_note(query, n) for n in group)):
+            parts.append("your search")
+        if show != "All" and (note is None or any(not self._note_passes_filter(n, show) for n in group)):
+            parts.append("Show: " + show)
+        folded = ({self._list_group_of(n) for n in group} & self.collapsed_groups
+                  if self.group_by_category.get() else set())
+        if folded:
+            parts.append("its folded group" if len(group) == 1
+                         else "their folded group" if len(folded) == 1 else "their folded groups")
+        return " and ".join(parts)
+
+    def _show_all_notes(self, note=None):
+        """The list with nothing hiding: Show at All, the search emptied,
+        *note*'s group unfolded, drawn again at once (Show's variable set by
+        hand draws nothing). The search box is emptied without the focus:
+        the banner comes while a new note is being written, and the words
+        typed after Show all went into the search."""
+        # Settings is left first, as Back leaves it; a
+        # popup holding typed work asks, and kept, nothing moves: the tab
+        # change below destroyed it, words and all.
+        if not self._leave_settings_for_the_editor():
+            return
+        # ...and from the Calendar, or with the list put away, the list is
+        # brought where it is seen.
+        try:
+            if self.notebook.index("current") != self.TAB_NOTES:
+                self.notebook.select(self.TAB_NOTES)
+        except tk.TclError:
+            pass
+        if getattr(self, "_sidebar_hidden", False):
+            self.toggle_sidebar()
+        # *note* may be a list: every group holding one is unfolded, in one
+        # write (the first's alone left the others' arrivals hidden).
+        targets = note if isinstance(note, list) else ([] if note is None else [note])
+        unfold = {self._list_group_of(n) for n in targets} & self.collapsed_groups
+        if unfold:
+            self.collapsed_groups -= unfold
+            settings = load_settings()
+            settings["collapsed_groups"] = sorted(self.collapsed_groups)
+            save_settings(settings)
+        self.filter_var.set("All")
+        if self.search_var.get() and not self._hint_shown(self.search_entry):
+            try:
+                in_box = self.focus_get() is self.search_entry
+            except (KeyError, tk.TclError):
+                in_box = False
+            if in_box:
+                self.search_var.set("")
+            else:
+                self.search_entry.show_hint()
+        self.refresh_note_list()
+        # Its card in sight: the list keeps its place, and the notes Show
+        # had hidden can come in above it.
+        if targets:
+            self._bring_card_into_view(targets[0].get("id"))
+
+    def _list_empty_link(self, y, text, tag, command):
+        """A link drawn under the empty list's words, at *y*: its item."""
+        item = self.canvas.create_text(
+            13, y, anchor="nw", text=text, font=("Segoe UI", 10, "underline"),
+            fill=self.colors["accent_text"], tags=("row", tag))
+        self.canvas.tag_bind(tag, "<Button-1>", lambda _e: command())
+        self.canvas.tag_bind(tag, "<Enter>", lambda _e: self.canvas.configure(cursor="hand2"))
+        self.canvas.tag_bind(tag, "<Leave>", lambda _e: self.canvas.configure(cursor=""))
+        return item
+
+    def _say_hidden_arrivals(self, notes, what):
+        """*notes*, just brought in -- an import, a restore -- said with the
+        banner a new note has when the list hides any of them: they landed
+        where Show or the search kept the list from looking, under "Added 3
+        notes" and a list that had not changed."""
+        shown = self._visible_note_ids()
+        hidden = [n for n in notes or () if n.get("id") not in shown]
+        hides = self._what_hides_notes(hidden) if hidden else ""
+        if hides:
+            tail = (f"hidden by {hides}" if len(notes) == 1
+                    else f"{len(hidden)} of them hidden by {hides}")
+            said = f"{what}, {tail}"
+
+            def say():
+                # Asked again when shown, as it can wait behind an Undo -- its
+                # words too, or they named a filter changed since.
+                # The list read once: per note, a big import froze.
+                shown_now = self._visible_note_ids()
+                held = {id(m) for m in self.notes}
+                still = [n for n in hidden if id(n) in held and n.get("id") not in shown_now]
+                if still:
+                    hides_now = self._what_hides_notes(still)
+                    now = (f"hidden by {hides_now}" if len(notes) == 1
+                           else f"{len(still)} of them hidden by {hides_now}")
+                    self._show_toast(f"{what}, {now}", kind="info",
+                                     action=lambda: self._show_all_notes(still), action_text="Show all")
+            # Not over an Undo still showing: 'Day removed' holds the day's
+            # text in it alone.
+            self._banner_after_undo(said, say)
+
+    def _bring_card_into_view(self, note_id):
+        """Draw the list down to *note_id*'s card, if it is still waiting to
+        be drawn, and scroll it all into sight."""
+        pending = getattr(self, "_list_pending", None) or ()
+        index = next((i for i, row in enumerate(pending)
+                      if row[0] == "note" and row[1].get("id") == note_id), None)
+        if index is not None:
+            self._draw_list_rows(index + 1)
+        rec = self._list_row_record(("note", note_id))
+        if rec is not None and self._row_on_screen(rec) != "all":
+            self._scroll_row_into_view(rec)
+
     def _toggle_group_collapsed(self, category):
         if category in self.collapsed_groups:
             self.collapsed_groups.discard(category)
@@ -192,7 +312,7 @@ class NoteListMixin:
         categories, and at startup, where the value comes off disk and could
         name a category this notebook has never had.
         """
-        var = getattr(self, "filter_var", None)
+        var = self.filter_var
         if var is not None and var.get() not in self._filter_options():
             var.set("All")
 
@@ -210,7 +330,7 @@ class NoteListMixin:
         return note.get("category") == selected
 
     def refresh_note_list(self):
-        if not hasattr(self, "canvas") or not self._still_alive():
+        if not self._still_alive():
             return
         # A card lifted by a drag is drawn away from its record; the
         # rebuild below would draw the list around a card that is not
@@ -221,7 +341,7 @@ class NoteListMixin:
         self._prune_selection()
         # The sort this list is drawn in -- what Custom order starts from
         # when it is chosen for the first time (_on_sort_chosen).
-        sort_var = getattr(self, "sort_var", None)
+        sort_var = self.sort_var
         if sort_var is not None:
             self._sort_shown = sort_var.get()
         # The rebuild empties the drawing for a moment, and a Configure then
@@ -284,18 +404,40 @@ class NoteListMixin:
         rows = self._list_rows()
 
         if not rows:
-            # Distinguish "no notes at all" from "nothing matches the filter".
+            # Distinguish "no notes at all" from "nothing matches the filter",
+            # and name what is hiding them, with the way back.
+            hides = self._what_hides_notes() if self.notes else ""
             if self.notes:
-                msg = "No notes match your search or filter."
+                msg = "No notes match " + (hides or "the list's choices") + "."
             else:
                 msg = "No notes yet.\nClick '+ New Note' to start!"
             # Kept inside the list's width, like every other text on it:
             # a message that fits here can run off the edge in another
             # font or at another scaling.
-            self.canvas.create_text(
+            text_id = self.canvas.create_text(
                 13, 23, anchor="nw", text=msg, font=("Segoe UI", 10),
                 width=self.LIST_DRAW_WIDTH - 2 * 13,
                 fill=self.colors["subtext"], tags=("row", "list_empty"))
+            if hides:
+                below = self.canvas.bbox(text_id)[3] + self.px(6)
+                link = self._list_empty_link(below, "Show all notes", "list_show_all",
+                                             self._show_all_notes)
+                # A day's own words (auto_expand) the list does not read: said,
+                # with the way to the History (the owner's choice). Not
+                # a dated note Show hid, which the History lists too.
+                typed = self.search_var.get().strip()
+                if (self._search_query()
+                        and any(e.get("auto_expand")
+                                for e in history_entries(self.notes, query=typed))):
+                    below = self.canvas.bbox(link)[3] + self.px(12)
+                    said = self.canvas.create_text(
+                        13, below, anchor="nw", font=("Segoe UI", 10),
+                        text="A day of a repeating note holds these words.",
+                        width=self.LIST_DRAW_WIDTH - 2 * 13,
+                        fill=self.colors["subtext"], tags=("row", "list_history_said"))
+                    self._list_empty_link(self.canvas.bbox(said)[3] + self.px(6),
+                                          "Search the Calendar's History", "list_history",
+                                          lambda: self._search_history_for(typed))
             self._list_extent_changed()
             return
 
@@ -313,7 +455,7 @@ class NoteListMixin:
         # it once the app is idle, for a rebuild that ran while the list was
         # not the thing holding the keyboard.
         self.after_idle(self._restore_card_focus)
-        if getattr(self, "selection_mode", False):
+        if self.selection_mode:
             # What "all" means just changed (a search or filter), and the
             # Select all button says what a press would do; only while the
             # bar is up, so an ordinary refresh pays nothing.
@@ -387,7 +529,7 @@ class NoteListMixin:
                 for gone in [k for k in cache if k not in alive]:
                     del cache[gone]
         # Category/type filter (from the dropdown). "All" shows everything.
-        chosen_category = getattr(self, "filter_var", None)
+        chosen_category = self.filter_var
         if chosen_category is not None:
             selected = self.filter_var.get()
             if selected != "All":
@@ -413,7 +555,7 @@ class NoteListMixin:
         self._sort_notes(shown)
         if not shown:
             return []
-        if not (getattr(self, "group_by_category", None) is not None
+        if not (self.group_by_category is not None
                 and self.group_by_category.get()):
             return [("note", note) for note in shown]
         groups = {}
@@ -671,7 +813,7 @@ class NoteListMixin:
         coerce missing/None fields to safe defaults so a single odd note can't
         crash the whole list."""
         if choice is None:
-            choice = getattr(self, "sort_var", None)
+            choice = self.sort_var
             choice = choice.get() if choice is not None else "Recently updated"
 
         def _s(n, key):
@@ -692,12 +834,19 @@ class NoteListMixin:
             notes.sort(key=lambda n: _s(n, "updated"))
         elif choice == "Title A–Z":
             # Untitled notes sink to the bottom rather than clustering at top.
-            notes.sort(key=lambda n: (not _s(n, "title").strip(), _s(n, "title").lower()))
+            # Folded as a search folds: by code point, É and every letter
+            # with a mark came after Z.
+            notes.sort(key=lambda n: (not _s(n, "title").strip(),
+                                      fold_for_search(_s(n, "title")), _s(n, "title")))
         elif choice == "Title Z–A":
-            notes.sort(key=lambda n: (not _s(n, "title").strip(), _s(n, "title").lower()),
+            # Untitled notes sink here too: A–Z's whole key reversed raised
+            # them to the top, so their mark is turned over before the reverse.
+            notes.sort(key=lambda n: (bool(_s(n, "title").strip()),
+                                      fold_for_search(_s(n, "title")), _s(n, "title")),
                        reverse=True)
         elif choice == "Category":
-            notes.sort(key=lambda n: (_s(n, "category"), _s(n, "updated")),
+            notes.sort(key=lambda n: (fold_for_search(_s(n, "category")), _s(n, "category"),
+                                      _s(n, "updated")),
                        reverse=False)
         elif choice == "Calendar: soonest":
             # Each note's NEXT relevant date from today (a series by its next
@@ -761,8 +910,7 @@ class NoteListMixin:
                         f"stays as it is now, and this is not asked again.",
                         icon="question")):
                 self._put_back_custom_order(marks)
-                self.save_notes()
-                self.set_status("Put back your Custom order")
+                self._say_if_saved(self.save_notes(), "Put back your Custom order")
         if (value == self.SORT_CUSTOM
                 and not any("order" in n for n in self.notes)):
             before = getattr(self, "_sort_shown", None)
@@ -787,7 +935,7 @@ class NoteListMixin:
         crossed either would be undone by the next rebuild."""
         if bool(a.get("pinned")) != bool(b.get("pinned")):
             return False
-        grouped = getattr(self, "group_by_category", None)
+        grouped = self.group_by_category
         if grouped is not None and grouped.get():
             return self._list_group_of(a) == self._list_group_of(b)
         return True
@@ -849,8 +997,10 @@ class NoteListMixin:
 
     @staticmethod
     def _order_identity(note):
-        """A note as the Custom order offer knows it: by its uid, which a
-        note brought back from the Trash keeps as a new dict."""
+        """A note as anything kept across a session knows it (the Custom
+        order offer, the Share panel's ticks, History's open groups): by its
+        uid, which a note back from the Trash keeps and a new note's reused
+        id does not."""
         return note.get("uid") or id(note)
 
     def _arranged_since_last_replace(self, was_notes):
@@ -908,11 +1058,11 @@ class NoteListMixin:
         self._custom_order_left = [
             self._order_identity(n)
             for n in sorted(placed, key=lambda n: n["order"])]
-        self.save_notes()
+        written = self.save_notes()
         self.sort_var.set(sort_before)
         self.refresh_note_list()
-        self.set_status(f"Put back your Custom order; the list is sorted by "
-                        f"{sort_before} again")
+        self._say_if_saved(written, f"Put back your Custom order; the list is sorted by "
+                                    f"{sort_before} again")
 
     def _put_back_custom_order(self, marks, dry_run=False):
         """Give every note in `marks` -- (note, had a place, the place), as
@@ -1369,7 +1519,7 @@ class NoteListMixin:
             # A refused open (Cancel on a day's or a template's save question)
             # returns "break": the window's click-outside, still to run for
             # this press, would ask again, and its "No" lost the template.
-            if self.open_note_in_tab(note) is False:
+            if self._open_unless_shown(note) is False:
                 return "break"
             # Before the ring's scroll-into-view, which then still brings a
             # card clicked at the list's edge fully into sight.
@@ -1462,7 +1612,7 @@ class NoteListMixin:
         on a folded one opens it. Without these (and Enter on a header) a
         folded group could be opened only with the mouse, and a list with
         every group folded gave the keyboard nothing at all to do."""
-        grouped = getattr(self, "group_by_category", None)
+        grouped = self.group_by_category
         key = self._ring_row()
         if key is None or grouped is None or not grouped.get():
             return "break"
@@ -1479,11 +1629,15 @@ class NoteListMixin:
             self._toggle_group_collapsed(key[1])
         return "break"
 
-    def _list_activate(self, _event=None):
+    def _list_activate(self, event=None):
         """Enter or Space: what a click does -- open the note, or tick it
         in selection mode, where a keyboard that opened the note instead
         would be the one route that ignores the mode. On a header, what a
-        click on it does: fold or unfold its group."""
+        click on it does: fold or unfold its group. Enter held down presses
+        once (_enter_repeats): a header folded and opened at every repeat,
+        writing settings.json each time."""
+        if self._enter_repeats(event):
+            return "break"
         self._bring_ring_into_view()
         key = self._ring_row()
         if key is not None and key[0] == "header":
@@ -1498,7 +1652,7 @@ class NoteListMixin:
             self._toggle_note_selected(nid, nid not in self.selected_note_ids)
             self._paint_card_check(nid)
         else:
-            self.open_note_in_tab(rec["note"])
+            self._open_unless_shown(rec["note"])
         return "break"
 
     def _list_open_menu(self, _event=None):
@@ -1874,37 +2028,39 @@ class NoteListMixin:
         # only the note's plain text; the tags row says a table is there.
         # The calendar's rule, so a row typed past its last cell goes too.
         prose, table_count = core_tables.preview_text(note_body)
-        if table_count:
-            preview_src = " ".join(
-                ln.strip() for ln in prose.split("\n") if ln.strip())
-        else:
-            preview_src = note_body.replace("\n", " ")
-        # The cap is a glimpse, not a width: the drawing wraps the glimpse
-        # to the card, so it stays readable however wide the characters are.
-        cap = self.CARD_PREVIEW_CHARS
-        preview = preview_src[:cap] + ("..." if len(preview_src) > cap else "")
+        preview_src = core_tables.lines_apart(prose if table_count else note_body)
+        # A glimpse, not a width: the drawing wraps it to the card.
+        preview = core_tables.glimpse(preview_src, self.CARD_PREVIEW_CHARS)
 
-        tags_text = note_category
+        # Two lines in fixed places (the owner's choice, 2026-11-11): when the
+        # note belongs, then what it holds. A sign's own spaces are U+00A0,
+        # which Tk never breaks at: "▦ 1" and "table" fell on two lines.
+        nb = "\xa0"
+        when = [note_category]
         if is_recurring(note):
-            tags_text += f"   🔁 {describe_recurrence(note)}"
+            when.append(f"🔁{nb}{describe_recurrence(note)}")
             if note.get("exceptions"):
-                tags_text += f"   ✕{len(note['exceptions'])}"
+                when.append(f"✕{len(note['exceptions'])}")
             if note.get("overrides"):
-                tags_text += f"   ✎{len(note['overrides'])}"
+                when.append(f"✎{len(note['overrides'])}")
         elif note.get("date"):
-            tags_text += f"   📅 {show_date(note['date'])}"
+            when.append(f"📅{nb}{show_date(note['date'])}")
+        holds = []
         if note.get("comments"):
-            tags_text += "   💬"
+            holds.append("💬")
         if note.get("attachments"):
-            tags_text += f"   📎×{len(note['attachments'])}"
+            holds.append(f"📎×{len(note['attachments'])}")
         if table_count:
-            tags_text += ("   ▦ 1 table" if table_count == 1
-                          else f"   ▦ {table_count} tables")
+            holds.append(f"▦{nb}1{nb}table" if table_count == 1
+                         else f"▦{nb}{table_count}{nb}tables")
         checklist = note.get("checklist") or []
         if isinstance(checklist, list) and checklist:
             done = sum(1 for it in checklist
                        if isinstance(it, dict) and it.get("done"))
-            tags_text += f"   ☑ {done}/{len(checklist)}"
+            holds.append(f"☑{nb}{done}/{len(checklist)}")
+        tags_text = "   ".join(when)
+        if holds:
+            tags_text += "\n" + "   ".join(holds)
         # The stripe wears the colour whole; the tags row's words a shade of
         # it that reads on the card (a pale yellow was 1.6:1 on white).
         words = legible_on(color, self.colors["card"], self.colors["text"])
@@ -1928,7 +2084,7 @@ class NoteListMixin:
         x1 = self.LIST_DRAW_WIDTH - self.CARD_INSET_X
         left = x0 + self.CARD_RING
         check_x = None
-        if getattr(self, "selection_mode", False):
+        if self.selection_mode:
             # Leftmost, ahead of the stripe, where the Checkbutton stood: 6
             # pixels before it and 22 wide, measured on the widget card (17,
             # guessed first, put the stripe five pixels off in the photograph).
@@ -2047,7 +2203,7 @@ class NoteListMixin:
         switch as through a rebuild; _recolor_stragglers never reaches the
         list (a drawing is not a widget), so this is its only recolour."""
         c = self.colors
-        cv = getattr(self, "canvas", None)
+        cv = self.canvas
         if cv is None:
             return
         try:
@@ -2282,7 +2438,7 @@ class NoteListMixin:
         self._ask_for_top_up()
         # Everything else refresh_note_list does on its way past.
         self._render_statistics()
-        if getattr(self, "selection_mode", False):
+        if self.selection_mode:
             self._update_bulk_selected_label()
         # A new note's first save draws its card as the open one, and the card
         # open before it still wears the outline: one card redrawn repaints
@@ -2320,7 +2476,7 @@ class NoteListMixin:
         them: a deleted note kept its tick, and a new note could take its freed
         id (the highest plus one) and arrive ticked, to be trashed by a Trash
         nobody aimed at it."""
-        chosen = getattr(self, "selected_note_ids", None)
+        chosen = self.selected_note_ids
         if not chosen:
             return
         kept = chosen & {n["id"] for n in self.notes}
@@ -2345,7 +2501,7 @@ class NoteListMixin:
         self._refresh_bulk_pin_label()
         # The button says what a press will do, asked of the same
         # _visible_note_ids() the press uses, so word and action agree.
-        button = getattr(self, "_bulk_select_all_btn", None)
+        button = self._bulk_select_all_btn
         if button is None:
             return
         try:
@@ -2372,17 +2528,19 @@ class NoteListMixin:
     @staticmethod
     def _search_texts(note):
         """What the sidebar search looks through in a note: its title, its
-        body as text -- a table's plumbing stripped -- and its comments,
-        lowercased (see _query_matches_note)."""
+        body as text -- a table's plumbing stripped -- its comments and its
+        checklist's rows, folded (core.model.fold_for_search)."""
         def _txt(value):
-            return value.lower() if isinstance(value, str) else ""
+            return fold_for_search(value) if isinstance(value, str) else ""
 
         body = note.get("body")
         if isinstance(body, str) and core_tables.CELL in body:
-            body_txt = core_tables.content_text(body).lower()
+            body_txt = fold_for_search(core_tables.content_text(body))
         else:
             body_txt = _txt(body)
-        return (_txt(note.get("title")), body_txt, _txt(note.get("comments")))
+        rows = "\n".join(it.get("text") or "" for it in note.get("checklist") or []
+                         if isinstance(it, dict) and isinstance(it.get("text"), str))
+        return (_txt(note.get("title")), body_txt, _txt(note.get("comments")), _txt(rows))
 
     @staticmethod
     def _query_in_texts(query, texts):
@@ -2390,18 +2548,21 @@ class NoteListMixin:
         return any(query in text for text in texts)
 
     def _cached_search_texts(self, note):
-        """_search_texts, kept for each note until one of the three fields
-        is replaced. Asked of the field objects themselves: a save writes
-        new strings, and the cache holds on to the old ones, so an old one's
-        identity cannot be reused by a new string while it is compared."""
+        """_search_texts, kept for each note until one of its fields is
+        replaced. The three texts are asked by the objects themselves: a save
+        writes new strings, and the cache holds on to the old ones, so an old
+        one's identity cannot be reused by a new string while it is compared.
+        The checklist's rows are compared as words: a row is edited in place."""
         cache = self.__dict__.setdefault("_search_text_cache", {})
         fields = (note.get("title"), note.get("body"), note.get("comments"))
+        rows = tuple(it.get("text") for it in note.get("checklist") or [] if isinstance(it, dict))
         hit = cache.get(note.get("id"))
         if (hit is None or hit[0][0] is not fields[0]
-                or hit[0][1] is not fields[1] or hit[0][2] is not fields[2]):
-            hit = (fields, self._search_texts(note))
+                or hit[0][1] is not fields[1] or hit[0][2] is not fields[2]
+                or hit[1] != rows):
+            hit = (fields, rows, self._search_texts(note))
             cache[note.get("id")] = hit
-        return hit[1]
+        return hit[2]
 
     def _visible_note_ids(self):
         """The notes the list is showing right now, by id: the ONE definition,
@@ -2410,8 +2571,8 @@ class NoteListMixin:
         not drawn yet), and leaving out a folded group's notes: counted, they
         let Select all and then bulk Trash take notes nobody could see."""
         shown = self._notes_on_the_list()
-        grouped = getattr(self, "group_by_category", None)
-        folded = getattr(self, "collapsed_groups", None)
+        grouped = self.group_by_category
+        folded = self.collapsed_groups
         if grouped is not None and grouped.get() and folded:
             shown = [n for n in shown if self._list_group_of(n) not in folded]
         return {n["id"] for n in shown}

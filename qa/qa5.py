@@ -170,11 +170,14 @@ app.trash = [
     {'id':2,'title':'bad_date','deleted_at':'garbage'},
     {'id':3,'title':'missing_date'},
 ]
+_pg_kept = []
 def purge():
-    if hasattr(app, 'purge_old_trash'):
-        app.purge_old_trash()
+    kept, _purged = NO.purge_expired_trash(app.trash, app.notes)
+    _pg_kept.extend(e.get('id') for e in kept)
     app.update()
 safe('purge survives bad deleted_at in trash', purge)
+check('...and keeps the entries whose moment it cannot read',
+      2 in _pg_kept and 3 in _pg_kept)
 
 # ---- MULTI-SCRIPT INPUT ----
 # The app's own functions speak English; the USER writes in whatever
@@ -248,7 +251,9 @@ if sys.platform == 'win32':
     app.update()
     _msid = app.selected_note_id
     _mdisk = _mjson.load(_mio.open('notes_data.json', encoding='utf-8'))
-    _mnote = next(n for n in _mdisk if n['id'] == _msid)
+    # With a default, as every lookup a mutant can empty: a bare next()
+    # stopped the suite before its footer.
+    _mnote = next((n for n in _mdisk if n['id'] == _msid), {'title': '', 'body': ''})
     _mflat = (_mnote['title'] + _mnote['body'] + _mnote.get('comments', '')
               + _mjson.dumps(_mnote.get('checklist', []),
                              ensure_ascii=False))
@@ -347,10 +352,48 @@ _t05b = _time5.time()
 while not _msgs5b and _time5.time() - _t05b < 3:
     app5d.update(); _time5.sleep(0.05)
 _st5._preserve_corrupt = _real_pres5
-check('a failed preserve is announced with the do-not-save warning',
+check('a failed preserve is announced with the do-not-save warning, its cause '
+      'not put on another program',
       bool(_msgs5b)
-      and 'Preserving a copy of it also failed' in _msgs5b[0][1])
+      and 'No copy of it could be kept' in _msgs5b[0][1]
+      and 'will not save anything over it' in _msgs5b[0][1]
+      and 'Another program' not in _msgs5b[0][1])
 app5d.destroy()
+
+# ...and a read Windows refuses (another program holding the file) is said as
+# that, not as a broken file to repair: it is held, never copied aside.
+_real_read5 = _st5._read_data_file
+
+
+def _refuse5(path):
+    if os.path.basename(str(path)) == 'notes_data.json':
+        raise PermissionError(13, 'held by another program')
+    return _real_read5(path)
+
+
+_st5._read_data_file = _refuse5
+_msgs5r = []
+try:
+    app5r = NO.NoteOrganizer(); app5r._poll_active_dirty = lambda: None
+    app5r.show_info = lambda t, m: _msgs5r.append((t, m))
+    _t05r = _time5.time()
+    while not _msgs5r and _time5.time() - _t05r < 3:
+        app5r.update(); _time5.sleep(0.05)
+finally:
+    _st5._read_data_file = _real_read5
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.DATA_FILE)))
+check(f'a refused read is said as another program holding the file, not as damage, '
+      f'with nothing saved over it and the ask to open the app again '
+      f'({(_msgs5r or [("", "")])[0][1][-160:]!r})',
+      bool(_msgs5r)
+      and 'Windows would not let the app read the file' in _msgs5r[0][1]
+      and 'Another program may be holding the file, so no copy of it was kept' in _msgs5r[0][1]
+      and 'will not save anything over it in this session' in _msgs5r[0][1]
+      and 'Close Note Organizer and open it again' in _msgs5r[0][1]
+      and 'unreadable' not in _msgs5r[0][1])
+app5r.destroy()
+with open('notes_data.json', 'w', encoding='utf-8') as _f5:
+    _f5.write('[]')
 
 # ============================================================
 # A POISONED RECURRENCE INTERVAL CANNOT MAKE THE APP UNLAUNCHABLE
@@ -419,7 +462,9 @@ app5f._cleanup_report = ({'before': 5, 'empty_removed': 1,
 app5f.announce_startup_changes()
 app5f.update()
 check('a cleanup that DID something still reports it, in plain words',
-      len(_notices) == 1 and '1 empty note(s)' in _notices[0][1]
+      len(_notices) == 1
+      and '1 empty note and 2 exact duplicates were removed' in _notices[0][1]
+      and '2 of your 5 notes remain.' in _notices[0][1]
       and 'removed' in _notices[0][1]
       # the words the product review flagged as maintenance vocabulary
       # must be gone from a dialog that reports a permanent deletion
@@ -810,7 +855,7 @@ check('a dated note shows its date day first, and opens clean',
       app.date_entry.get() == '17.10.2026'
       and app.editor_state_matches_saved(app.capture_editor_state()))
 check('...and its card says it day first too',
-      '\U0001F4C5 17.10.2026' in app._card_texts(app.find_note(1))['tags'])
+      '\U0001F4C5\xa017.10.2026' in app._card_texts(app.find_note(1))['tags'])
 _w_stored = []
 for _w_form in ('16.11.2026', '16/11/2026', '16 nov 2026',
                 '16 noiembrie 2026', 'November 16, 2026', '2026-11-16'):
@@ -1343,7 +1388,7 @@ _nl_routes = [
      lambda: app._cleanup_selected_duplicates(
          [(_NlVar(False), app.find_note(2), [app.find_note(2), app.find_note(3)]),
           (_NlVar(True), app.find_note(3), [app.find_note(2), app.find_note(3)])],
-         None, refresh=lambda: None)),
+         refresh=lambda: None)),
     ("deleting another note's category",
      lambda: app._delete_category('Temp5nl', lambda: None)),
     ('moving another note to a category from its menu',
@@ -1548,6 +1593,1024 @@ check(f'...while a day differing only in its colour keeps the rescue copy '
       f'the note had, its series still repeating ({_ro_asked})',
       _ro_asked == [] and app.find_note(1)['recurrence']['freq'] == 'weekly'
       and (app.find_note(1).get('_prev') or {}).get('body') == 'AN OLDER VERSION')
+
+# ---- A REPEAT ENDED ANOTHER WAY KEEPS ITS DAYS TOO ----
+# A share code whose copy does not repeat, answered Update, and a Restore
+# previous of a version that did not repeat, both ended the repeat outside
+# the editor's save: the days stayed in the note out of sight, the rescue
+# copy had no room for them, and the next small edit's save dropped them
+# with no copy anywhere.
+_rd_uid = '11111111-2222-3333-4444-555555555555'
+
+
+def _rd_edit_and_restore():
+    """One small edit, its autosave, then Restore previous answered Yes:
+    note 1's repeat and day text after, and whether the words are on disk."""
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app.body_text.insert('end-1c', ' and stretch'); app.update()
+    app._flush_autosave(); app.update()
+    _after_edit = sorted(app.find_note(1).get('overrides') or {})
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        app.restore_previous_version(); app.update()
+    finally:
+        app.ask_yes_no = _ro_yes
+    n = app.find_note(1)
+    with open('notes_data.json', encoding='utf-8') as _f:
+        _disk = _f.read()
+    return (_after_edit, n['recurrence'].get('freq'),
+            NO.effective_note(n, '2026-09-14').get('body'), 'room 9' in _disk)
+
+
+_ro_fixture()
+app.notes[0]['uid'] = _rd_uid
+app.save_notes()
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rd_code = NO.encode_share_code({'uid': _rd_uid, 'title': 'Standup',
+                                 'body': 'SERIES TEXT, fixed', 'date': '2026-09-07',
+                                 'recurrence': {}})
+app._themed_dialog = lambda *a, **k: 'update'
+try:
+    if not app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end'); app.import_box.insert('1.0', _rd_code)
+    app._do_inline_import(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rd = app.find_note(1)
+check(f"a share code that ends the repeat copies the series' days into the rescue "
+      f"copy and keeps them in the note "
+      f"({sorted(_rd.get('overrides') or {})}, {sorted(_rd.get('_prev') or {})})",
+      _rd['recurrence'].get('freq') in (None, '')
+      and sorted(_rd.get('overrides') or {}) == ['2026-09-14', '2026-09-21']
+      and sorted((_rd.get('_prev') or {}).get('overrides') or {})
+      == ['2026-09-14', '2026-09-21'])
+_rd_back = _rd_edit_and_restore()
+check(f'...and after one small edit Restore previous brings the series back with '
+      f'every day\'s own text ({_rd_back})',
+      _rd_back[1:] == ('weekly', 'DAY TEXT: room 9', True))
+# Restore previous of a version that did not repeat, over a series with
+# days of its own: the copy it keeps in its turn holds the days.
+_ro_fixture()
+app.notes[0]['_prev'] = {'title': 'Standup', 'body': 'SERIES TEXT',
+                         'formatting': [], 'paragraphs': [], 'comments': '',
+                         'recurrence': {'freq': ''}}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rd = app.find_note(1)
+check(f"a restore that ends the repeat keeps the days in the copy it keeps in "
+      f"its turn ({sorted((_rd.get('_prev') or {}).get('overrides') or {})})",
+      not _rd['recurrence'].get('freq')
+      and sorted(_rd.get('overrides') or {}) == ['2026-09-14', '2026-09-21']
+      and sorted((_rd.get('_prev') or {}).get('overrides') or {})
+      == ['2026-09-14', '2026-09-21'])
+_rd_back = _rd_edit_and_restore()
+check(f'...and restoring back after an edit brings the series and its days '
+      f'({_rd_back})', _rd_back[1:] == ('weekly', 'DAY TEXT: room 9', True))
+# Days a file left on a note that does not repeat are in no other copy:
+# the save that clears a one-off note's days keeps these.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                       'date': '2026-09-07', 'recurrence': {},
+                       'overrides': {'2026-09-14': {'body': 'DAY TEXT: room 9'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.insert('end-1c', ' more'); app.update()
+app.save_current_note(); app.update()
+check('a one-off note keeps days with text no copy holds when it is saved',
+      'room 9' in (app.find_note(1).get('overrides') or {})
+      .get('2026-09-14', {}).get('body', ''))
+# The repeat turned off in the editor copies the days and keeps them: in the
+# one copy slot alone, the next big rewrite's copy erased them.
+_ro_fixture()
+app.notes[0]['body'] = 'SERIES TEXT ' + 'long words ' * 10
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'Something else entirely')
+app.save_current_note(); app.update()
+with open('notes_data.json', encoding='utf-8') as _f:
+    _rd_disk = _f.read()
+check(f"turned off in the editor, then rewritten: every day's own text is still "
+      f"in the file ({sorted(app.find_note(1).get('overrides') or {})})",
+      'room 9' in _rd_disk and 'DAY 21' in _rd_disk)
+# ...and the days it keeps steer nothing while it does not repeat: opened from
+# its date on the calendar, the one-off showed its first day's words and the
+# save wrote them over the note; a deleted first day hid it.
+_ro_fixture()
+app.notes[0]['overrides']['2026-09-07'] = {'title': 'Kickoff',
+                                           'body': 'FIRST DAY ONLY: room 4'}
+app.notes[1].update({'title': 'Gym', 'date': '2026-09-08',
+                     'recurrence': {'freq': 'weekly'}, 'exceptions': ['2026-09-08'],
+                     'overrides': {'2026-09-15': {'body': 'GYM DAY: legs'}}})
+app.notes[1] = NO.normalize_note(app.notes[1])
+app.save_notes()
+app._themed_dialog = lambda *a, **k: True
+try:
+    for _kd_id in (1, 2):
+        app.open_note_in_tab(app.find_note(_kd_id)); app.update()
+        app.rec_freq_var.set(NO.FREQ_LABELS[''])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+from noteorganizer.ui import calendar_view as _kd_cv
+_kd_row = _kd_cv._day_row_parts(app, app.find_note(1), '2026-09-07')
+check(f'...and its calendar row is the note\'s own, with no day mark ({_kd_row[:2]})',
+      'Standup' in _kd_row[0] and '✎' not in ''.join(map(str, _kd_row[:2])))
+app._open_note_from_calendar(app.find_note(1), '2026-09-07'); app.update()
+_kd_shown =(app.title_entry.get(), app.body_text.get('1.0', 'end-1c').strip())
+app.open_note_in_tab(app.find_note(2)); app.update()
+_kd_note = app.find_note(1)
+_kd_gym = [n.get('title') for n in app.notes_on_date('2026-09-08')]
+check(f"a series turned off keeps its days unused: opened from its calendar date "
+      f"it shows and keeps its own words ({_kd_shown}, stored "
+      f"{(_kd_note['title'], _kd_note['body'][:12])}), and a deleted first day no "
+      f"longer hides it ({_kd_gym})",
+      _kd_shown == ('Standup', 'SERIES TEXT')
+      and (_kd_note['title'], _kd_note['body']) == ('Standup', 'SERIES TEXT')
+      and '2026-09-07' in (_kd_note.get('overrides') or {})
+      and not app.find_note(2)['recurrence'].get('freq')
+      and app.find_note(2).get('exceptions') == ['2026-09-08']
+      and 'Gym' in _kd_gym)
+# A big delete saved first, the repeat turned off after: the turn-off's copy
+# keeps the deleted words with the series. Only the other order was kept.
+_ro_fixture()
+app.notes[0]['body'] = 'SERIES TEXT ' + 'long words ' * 10
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+app.save_current_note(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_rd_prev = app.find_note(1).get('_prev') or {}
+# One rescue copy per note: an update's takes the place of one the note still
+# needs, so the question says so rather than doing it in silence.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Passport',
+                                'body': 'Passport.'})]
+app.notes[0]['_prev'] = {'title': 'Passport', 'body': 'Passport. The blue jacket pocket.',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+_rd_said = []
+app._themed_dialog = lambda *a, **k: (_rd_said.append(a[1] if len(a) > 1 else ''), 'cancel')[1]
+try:
+    if not app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end')
+    app.import_box.insert('1.0', NO.encode_share_code({'uid': _rd_uid, 'title': 'Passport',
+                                                       'body': 'Passport, renewed.'}))
+    app._do_inline_import(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+check(f"an update that would replace an earlier version Restore previous holds "
+      f"says so ({' '.join(_rd_said)[-90:]!r})",
+      any('replaced by the one from before this update' in s for s in _rd_said))
+# After an Update, a big delete in the note keeps the Update's copy -- the note
+# as it was here before, in no other file -- not the backup's words it deletes,
+# which are still in the backup (the copy was replaced).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Passport',
+                                'body': 'From the backup: ' + 'renewed in March ' * 6})]
+app.notes[0]['_prev'] = {'title': 'Passport', 'body': 'My own words before the update.',
+                         'formatting': [], 'paragraphs': [], 'comments': '',
+                         'category': 'General', 'color': '', 'checklist': [], 'pinned': False}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+app.save_current_note(); app.update()
+_uc_prev = app.find_note(1).get('_prev') or {}
+# ...and the words it took away -- written since the Update, or brought back by
+# Restore previous -- are kept too, as a note of their own (kept in neither,
+# they were in no file).
+_uc_aside = next((n for n in app.notes if n.get('title') == 'Passport (earlier text)'), {})
+check(f"after an Update, a big delete keeps the copy from before the Update, and the "
+      f"words it took away as a note of their own ({(_uc_prev.get('body') or '')[:30]!r}, "
+      f"{(_uc_aside.get('body') or '')[:20]!r})",
+      _uc_prev.get('body') == 'My own words before the update.'
+      and (_uc_aside.get('body') or '').startswith('From the backup:'))
+# ...and when those words come back -- Ctrl+Z, a cut pasted back -- their note
+# goes again, untouched since (one stayed for good after every Undo).
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'From the backup: ' + 'renewed in March ' * 6)
+app.save_current_note(); app.update()
+check('...and when the words come back, their note kept aside goes again',
+      not any(n.get('title') == 'Passport (earlier text)' for n in app.notes)
+      and (app.find_note(1).get('_prev') or {}).get('body') == 'My own words before the update.')
+# A paragraph moved -- cut, then pasted elsewhere -- and two big deletes undone
+# in turn: each note kept aside goes as its words come back.
+_mv_p1 = 'First part: ' + 'packing the tent ' * 4
+_mv_p2 = 'Second part: ' + 'buying the tickets ' * 4
+
+
+def _mv_fixture():
+    app.new_note(); app.update()
+    app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Trip',
+                                    'body': _mv_p1 + '\n' + _mv_p2})]
+    app.notes[0]['_prev'] = {'title': 'Trip', 'body': 'Mine before.', 'formatting': [],
+                             'paragraphs': [], 'comments': '', 'category': 'General',
+                             'color': '', 'checklist': [], 'pinned': False}
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+
+
+def _mv_body(text):
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', text)
+    app.save_current_note(); app.update()
+
+
+def _mv_asides():
+    return sum(1 for n in app.notes if n.get('title') == 'Trip (earlier text)')
+
+
+_mv_fixture()
+_mv_body(_mv_p2)
+_mv_made = _mv_asides()
+_mv_body(_mv_p2 + '\n' + _mv_p1)
+_mv_moved = _mv_asides()
+_mv_fixture()
+_mv_body(_mv_p2)
+_mv_body('x')
+_mv_two = _mv_asides()
+_mv_body(_mv_p2)
+_mv_body(_mv_p1 + '\n' + _mv_p2)
+check(f'a paragraph moved, and two deletes undone in turn, leave no note kept aside '
+      f'({_mv_made}, {_mv_moved}; {_mv_two}, {_mv_asides()})',
+      (_mv_made, _mv_moved, _mv_two, _mv_asides()) == (1, 0, 2, 0))
+# The note kept aside, opened in the half second before the words put back are
+# saved: that save takes it away, and it was loaded anyway, what was typed into
+# it stored by no save.
+_mv_fixture()
+_mv_body(_mv_p2)
+_gh_aside = next((n for n in app.notes if n.get('title') == 'Trip (earlier text)'), None)
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', _mv_p1 + '\n' + _mv_p2)
+_gh_opened = app.open_note_in_tab(_gh_aside) if _gh_aside else None
+app.update()
+check(f'a note kept aside, taken away by the save its opening makes, is not opened '
+      f'({_gh_opened}, {app.selected_note_id})',
+      _gh_aside is not None and _gh_opened is False and app.selected_note_id == 1
+      and _mv_asides() == 0)
+# Spent, it is said on the banner too, not only on a status line out of sight,
+# whose Show then offered a note just gone...
+_sp_toasts = []
+_sp_real = app._show_toast
+app._show_toast = lambda text, *a, **k: (_sp_toasts.append((text, k.get('action'))), _sp_real(text, *a, **k))[1]
+try:
+    _mv_fixture()
+    _mv_body(_mv_p2)
+    _mv_body(_mv_p1 + '\n' + _mv_p2)
+finally:
+    app._show_toast = _sp_real
+check(f'a note kept aside spent again is said on the banner, with no Show ({_sp_toasts[-1:]})',
+      bool(_sp_toasts) and 'gone again' in _sp_toasts[-1][0] and _sp_toasts[-1][1] is None)
+# ...and held back behind an Undo, then spent before that Undo went: its Show
+# is not offered once it goes, waiting for a note gone.
+_sp_toasts = []
+try:
+    _mv_fixture()
+    _sp_real('Note moved to Trash', action=lambda: None)
+    app._show_toast = lambda text, *a, **k: (_sp_toasts.append((text, k.get('action'))), _sp_real(text, *a, **k))[1]
+    _mv_body(_mv_p2)
+    _mv_body(_mv_p1 + '\n' + _mv_p2)
+    app._hide_toast(); app.update()
+    app._hide_toast(); app.update()
+finally:
+    app._show_toast = _sp_real
+check(f'...and held back behind an Undo, then spent, it offers no Show once the Undo goes '
+      f'({[t for t, _a in _sp_toasts]})',
+      not any('kept as a note of their own' in t for t, _a in _sp_toasts)
+      and any('gone again' in t for t, _a in _sp_toasts))
+# ...one pinned since, or put back from the Trash, is the person's and stays:
+# untouched read as its stamp, it went outright.
+_mv_fixture()
+_mv_body(_mv_p2)
+# None when no note was kept aside: the check's answer, not the suite's end.
+_sp_aside = next((n for n in app.notes if n.get('title') == 'Trip (earlier text)'), None)
+if _sp_aside:
+    _sp_aside['pinned'] = True
+_mv_body(_mv_p1 + '\n' + _mv_p2)
+_sp_pinned = _mv_asides()
+_mv_fixture()
+_mv_body(_mv_p2)
+_sp_aside = next((n for n in app.notes if n.get('title') == 'Trip (earlier text)'), None)
+_sp_gone = _sp_back = None
+if _sp_aside:
+    # Deleted as a delete does it: out of the notes, into the Trash.
+    app.notes.remove(_sp_aside); app._move_notes_to_trash([_sp_aside]); app.save_notes(); app.update()
+    _sp_gone = _mv_asides()
+    app._restore_trash_entries([e for e in app.trash if e.get('uid') == _sp_aside.get('uid')]); app.update()
+    _sp_back = _mv_asides()
+_mv_body(_mv_p1 + '\n' + _mv_p2)
+check(f'a note kept aside, pinned since or put back from the Trash, stays '
+      f'({_sp_pinned}; {_sp_gone} -> {_sp_back} -> {_mv_asides()})',
+      _sp_pinned == 1 and (_sp_gone, _sp_back) == (0, 1) and _mv_asides() == 1)
+# ...and one the list hides is said so, its Show showing all.
+_sp_toasts = []
+app._show_toast = lambda text, *a, **k: (_sp_toasts.append((text, k.get('action'))), _sp_real(text, *a, **k))[1]
+try:
+    _mv_fixture()
+    app.filter_var.set(app.FILTER_DATED); app.refresh_note_list(); app.update()
+    _mv_body(_mv_p2)
+finally:
+    app._show_toast = _sp_real
+_sp_said = next((t for t, _a in _sp_toasts if 'earlier text' in t), '')
+_sp_show = next((a for t, a in _sp_toasts if 'earlier text' in t), None)
+if callable(_sp_show):
+    _sp_show(); app.update()
+check(f'a note kept aside that Show hides is said so, and its Show shows all ({_sp_said!r}, {app.filter_var.get()!r})',
+      'hidden by Show: ' + app.FILTER_DATED in _sp_said and app.filter_var.get() == 'All')
+app.filter_var.set('All'); app.refresh_note_list(); app.update()
+# Comments cleared after an Update: the copy keeps this computer's comments,
+# not the backup's, which go to a note of their own.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Flat', 'body': 'b',
+                                'comments': 'Booked the venue; deposit paid on Friday, receipt in the drawer'})]
+app.notes[0]['_prev'] = {'title': 'Flat', 'body': 'b', 'formatting': [], 'paragraphs': [],
+                         'comments': 'Call Ana Tue', 'category': 'General', 'color': '',
+                         'checklist': [], 'pinned': False}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.comments_text.delete('1.0', 'end')
+app.save_current_note(); app.update()
+_cc_prev = app.find_note(1).get('_prev') or {}
+_cc_aside = next((n for n in app.notes if n.get('title') == 'Flat (earlier text)'), {})
+check(f"after an Update, cleared comments leave the copy's own comments, and keep "
+      f"theirs as a note ({_cc_prev.get('comments')!r}, {(_cc_aside.get('comments') or '')[:12]!r})",
+      _cc_prev.get('comments') == 'Call Ana Tue'
+      and (_cc_aside.get('comments') or '').startswith('Booked the venue')
+      # the comments alone, not a whole copy of the note
+      and _cc_aside.get('body') == '')
+# The repeat turned off in the same save as a big delete: the Update's copy
+# still kept whole, the words taken as a note of their own.
+_ro_fixture()
+app.notes[0]['body'] = 'SERIES TEXT ' + 'words from the backup ' * 6
+app.notes[0]['_prev'] = {'title': 'Standup', 'body': 'Before the update.', 'formatting': [],
+                         'paragraphs': [], 'comments': '', 'category': 'General', 'color': '',
+                         'checklist': [], 'pinned': False}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_to_prev = app.find_note(1).get('_prev') or {}
+_to_aside = next((n for n in app.notes if n.get('title') == 'Standup (earlier text)'), {})
+check(f"after an Update, the repeat off and a big delete in one save keep the copy from "
+      f"before the Update, and the words as a note ({(_to_prev.get('body') or '')[:20]!r}, "
+      f"{(_to_aside.get('body') or '')[:12]!r})",
+      _to_prev.get('body') == 'Before the update.'
+      and (_to_aside.get('body') or '').startswith('SERIES TEXT'))
+check(f"a big delete, then the repeat turned off: the copy holds the deleted words "
+      f"and the series ({(_rd_prev.get('body') or '')[:20]!r}, "
+      f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
+      (_rd_prev.get('body') or '').startswith('SERIES TEXT')
+      and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly')
+# ...but when the turn-off's own save also clears the text, the words it takes
+# are the newest: the older copy's text in their place left them in no file.
+# Select all, type, pick "Does not repeat" and Save, in one save.
+_ro_fixture()
+app.notes[0]['body'] = 'OLD DRAFT ' + 'old words ' * 10
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept line')
+app.save_current_note(); app.update()
+app.body_text.insert('end-1c', ' NEW WORK ' + 'fresh words ' * 30)
+app.save_current_note(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'done')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rd_prev = app.find_note(1).get('_prev') or {}
+check(f"a turn-off whose own save clears the text keeps that text, the newest, with "
+      f"the series ({(_rd_prev.get('body') or '')[:20]!r}, "
+      f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
+      'NEW WORK' in (_rd_prev.get('body') or '')
+      and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly')
+# ...and so when a save made while the turn-off waited has a copy of its own:
+# that copy's older text went in, and the words the last save took were in no
+# file. Turn-off picked, a big delete autosaved, words added, cleared.
+_ro_fixture()
+app.notes[0]['body'] = 'FIRST PART ' + 'early words ' * 25
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept line')
+    app._autosave_now(); app.update()
+    _rh_held = getattr(app, '_held_text_rescue', None) is not None
+    app.body_text.insert('end-1c', ' SECOND PART ' + 'later words ' * 25)
+    app._autosave_now(); app.update()
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'done')
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rd_prev = app.find_note(1).get('_prev') or {}
+check(f"...and so when a save made while the turn-off waited holds a copy of its "
+      f"own (held: {_rh_held}; {(_rd_prev.get('body') or '')[:24]!r}, "
+      f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
+      _rh_held and 'SECOND PART' in (_rd_prev.get('body') or '')
+      and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+# ...and when the turn-off's save clears only the comments, the copy a big
+# delete made before keeps its words: taken as the newest text, the deleted
+# body was in no file.
+_ro_fixture()
+app.notes[0]['body'] = 'BODY GONE ' + 'packed words ' * 25
+app.notes[0]['comments'] = 'ok'
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept line')
+app.save_current_note(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.comments_text.delete('1.0', 'end')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rc_prev = app.find_note(1).get('_prev') or {}
+check(f"...and when it clears only the comments, the copy keeps the body a big "
+      f"delete took before ({(_rc_prev.get('body') or '')[:12]!r}, "
+      f"{_rc_prev.get('comments')!r}, {(_rc_prev.get('recurrence') or {}).get('freq')})",
+      'BODY GONE' in (_rc_prev.get('body') or '') and _rc_prev.get('comments') == 'ok'
+      and (_rc_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+# A turn-off after an import's Update replaced the update's copy: the note as
+# it was here before the Update was in no file, and nothing said.
+_ro_fixture()
+_uc_note = app.find_note(1)
+NO.apply_shared_update(_uc_note, dict(
+    {key: _uc_note[key] for key in ('uid', 'created', 'date', 'recurrence', 'overrides')},
+    title='Standup', body='FROM THE PHONE'), NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_uc_prev = app.find_note(1).get('_prev') or {}
+check(f"a turn-off after an import's Update keeps the update's copy, the series in it "
+      f"({(_uc_prev.get('body') or '')[:12]!r}, {(_uc_prev.get('recurrence') or {}).get('freq')})",
+      _uc_prev.get('body') == 'SERIES TEXT' and 'category' in _uc_prev
+      and (_uc_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+# ...kept whole with its own days when it holds another series: they stay in
+# it, not set aside as earlier text the turn-off then left out.
+_ro_fixture()
+_uc2 = app.find_note(1)
+NO.apply_shared_update(_uc2, dict(
+    {key: _uc2[key] for key in ('uid', 'created')}, title='Standup', body='FROM THE PHONE',
+    date='2026-09-08', recurrence={'freq': 'weekly'},
+    overrides={'2026-09-15': {'body': 'PHONE TUESDAY'}}), NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_uc2_prev = app.find_note(1).get('_prev') or {}
+_uc2_made = [n.get('title') for n in app.notes if n['id'] > 2]
+check(f"a turn-off keeps an import's Update copy of another series whole, its days in it, nothing set "
+      f"aside ({sorted(_uc2_prev.get('overrides') or {})}, {_uc2_made})",
+      sorted(_uc2_prev.get('overrides') or {}) == ['2026-09-14', '2026-09-21'] and _uc2_made == []
+      and _uc2_prev.get('body') == 'SERIES TEXT')
+# A day reset to the series came back from the turn-off's copy at every
+# start, in a duplicate and after a Trash restore: once the note
+# repeats as its copy's series again, the copy's days are spent.
+_ro_fixture()
+app.open_note_in_tab(app.find_note(1)); app.update()
+_rz_real_yes = app.ask_yes_no
+app._themed_dialog = lambda *a, **k: True
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    app.body_text.insert('end-1c', ' and more')
+    app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    _rz_spent = not (app.find_note(1).get('_prev') or {}).get('overrides')
+    for _rz_day in ('2026-09-14', '2026-09-21'):
+        app._reset_occurrence_override(app.find_note(1), _rz_day); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+    app.ask_yes_no = _rz_real_yes
+_rz_disk = next((n for n in _json5e.load(open(NO.DATA_FILE, encoding='utf-8')) if n.get('id') == 1), {})
+_rz_read = NO.normalize_note(_rz_disk)
+check(f"a day reset after the series came back on stays reset at the next start "
+      f"(copy's days spent: {_rz_spent}; days read back: {sorted(_rz_read['overrides'])})",
+      _rz_spent and _rz_disk.get('overrides') == {} and _rz_read['overrides'] == {}
+      and app.find_note(1)['recurrence'].get('freq') == 'weekly')
+# ...and the turn-off's save that clears two letters of comments keeps a long
+# comment deleted before, in the copy beside the series.
+_ro_fixture()
+_tc_long = ' '.join('Book room %d for the planning day' % i for i in range(10))
+app.notes[0]['comments'] = _tc_long
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.comments_text.delete('1.0', 'end')
+app.save_current_note(); app.update()
+app.comments_text.insert('1.0', 'zz')
+app.save_current_note(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.comments_text.delete('1.0', 'end')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_tc_prev = app.find_note(1).get('_prev') or {}
+check(f"a turn-off that clears two letters of comments keeps a long comment deleted before "
+      f"({(_tc_prev.get('comments') or '')[:12]!r}, {(_tc_prev.get('recurrence') or {}).get('freq')})",
+      _tc_prev.get('comments') == _tc_long
+      and (_tc_prev.get('recurrence') or {}).get('freq') == 'weekly')
+# A big delete, the repeat off, back on as it was, off again: the second
+# turn-off replaced the first one's copy, and the deleted words were in no
+# file, Restore previous still offered.
+_ro_fixture()
+app.notes[0]['body'] = 'MEETING NOTES ' + 'agreed points ' * 25
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
+    app.save_current_note(); app.update()
+    for _t2_freq in ('', 'weekly', ''):
+        app.rec_freq_var.set(NO.FREQ_LABELS[_t2_freq])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_t2_prev = app.find_note(1).get('_prev') or {}
+check(f"a repeat turned off a second time keeps the words a big delete took before "
+      f"({(_t2_prev.get('body') or '')[:16]!r}, {(_t2_prev.get('recurrence') or {}).get('freq')})",
+      'MEETING NOTES' in (_t2_prev.get('body') or '')
+      and (_t2_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+# ...and when it came back as another series -- another start, every two
+# weeks, an end date -- the first turn-off's copy, the deleted words' only
+# home, was replaced at the second (found on the phone first).
+_t3_seen = []
+for _t3_road in ('start', 'interval', 'end'):
+    _ro_fixture()
+    app.notes[0]['body'] = 'MEETING NOTES ' + 'agreed points ' * 25
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._themed_dialog = lambda *a, **k: True
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
+        app.save_current_note(); app.update()
+        app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+        if _t3_road == 'start':
+            app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2026-09-08')
+        app.rec_freq_var.set(NO.FREQ_LABELS['weekly']); app.on_recurrence_changed(); app.update()
+        if _t3_road == 'interval':
+            app.rec_interval_var.set('2'); app.update()
+        elif _t3_road == 'end':
+            app.rec_end_mode_var.set('on'); app.on_end_mode_changed()
+            app.rec_end_date_var.set('01.03.2027'); app.update()
+        app.save_current_note(); app.update()
+        _t3_series = (app.find_note(1)['date'], dict(app.find_note(1)['recurrence']))
+        app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+        _t3_prev = _json5r.loads(_json5r.dumps(app.find_note(1).get('_prev') or {}))
+        app.restore_previous_version(); app.update()
+        _t3_back = app.find_note(1)
+    finally:
+        app._themed_dialog = _ro_real_dlg
+        app.ask_yes_no = _ro_yes
+    _t3_seen.append((_t3_road, 'MEETING NOTES' in (_t3_prev.get('body') or ''),
+                     (_t3_prev.get('date'), _t3_prev.get('recurrence')) == _t3_series,
+                     'MEETING NOTES' in _t3_back['body'],
+                     (_t3_back['date'], _t3_back['recurrence']) == _t3_series))
+check(f"...and so when it came back as another series -- another start, every two weeks, an "
+      f"end date: the copy keeps the deleted words with the series as it was last, and Restore "
+      f"previous brings both back ({_t3_seen})",
+      [s[1:] for s in _t3_seen] == [(True, True, True, True)] * 3
+      and [s[0] for s in _t3_seen] == ['start', 'interval', 'end'])
+# An import's Update, then the repeat off with the comments cleared and the
+# autosave let run: the held save's copy is the update's, and the turn-off
+# kept only its words -- its category and checklist in no file.
+_ro_fixture()
+app.notes[0]['comments'] = 'ok'
+app.notes[0]['checklist'] = [{'text': 'LOCAL ITEM', 'done': False}]
+_uh_note = app.find_note(1)
+NO.apply_shared_update(_uh_note, dict(
+    {key: _uh_note[key] for key in ('uid', 'created', 'date', 'recurrence', 'overrides')},
+    title='Standup', body='FROM THE PHONE', comments='ok',
+    checklist=[{'text': 'PHONE ITEM', 'done': False}]), NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.comments_text.delete('1.0', 'end')
+    app._autosave_now(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_uh_prev = app.find_note(1).get('_prev') or {}
+_uh_line = app.status_lbl.cget('text')
+check(f"a held turn-off after an import's Update keeps the update's copy whole "
+      f"({[i.get('text') for i in _uh_prev.get('checklist') or []]}, "
+      f"{(_uh_prev.get('recurrence') or {}).get('freq')})",
+      [i.get('text') for i in _uh_prev.get('checklist') or []] == ['LOCAL ITEM']
+      and _uh_prev.get('body') == 'SERIES TEXT'
+      and (_uh_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+check(f"...and the status line says Restore previous brings back the note from before "
+      f"the update, not the series ({_uh_line[-70:]!r})",
+      'the version it kept before' in _uh_line
+      and "every day's own text" not in _uh_line)
+# Turned off, on again from another start, then the start put back: the
+# second save spent the copy's deleted day, which came back on the calendar
+# with no way to undo it. The owner's rule: kept days come back
+# onto the same date and rule -- deleted ones included.
+_ro_fixture()
+app.notes[0]['exceptions'] = ['2026-09-28']
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    for _sb_date in ('2026-09-08', '2026-09-07'):
+        app.date_entry.delete(0, 'end'); app.date_entry.insert(0, _sb_date)
+        app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_sb_note = app.find_note(1)
+check(f"a deleted day stays deleted when the series is put back on its own start after "
+      f"another ({_sb_note.get('exceptions')}, "
+      f"{'Standup' in [n.get('title') for n in app.notes_on_date('2026-09-28')]})",
+      _sb_note.get('exceptions') == ['2026-09-28']
+      and 'Standup' not in [n.get('title') for n in app.notes_on_date('2026-09-28')]
+      and '2026-09-21' in (_sb_note.get('overrides') or {}))
+# Turned back on from another date, an old deleted day hid the new series' own
+# first day. Her answer: kept days come back only onto the same date
+# and rule; a deleted day holds nothing, and the rescue copy keeps them all.
+_rr_seen = []
+for _rr_date in ('2026-09-07', '2026-09-14'):
+    _ro_fixture()
+    app.notes[0]['exceptions'] = ['2026-09-14']
+    app.notes[0]['overrides'] = {'2026-09-21': {'body': 'DAY 21: decisions'}}
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._themed_dialog = lambda *a, **k: True
+    try:
+        app.rec_freq_var.set(NO.FREQ_LABELS[''])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+        app.date_entry.delete(0, 'end'); app.date_entry.insert(0, _rr_date)
+        app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+    finally:
+        app._themed_dialog = _ro_real_dlg
+    _rr_note = app.find_note(1)
+    _rr_seen.append((_rr_note.get('exceptions'), sorted(_rr_note.get('overrides') or {}),
+                     'Standup' in [n.get('title') for n in app.notes_on_date(_rr_date)]))
+check(f"a series turned back on keeps its old days on the same date, and from "
+      f"another its old deleted day no longer hides its first ({_rr_seen})",
+      _rr_seen[0][0] == ['2026-09-14'] and _rr_seen[1][0] == []
+      and all(s[1] == ['2026-09-21'] for s in _rr_seen) and _rr_seen[1][2])
+# Off, a line added, on again as it was, off again: the second turn-off's copy
+# took the first one's words because they differed, and Restore previous then
+# took back the added line, which the next turn-off put in no file.
+# An earlier copy's words are given only when the note has LOST words to it.
+_ro_fixture()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    app.body_text.insert('end-1c', '\nAdded later: bring water')
+    app.save_current_note(); app.update()
+    for _al_freq in ('weekly', ''):
+        app.rec_freq_var.set(NO.FREQ_LABELS[_al_freq]); app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+    _al_copy = (app.find_note(1).get('_prev') or {}).get('body') or ''
+    _al_line = str(app.status_lbl.cget('text'))
+    app.restore_previous_version(); app.update()
+    _al_back = app.find_note(1)
+    _al_shown = (_al_back['recurrence'].get('freq'), 'Added later' in _al_back['body'],
+                 NO.effective_note(_al_back, '2026-09-14').get('body'))
+    app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+    app.ask_yes_no = _ro_yes
+with open(NO.DATA_FILE, encoding='utf-8') as _f:
+    _al_disk = _f.read()
+check(f"a repeat turned off a second time, a line added between, keeps the newest words in its "
+      f"copy, and Restore previous brings the series back with them ({_al_copy[-26:]!r}, "
+      f"{_al_shown}; on disk after one more turn-off: {'Added later' in _al_disk})",
+      'Added later' in _al_copy and _al_shown == ('weekly', True, 'DAY TEXT: room 9')
+      and 'Added later' in _al_disk and "every day's own text" in _al_line
+      and '↩ Restore previous' in _al_line)
+# An Update that only turned the repeat on keeps a copy that, given the series'
+# days at the turn-off, equals the note and is dropped by the same save: the
+# status line promised a Restore previous that was gone.
+_ro_fixture()
+_np_note = app.find_note(1)
+_np_note.update({'recurrence': NO.normalize_recurrence({}), 'overrides': {}})
+NO.apply_shared_update(_np_note, dict(
+    {key: _np_note[key] for key in ('uid', 'created', 'title', 'body', 'formatting', 'date')},
+    recurrence={'freq': 'weekly'}), NO.UPDATABLE_FROM_SHARED)
+_np_note['overrides'] = {'2026-09-14': {'body': 'DAY TEXT: room 9'}}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_np_line = str(app.status_lbl.cget('text'))
+check(f"a turn-off whose copy the same save drops promises no Restore previous "
+      f"({_np_line[-62:]!r}; copy kept: {'_prev' in app.find_note(1)})",
+      '_prev' not in app.find_note(1) and 'Restore previous' not in _np_line
+      and 'the repeat is off' in _np_line
+      and not app._is_placed(app.restore_prev_btn))
+# 0.97.405 (or the phone's 0.12.0) turned the repeat off and on as it was, the
+# day's own text in the copy alone; then that day moved, or only coloured. The
+# first start of this build spent the text: read, the day shows it.
+_tb_copy = {'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-07',
+            'recurrence': {'freq': 'weekly'},
+            'overrides': {'2026-09-14': {'body': 'DAY 14 OWN TEXT, room 4B'}}}
+_tb_seen = []
+for _tb_days, _tb_day in (({'moved': {'2026-09-14': '2026-09-15'}}, '2026-09-15'),
+                          ({'overrides': {'2026-09-14': {'title': 'Standup', 'body': 'SERIES TEXT',
+                                                         'color': '#ff6b6b'}}}, '2026-09-14')):
+    app.new_note(); app.update()
+    app.notes = [NO.normalize_note(dict({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                                         'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                                         '_prev': dict(_tb_copy)}, **_tb_days)),
+                 NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1), occurrence_date=_tb_day); app.update()
+    _tb_seen.append((app.body_text.get('1.0', 'end-1c'), app.current_note_color))
+    app.open_note_in_tab(app.find_note(2)); app.update()
+with open(NO.DATA_FILE, encoding='utf-8') as _f:
+    _tb_disk = _f.read()
+check(f"a day the old version moved or only coloured, its own text in the copy alone, shows "
+      f"that text where it is drawn, its colour kept ({_tb_seen})",
+      _tb_seen == [('DAY 14 OWN TEXT, room 4B', ''), ('DAY 14 OWN TEXT, room 4B', '#ff6b6b')]
+      and 'DAY 14 OWN TEXT' in _tb_disk)
+# ...and a day holding words of its own keeps them as they are: the copy's
+# for it become a note of their own on that date, said on a banner of its
+# own, made once (added to the day, four earlier fixes read them four ways).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                                'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                                'overrides': {'2026-09-14': {'body': 'Moved to room 2'}},
+                                '_prev': dict(_tb_copy)}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+_sa_line = str(app.toast_lbl.cget('text'))
+app.save_notes()
+_sa_made = [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2]
+with open(NO.DATA_FILE, encoding='utf-8') as _f:
+    _sa_disk = _json5g.load(_f)
+check(f"a day with words of its own keeps them, and the copy's words for it become one note of "
+      f"their own on that date ({_sa_made}; {_sa_line!r})",
+      _sa_made == [('Standup (earlier text)', 'DAY 14 OWN TEXT, room 4B', '2026-09-14')]
+      and all(n.get('created') and n.get('updated') for n in app.notes if n['id'] > 2)
+      and NO.effective_note(app.find_note(1), '2026-09-14').get('body') == 'Moved to room 2'
+      and 'Standup (earlier text)' in [n.get('title') for n in app.notes_on_date('2026-09-14')]
+      and 'kept as notes of their own' in _sa_line
+      and not any('_set_aside' in n for n in _sa_disk)
+      and len(_sa_disk) == 3)
+# ...and several at once, from two notes: each its own number, counted on
+# from the notebook's highest, worked out once -- asked again for each, the
+# whole notebook was walked for every note made (found by a security review).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'S', 'date': '2026-09-07',
+                                'recurrence': {'freq': 'weekly'},
+                                '_set_aside': [{'day': '2026-09-14', 'body': 'A'},
+                                               {'day': '2026-09-21', 'body': 'B'}]}),
+             NO.normalize_note({'id': 7, 'title': 'Gym', 'body': 'G', 'date': '2026-09-08',
+                                'recurrence': {'freq': 'weekly'},
+                                '_set_aside': [{'day': '2026-09-15', 'body': 'C'}]})]
+app.save_notes()
+_sm_made = sorted((n['id'], n.get('body')) for n in app.notes if n['id'] not in (1, 7))
+check(f"days set aside on two notes become notes numbered on from the highest, one number each "
+      f"({_sm_made})",
+      _sm_made == [(8, 'A'), (9, 'B'), (10, 'C')])
+# ...and a copy of another series than the note repeats as now, replaced by
+# the next turn-off: its days with words were in it alone, and the new copy
+# put them in no file. Made notes of their own first.
+_ob_seen = []
+for _ob_view in (None,):    # the series' view: on a day, a turn-off is put back
+    _ro_fixture()
+    app.notes = [NO.normalize_note(dict(app.find_note(1), _prev={
+                     'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-08',
+                     'recurrence': {'freq': 'weekly'},
+                     'overrides': {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}}})),
+                 app.find_note(2)]
+    app.save_notes()
+    _ob_waits = (app.find_note(1).get('_prev') or {}).get('overrides')
+    _ro_off(_ob_view)
+    with open(NO.DATA_FILE, encoding='utf-8') as _f:
+        _ob_disk = _f.read()
+    _ob_seen.append((_ob_view, _ob_waits == {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}},
+                     [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2],
+                     'TUESDAY' in _json5g.dumps(app.find_note(1).get('_prev')),
+                     _ob_disk.count('TUESDAY 15 OWN TEXT')))
+check(f"a turn-off over another series' copy makes that copy's days with words notes of their "
+      f"own first ({_ob_seen})",
+      [seen[1:] for seen in _ob_seen] == [
+          (True, [('Standup (earlier text)', 'TUESDAY 15 OWN TEXT', '2026-09-15')], False, 1)])
+# ...said after the turn-off's own line, not over it: its Restore previous
+# promise was lost. The line read as the Save left it.
+_ro_fixture()
+app.notes = [NO.normalize_note(dict(app.find_note(1), _prev={
+                 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-08',
+                 'recurrence': {'freq': 'weekly'},
+                 'overrides': {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}}})),
+             app.find_note(2)]
+app.save_notes()
+_ob_line = _ro_off(None, save_first=True)[1][3]
+_ob_toast = str(app.toast_lbl.cget('text'))
+app._run_toast_action(); app.update()
+_ob_shown = (app.find_note(app.selected_note_id) or {}).get('title')
+check(f"the notes made are said on a banner of their own that opens them, the turn-off's own line "
+      f"kept ({_ob_line!r}; {_ob_toast!r}; {_ob_shown!r})",
+      'the repeat is off' in _ob_line and 'kept as notes of their own' not in _ob_line
+      and 'kept as notes of their own' in _ob_toast and _ob_shown == 'Standup (earlier text)')
+# ...Ctrl+Z, which takes a banner's Undo, never takes its Show; and Show from
+# Settings -- after a backup's Update there -- opens the note where the
+# editor is seen, found by its identity.
+_sh_seen = []
+app._show_toast("Earlier text of 1 day of a repeating note kept as notes of their own", kind="info",
+                action=lambda: _sh_seen.append('show'), action_text="Show")
+
+
+class _ShKey:
+    widget = app
+
+
+_sh_took = app._toast_undo_key(_ShKey())
+app._hide_toast()
+# A default, and Settings closed whatever happens: under a mutant that makes
+# no such note, a bare next() stopped the suite before its footer.
+_sh_note = next((n for n in app.notes if n.get('title') == 'Standup (earlier text)'), None)
+_sh_in_settings = _sh_after = None
+if _sh_note is not None:
+    app.show_settings_page(); app.update()
+    try:
+        app.toggle_settings_panel('trash'); app.update()
+        _sh_in_settings = getattr(app, '_settings_open', None)
+        app._show_set_aside(_sh_note['id'], _sh_note.get('uid')); app.update()
+        _sh_after = getattr(app, '_settings_open', None)
+    finally:
+        if getattr(app, '_settings_open', False):
+            app.hide_settings_page(); app.update()
+check(f"Ctrl+Z leaves a banner's Show alone, and Show from Settings opens the note in sight "
+      f"({_sh_took}, {_sh_seen}, {_sh_in_settings} -> {_sh_after}, {app.selected_note_id})",
+      _sh_took is None and _sh_seen == [] and _sh_in_settings is True and not _sh_after
+      and _sh_note is not None and app.selected_note_id == _sh_note['id'])
+# ...and a big delete over such a copy sets its days aside first too: no
+# check reached that road.
+_ro_fixture()
+app.notes = [NO.normalize_note(dict(app.find_note(1), body='SERIES TEXT, the long agenda. ' * 6, _prev={
+                 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-08',
+                 'recurrence': {'freq': 'weekly'},
+                 'overrides': {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}}})),
+             app.find_note(2)]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+app.save_current_note(); app.update()
+_bd_made = [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2]
+check(f"a big delete over another series' copy makes that copy's days with words notes of their own "
+      f"first ({_bd_made})",
+      _bd_made == [('Standup (earlier text)', 'TUESDAY 15 OWN TEXT', '2026-09-15')]
+      and 'TUESDAY' not in _json5g.dumps(app.find_note(1).get('_prev')))
+# A day moved onto a Tuesday, the repeat then made daily: the Tuesday is the
+# rule's own day, and the moved day was drawn nowhere until the next start.
+# The save drops the move; its words stay where they showed (the
+# owner's choice: words never move on their own).
+_ro_fixture()
+_mh = app.find_note(1)
+_mh['moved'] = {'2026-09-14': '2026-09-15'}
+_mh['overrides']['2026-09-15'] = _mh['overrides'].pop('2026-09-14')
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['daily']); app.on_recurrence_changed(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_mh = app.find_note(1)
+_mh_seen = (_mh.get('moved'), NO.effective_note(_mh, '2026-09-14').get('body'),
+            NO.effective_note(_mh, '2026-09-15').get('body').rstrip('\n'))
+check(f"a day moved onto a date the new rule gives loses its move at the save, its words where they "
+      f"showed ({_mh_seen})",
+      _mh['recurrence']['freq'] == 'daily'
+      and _mh_seen == ({}, 'SERIES TEXT', 'DAY TEXT: room 9'))
+# The Undo of a deleted moved day drops a dead move onto its date
+# (its own date no longer the rule's), as Move this day does: put back beside
+# it, the date held two moves, listed twice, and the phone's History threw.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'}, 'exceptions': ['2026-11-16'],
+                                'moved': {'2026-11-18': '2026-11-20'}}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app._undo_occurrence_delete(1, '2026-11-20', None, None, '2026-11-16'); app.update()
+check(f"the Undo of a deleted moved day drops a dead move onto its date ({app.find_note(1).get('moved')})",
+      app.find_note(1).get('moved') == {'2026-11-16': '2026-11-20'}
+      and '2026-11-16' not in app.find_note(1).get('exceptions'))
+# ...never a live one: within its seconds a Restore previous brought back a
+# version with another day moved onto that date, and the Undo dropped that
+# move as dead, its words read as this day's.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'}, 'moved': {'2026-11-23': '2026-11-20'},
+                                'overrides': {'2026-11-20': {'body': "the 23rd's words"}}}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app._undo_occurrence_delete(1, '2026-11-20', {'body': 'deleted words'}, None, '2026-11-16'); app.update()
+_ul = app.find_note(1)
+check(f"...but keeps a live move onto that date, and the day stays away ({_ul.get('moved')}, "
+      f"{_ul.get('overrides')})",
+      _ul.get('moved') == {'2026-11-23': '2026-11-20'}
+      and (_ul.get('overrides') or {}).get('2026-11-20', {}).get('body') == "the 23rd's words")
+# Reset "The date and the text" of a moved day drops a dead move onto its home
+# date too, as Move this day does: left, the date held two moves.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'},
+                                'moved': {'2026-11-09': '2026-11-11', '2026-11-10': '2026-11-09'},
+                                'overrides': {'2026-11-11': {'body': 'moved words'}}}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+_rs_dialog = app._themed_dialog
+app._themed_dialog = lambda *a, **k: 'text'
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-11-11'); app.update()
+finally:
+    app._themed_dialog = _rs_dialog
+_rs = app.find_note(1)
+check(f"Reset of a moved day's date and text drops a dead move onto its home date ({_rs.get('moved')})",
+      _rs.get('moved') == {} and '2026-11-11' not in (_rs.get('overrides') or {}))
+# ...and an older rule Restore previous brings back drops a move made since
+# onto its days at once: a share code made the daily series weekly, a day was
+# moved; left till the next start, a delete on the shared date took the hidden
+# day and its Undo was refused.
+app.new_note(); app.update()
+_rp = NO.normalize_note({'id': 1, 'uid': 'rp', 'title': 'Standup', 'body': 'SERIES TEXT',
+                         'date': '2026-11-02', 'recurrence': {'freq': 'daily'}})
+NO.apply_shared_update(_rp, {'uid': 'rp', 'title': 'Standup', 'body': 'SERIES TEXT',
+                             'date': '2026-11-02', 'recurrence': {'freq': 'weekly'}})
+_rp['moved'] = {'2026-11-09': '2026-11-11'}
+_rp['overrides'] = {'2026-11-11': {'body': 'MOVED DAY WORDS'}}
+app.notes = [_rp, NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+_ro_restored()
+_rp = app.find_note(1)
+_rp_seen = (_rp['recurrence']['freq'], _rp.get('moved'), NO.effective_note(_rp, '2026-11-11').get('body'))
+check(f"Restore previous bringing an older rule back drops a move made since onto its days at once "
+      f"({_rp_seen})",
+      _rp_seen == ('daily', {}, 'MOVED DAY WORDS'))
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the
@@ -2350,6 +3413,27 @@ _rn_said_after = str(app.status_lbl.cget('text'))
 check(f'putting the stored date back puts the status line right at once '
       f'({_rn_said_before!r} -> {_rn_said_after!r})',
       'except the date' in _rn_said_before and 'except' not in _rn_said_after)
+# ...but a save the disk refused keeps no words to put back: once the date
+# was, "Auto-saved" came back over "Not saved".
+_rn_series(interval=3)
+app.body_text.insert('end', ' more')
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
+_rn_store_was, _rn_err_was = NO.core_save_notes, app.show_error
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+try:
+    app.save_current_note(auto=True); app.update()
+    _rn_refused = str(app.status_lbl.cget('text'))
+    app._put_back_stored_date_and_repeat()
+    app._cancel_pending_autosave()
+    _rn_refused_after = str(app.status_lbl.cget('text'))
+finally:
+    NO.core_save_notes, app.show_error = _rn_store_was, _rn_err_was
+app.save_notes(); app.update()
+check(f'a refused save keeps saying so once the date is put back '
+      f'({_rn_refused!r} -> {_rn_refused_after!r})',
+      _rn_refused.startswith('Not saved') and _rn_refused_after.startswith('Not saved'))
 # ...and a day of a series never leaves its date out at all: the date is the
 # series', a day puts it back, and its save says so in its own words. (Saved
 # to the series from a day, it once left the date out, and a put-right wrote
@@ -2363,6 +3447,10 @@ app.date_entry.insert(0, '31/09/2026')
 _rn_dialog_real = app._themed_dialog
 _rn_warned = []
 app._themed_dialog = lambda title, *a, **k: (_rn_warned.append(title), None)[1]
+# show_warning heard here too: the suite's stand-in for it, put in place above,
+# would hear "Part of this note isn't saved" where this check could not.
+_rn_warn_was = app.__dict__.get('show_warning')
+app.show_warning = lambda title, *a, **k: _rn_warned.append(title)
 try:
     app.save_current_note(); app.update()
     _rn_first = str(app.status_lbl.cget('text'))
@@ -2372,6 +3460,10 @@ try:
     _rn_second = str(app.status_lbl.cget('text'))
 finally:
     app._themed_dialog = _rn_dialog_real
+    if _rn_warn_was is None:
+        app.__dict__.pop('show_warning', None)
+    else:
+        app.show_warning = _rn_warn_was
 app._cancel_pending_autosave()
 check(f'a date the app cannot read, typed on a day, is put back rather than left '
       f'out, and each save of the day says so in its own words, asking nothing '
@@ -2667,9 +3759,10 @@ _rn_bd = ((app.find_note(1) or {}).get('body'), _rn_days()[0],
 check(f'a big delete made while a turn-off waits keeps its text in the '
       f'rescue copy the turn-off makes ({_rn_bd})',
       _rn_ok and _rn_bd == ('short', '', True, 'weekly', ['2026-09-14']))
-# ...within that wait only: with the repeat picked again in between, a later
-# turn-off's copy is the note as it stands, as after any big delete followed
-# by a turn-off -- not the text from before a delete the person had kept.
+# ...and outside that wait too: with the repeat picked again in between, a
+# later turn-off's copy still keeps the words the delete took, which the
+# note does not hold again. Taken as "the note as it stands", the deleted
+# words were in no file.
 _rn_fresh(_RN_LONG)
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 app.body_text.delete('1.0', 'end')
@@ -2680,9 +3773,9 @@ app._autosave_now(); app.update()
 _rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
 app.open_note_in_tab(app.find_note(2)); app.update()
 _rn_bd = (_rn_prev().get('body'), (_rn_prev().get('recurrence') or {}).get('freq'))
-check(f'...and only within that wait: a turn-off made after the repeat was '
-      f'picked again keeps the note as it stands ({_rn_bd})',
-      _rn_ok and _rn_bd == ('short', 'weekly'))
+check(f'...and outside that wait too: a turn-off made after the repeat was '
+      f'picked again keeps the deleted words with the series ({_rn_bd})',
+      _rn_ok and _rn_bd == (_RN_LONG, 'weekly'))
 # The Undo of one day's delete leaves the series view be: it opened the day,
 # which left the series and made its waiting turn-off -- the day just put
 # back went with every other.
@@ -2778,8 +3871,7 @@ for _rn_route in ('category: Cancel', 'category: move', 'duplicates: No',
         if _rn_route.startswith('category'):
             app._delete_category('TempHold5', lambda: None)
         else:
-            app._cleanup_selected_duplicates(_rn_dups, None,
-                                             refresh=lambda: None)
+            app._cleanup_selected_duplicates(_rn_dups, refresh=lambda: None)
         app.update()
     finally:
         app.__dict__.pop('_ask_category_deletion', None)
@@ -2801,6 +3893,21 @@ check(f'a delete asks about what is stored: a waiting turn-off is not made '
       and _rn_dl.get('category: move') == (_RN_SERIES, 1, '', 0)
       and _rn_dl.get('duplicates: No') == (_RN_SERIES, 1, '', 0)
       and _rn_dl.get('duplicates: Yes') == (_RN_SERIES, 1, '', 1))
+# Deleting a category is not taken back, and with notes in it their filing
+# goes too: Enter there is Cancel, as on the question asked of an empty one.
+# It fired "Move them to General", the last button.
+_cd_q = []
+_cd_real_dlg = app._themed_dialog
+app._themed_dialog = lambda title, message, *a, **k: (
+    _cd_q.append([spec[0] for spec in k.get('buttons', [])][
+        app._dialog_focus_index(k.get('buttons', []), k.get('default'))]), None)[1]
+try:
+    app._ask_category_deletion('Work', 3)
+    app._ask_category_deletion('Work', 0)
+finally:
+    app._themed_dialog = _cd_real_dlg
+check(f'deleting a category, with notes in it or none, Enter is Cancel ({_cd_q})',
+      _cd_q == ['Cancel', 'Cancel'])
 # The duplicates clean-up fills the editor from the kept copy again and
 # carries a waiting turn-off across -- but the reload's own repeat cleared
 # the record of a big delete's rescue copy, and on leaving the turn-off's
@@ -2827,7 +3934,7 @@ try:
     app._cleanup_selected_duplicates(
         [(_NlVar(False), app.find_note(1), [app.find_note(1), app.find_note(3)]),
          (_NlVar(True), app.find_note(3), [app.find_note(1), app.find_note(3)])],
-        None, refresh=lambda: None)
+        refresh=lambda: None)
     app.update()
 finally:
     app.ask_yes_no = _ro_yes
@@ -3113,6 +4220,83 @@ app._cancel_pending_autosave()
 check(f'an open series\' banner counts its days\' own edits after a day is '
       f'deleted, put back or reset ({_rn_bn})',
       _rn_ok and _rn_bn == [True, False, True, False])
+# The series open, holding a date its save cannot store: a day's Undo asks
+# about it first, and going back keeps the person on the note -- and the
+# Undo with them, the day's own text kept nowhere else. Checked on a day's
+# save question until day mode took that question away.
+_rn_day_fresh()
+_rn_day_delete()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
+app.update()
+_rn_asked, _rn_dialog_was = [], app._themed_dialog
+app._themed_dialog = lambda title, *a, **k: (_rn_asked.append(title), False)[1]
+try:
+    # Taken as a click takes it: the delete's own banner cleared first, so
+    # a "Day removed" seen after is the offer made again, not the first one.
+    app._run_toast_action(); app.update()
+finally:
+    app._themed_dialog = _rn_dialog_was
+_rn_gb = (_rn_asked[:1], str(app.toast_lbl.cget('text')), app._toast_action is not None,
+          '2026-09-14' in (app.find_note(1).get('exceptions') or []), app.selected_note_id)
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f"going back on the question a day's Undo asks first keeps the Undo on offer ({_rn_gb})",
+      _rn_gb[0] == ["Part of this note isn't saved"] and 'Day removed' in _rn_gb[1]
+      and _rn_gb[2] and _rn_gb[3] and _rn_gb[4] == 1)
+# A backup's Update wrote over a field this version does not know: Restore
+# previous puts the note's own value back, as it puts back its words.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Mine', 'body': 'b', 'reminder': '10:00'}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+NO.apply_shared_update(app.notes[0], {'title': 'Older', 'body': 'b', 'reminder': '09:00'},
+                       NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_own = ((app.find_note(1) or {}).get('title'), (app.find_note(1) or {}).get('reminder'))
+app._cancel_pending_autosave()
+check(f"Restore previous after a backup's Update puts back a field this version does not know ({_rn_own})",
+      _rn_own == ('Mine', '10:00'))
+# ...and the field the backup added, which the restored version lacks, is kept
+# in its turn: an older backup's words held in this note's left nothing else
+# to keep, and the field went in no copy.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'T', 'body': 'Hello world'}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+NO.apply_shared_update(app.notes[0], {'title': 'T', 'body': 'Hello', 'x_new': 'v'},
+                       NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_turn = app.find_note(1) or {}
+app._cancel_pending_autosave()
+check(f"...and keeps in its turn the field the backup added, which the restored version lacks "
+      f"({_rn_turn.get('body')!r}, {'x_new' in _rn_turn}, {(_rn_turn.get('_prev') or {}).get('_unknown')})",
+      _rn_turn.get('body') == 'Hello world' and 'x_new' not in _rn_turn
+      and (_rn_turn.get('_prev') or {}).get('_unknown') == {'x_new': 'v'})
+# Pressed again, the copy is the updated version the restore replaced: the
+# question asked "as it was before it was updated" of it, the reverse of what
+# the button then did. It names the previous version, as the button does.
+_rn_asked = []
+app.ask_yes_no = lambda _t, msg, **_k: (_rn_asked.append(msg), False)[1]
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+app._cancel_pending_autosave()
+check(f"...and pressed again it asks for the previous version, not the note before an update "
+      f"({(_rn_asked or [''])[0][:60]!r})",
+      bool(_rn_asked) and _rn_asked[0].startswith('Bring back the previous version of this note')
+      and 'before it was updated' not in _rn_asked[0])
 # The Undo of a day clicked with THAT day open -- a repeat picked anew has it
 # again, the series' text on it -- saves the editor before it writes the
 # day, and opens it without a second save. Saved after, the editor's view
@@ -3408,6 +4592,46 @@ check('the day moved to the Trash comes back from it as a note on its day',
       any(n.get('date') == '2026-09-21' and n.get('title') == 'Stand-up'
           and n is not app.find_note(1) for n in app.notes))
 
+# The Trash is written before the notes. Stopped between the two, the app
+# came back with the day still on the series and its copy in the Trash, and
+# moving it to the Trash again put a second copy there.
+_os_seed()
+_os_walk(['keep', 'trash'])
+# Put there twenty days ago: the copy kept must be kept the whole window
+# from now, as the question promised, not go in ten.
+from noteorganizer.core.storage import STAMP_FORMAT as _os_stamp_format
+_os_twenty_ago = (_dt5w.datetime.now() - _dt5w.timedelta(days=20)).strftime(_os_stamp_format)
+_os_kept_trash = [dict(e, deleted_at=_os_twenty_ago) if e.get('date') == '2026-09-21' else dict(e)
+                  for e in app.trash]
+_os_seed()
+app.trash = _os_kept_trash
+NO.save_trash(app.trash)
+check('fixture: the day is on the series again, its copy already in the Trash',
+      '2026-09-21' in (app.find_note(1).get('overrides') or {})
+      and sum(e.get('date') == '2026-09-21' for e in app.trash) == 1)
+_os_walk(['keep', 'trash'])
+check(f"moving it to the Trash again leaves one copy there "
+      f"({sum(e.get('date') == '2026-09-21' for e in app.trash)})",
+      sum(e.get('date') == '2026-09-21' for e in app.trash) == 1
+      and '2026-09-21' not in (app.find_note(1).get('overrides') or {}))
+_os_left = [NO.core_days_left_in_trash(e.get('deleted_at')) for e in app.trash
+            if e.get('date') == '2026-09-21']
+_os_left_on_disk = [NO.core_days_left_in_trash(e.get('deleted_at')) for e in NO.load_trash()
+                    if isinstance(e, dict) and e.get('date') == '2026-09-21']
+check(f"...kept the whole window from now, in the file too ({_os_left}, {_os_left_on_disk}, "
+      f"{NO.trash_retention_days()})",
+      _os_left == _os_left_on_disk == [NO.trash_retention_days()])
+
+# A day's text of two lines is asked with its lines kept apart, as a card
+# shows them: run together, they read as one sentence.
+_os_seed()
+app.find_note(1)['overrides']['2026-09-14']['body'] = 'moved to Monday\n\n  room 2 '
+app.save_notes()
+_os_lines = _os_walk(['keep', 'keep'])
+check(f'a day off its schedule of two lines is asked with its lines kept apart '
+      f'({_os_lines[0][1][:90]!r})',
+      'moved to Monday · room 2' in _os_lines[0][1])
+
 # Leaving a day changes nothing, and keeps its way in. And text typed and not
 # yet saved goes into the series first, as on every route that writes behind
 # the editor: the editor is filled from the note again once a day is made a
@@ -3430,15 +4654,14 @@ app.set_theme('light'); app.update()
 _os_colors = (str(_os_btn.cget('bg')), str(_os_btn.cget('activebackground')),
               str(_os_btn.cget('highlightcolor')), str(_os_btn.cget('fg')))
 check(f'the way in takes every colour of a new theme ({_os_colors})',
-      _os_colors == (app.colors['bg'], app.colors['bg'], app.colors['accent'],
+      _os_colors == (app.colors['bg'], app.colors['bg'], app._focus_ring(),
                      app.colors['accent_text']))
 app.set_theme('dark'); app.update()
 
-# At the smallest window the way in wraps within the line it has. (The window
-# then scrolls the whole editor sideways, as it always has; this asks only
-# that the line itself is not wider than the room it is given.)
+# At the smallest window -- the sidebar and the editor side by side, at the
+# window's floor -- the way in wraps within the line it has.
 _os_geo = app.geometry()
-app.geometry('640x600'); app.update()
+app.geometry('900x600'); app.update()
 check(f'at the smallest window the way in wraps within its line '
       f'({_os_btn.winfo_reqwidth()} of {_os_btn.winfo_width()})',
       _os_btn.winfo_reqwidth() <= _os_btn.winfo_width() + 1)
@@ -3502,6 +4725,23 @@ finally:
 check(f'...and a click on one opens the way in, not a day the calendar lacks ({_os_asked})',
       _os_asked[:1] == ['Day 1 of 2 off the schedule'])
 app._toggle_calendar_history(); app.update()
+# Walking ANOTHER note's days leaves the open one as it is: flushed as if left,
+# its unreadable date was asked about, and Continue threw it away while the
+# note stayed open.
+_os_seed()
+app.open_note_in_tab(app.find_note(2)); app.update()
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '31.09.2026')
+_os_asked = []
+app._themed_dialog = lambda title, message, *a, **k: (_os_asked.append(title), 'keep')[1]
+try:
+    app._show_off_schedule_days(app.find_note(1)); app.update()
+finally:
+    app._themed_dialog = _os_real
+check(f"walking another note's days off the schedule asks nothing of the open note ({_os_asked})",
+      "Part of this note isn't saved" not in _os_asked
+      and _os_asked[:1] == ['Day 1 of 2 off the schedule']
+      and app.date_entry.get() == '31.09.2026')
+app._cancel_pending_autosave()
 app.notebook.select(app.TAB_NOTES); app.update()
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
@@ -3785,11 +5025,11 @@ check(f"every colour of the day's strip and words follows a new theme ({_dm_got}
       _dm_got == _dm_want)
 app.set_theme('dark'); app.update()
 
-# The smallest window: the window scrolls the editor sideways as it always
-# has; the day's own lines wrap within the room they are given, and a day
-# asks the editor for no more width than its series does.
+# The smallest window, the sidebar beside the editor: the day's own lines
+# wrap within the room they are given, and a day asks the editor for no more
+# width than its series does.
 _dm_geo = app.geometry()
-app.geometry('640x600'); app.update(); app.update()
+app.geometry('900x600'); app.update(); app.update()
 _dm_req_day = app.editor.winfo_reqwidth()
 _dm_fits = (app.day_strip_lbl.winfo_reqwidth(), app.day_strip_lbl.winfo_width(),
             app.day_repeat_lbl.winfo_reqwidth(), app.day_repeat_lbl.winfo_width())
@@ -3874,6 +5114,61 @@ check('Undo puts the day back where it was, its own edit with it, the editor fol
       _mv_s['moved'] == {} and '2026-10-12' in (_mv_s.get('overrides') or {})
       and app.current_occurrence_date == '2026-10-12' and _dm_asked == [])
 
+# A date the series keeps words for though no day of it is drawn there -- a
+# day off its schedule -- is taken too: the move wrote over those words, and
+# its Undo took the day back without them.
+_mv_s['overrides']['2026-10-20'] = {'body': 'off-schedule words'}
+app.save_notes()
+_mv_info = []
+app.show_info = lambda title, message, **k: (_mv_info.append((title, message)), True)[1]
+try:
+    app._move_this_day('2026-10-20'); app.update()
+finally:
+    app.show_info = _mv_real_info
+_mv_s = app.find_note(1)
+check(f"a date that keeps a day's words the calendar no longer shows is refused, saying "
+      f"so, and its words stay ({_mv_info})",
+      [t for t, _m in _mv_info] == ['That day is taken']
+      and 'still keeps text or a colour of its own for a day' in _mv_info[0][1]
+      and _mv_s['moved'] == {} and app.current_occurrence_date == '2026-10-12'
+      and _mv_s['overrides'].get('2026-10-20') == {'body': 'off-schedule words'})
+# ...and a day goes home, by its Reset or the move's Undo, only while no other
+# day stands on its date: its return hid that one, and "Only the date" wrote
+# over its words (the phone refused it; now both do).
+app._move_this_day('2026-10-14'); app.update()
+_mv_s = app.find_note(1)
+NO.move_day(_mv_s, '2026-10-19', '2026-10-12')
+_mv_s['overrides']['2026-10-12'] = {'body': "the 19th's words"}
+app.save_notes()
+_mv_info = []
+app.show_info = lambda title, message, **k: (_mv_info.append((title, message)), True)[1]
+_mv_real_dialog = app._themed_dialog
+app._themed_dialog = lambda *a, **k: None     # a Reset that asked is cancelled
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-10-14'); app.update()
+    app._run_toast_action(); app.update()
+finally:
+    app.show_info = _mv_real_info
+    app._themed_dialog = _mv_real_dialog
+_mv_s = app.find_note(1)
+check(f"a day's Reset and its move's Undo leave it away while another day stands on its "
+      f"date, each day keeping its words ({_mv_info}; {_mv_s['moved']})",
+      [t for t, _m in _mv_info] == ['Reset this day']
+      and _mv_s['moved'] == {'2026-10-12': '2026-10-14', '2026-10-19': '2026-10-12'}
+      and _mv_s['overrides'].get('2026-10-12') == {'body': "the 19th's words"}
+      and (_mv_s['overrides'].get('2026-10-14') or {}).get('body') == 'series text (room 2)')
+# Each with a default: under the check's mutant (DR141) the day came home,
+# and a bare pop stopped the suite before its footer, a verdict of NO-RUN.
+_mv_s['moved'].pop('2026-10-19', None)
+for _mv_day in ('2026-10-12', '2026-10-20'):
+    _mv_s['overrides'].pop(_mv_day, None)
+app.save_notes()
+app._undo_day_move(1, _mv_s.get('uid'), '2026-10-12', '2026-10-14', '2026-10-12'); app.update()
+_mv_s = app.find_note(1)
+check('...and once its date is free again, the Undo brings it home',
+      _mv_s['moved'] == {} and app.current_occurrence_date == '2026-10-12'
+      and (_mv_s['overrides'].get('2026-10-12') or {}).get('body') == 'series text (room 2)')
+
 # Reset on a moved day with text of its own: the date always goes back; the
 # text is asked about.
 app._move_this_day('2026-10-14'); app.update()
@@ -3884,14 +5179,19 @@ check("a moved day offers its Reset in the day itself, beside Move this day",
       and _mv_row.index(app.day_move_btn) + 1 == _mv_row.index(app.day_reset_btn))
 _mv_q = []
 app._themed_dialog = lambda title, message, *a, **k: (
-    _mv_q.append((title, [b for b, _v in k.get('buttons', [])])), 'date')[1]
+    _mv_q.append((title, [b for b, _v in k.get('buttons', [])],
+                  app._dialog_focus_index(k.get('buttons', []), k.get('default')))),
+    'date')[1]
 app.day_reset_btn.invoke(); app.update()
 _dm_record()
 _mv_s = app.find_note(1)
 check(f'Reset on a moved day with text of its own asks: only the date, or the date '
       f'and the text ({_mv_q})',
-      _mv_q[:1] == [('Reset this day',
-                     ['Cancel', 'Only the date', 'The date and the text'])])
+      [q[:2] for q in _mv_q[:1]] == [('Reset this day',
+                                      ['Cancel', 'Only the date', 'The date and the text'])])
+check('...and Enter there keeps the text: "Only the date" holds the focus, '
+      'since the other answer cannot be taken back',
+      _mv_q[:1] and _mv_q[0][2] == 1)
 check('..."Only the date" puts the day back and keeps its text',
       _mv_s['moved'] == {}
       and (_mv_s.get('overrides') or {}).get('2026-10-12', {}).get('body')
@@ -3985,8 +5285,37 @@ check('...and its Undo brings it back moved, with its own text',
       .endswith('(Sat)')
       and _mv_on('2026-10-17') == [1])
 
-# The series counts its moved days; a repeat turned off takes them along into
-# the rescue copy, and Restore previous brings them back.
+# A deleted day comes back only onto a date nothing else of the series holds:
+# another day moved there since was hidden under it, its words read as the
+# deleted day's, and the deleted day's own were lost. Its own series, so the
+# editor's above stays as it is.
+app.notes.append(NO.normalize_note({
+    'id': 78, 'title': 'Two days', 'body': 'x', 'date': '2026-10-05',
+    'recurrence': {'freq': 'weekly'},
+    'overrides': {'2026-10-12': {'body': 'Mon 12 own'}, '2026-10-19': {'body': 'Mon 19 own'}}}))
+_ud = app.find_note(78)
+_ud_edit = _ud['overrides'].pop('2026-10-12')       # deleted, as its Undo remembers it
+_ud['exceptions'] = ['2026-10-12']
+NO.move_day(_ud, '2026-10-19', '2026-10-12')
+app.save_notes()
+_ud_said = []
+_ud_real_toast = app._show_toast
+app._show_toast = lambda text, *a, **k: _ud_said.append(text)
+try:
+    app._undo_occurrence_delete(78, '2026-10-12', _ud_edit, _ud.get('uid')); app.update()
+finally:
+    app._show_toast = _ud_real_toast
+_ud = app.find_note(78)
+check(f"a deleted day's Undo leaves it out while another day stands on its date, each "
+      f"day keeping its words ({_ud_said})",
+      any('Another day of this series is on' in t for t in _ud_said)
+      and _ud['exceptions'] == ['2026-10-12'] and _ud['moved'] == {'2026-10-19': '2026-10-12'}
+      and _ud['overrides'].get('2026-10-12') == {'body': 'Mon 19 own'})
+app.notes = [n for n in app.notes if n.get('id') != 78]
+app.save_notes()
+
+# The series counts its moved days; a repeat turned off copies them with the
+# days into the rescue copy, keeps them, and Restore previous brings them back.
 app.open_note_in_tab(app.find_note(1)); app.update()
 check(f'the series counts its moved days above the note ({_rn_banner()!r})',
       '· 1 day moved (↷)' in _rn_banner())
@@ -3999,13 +5328,30 @@ app.ask_yes_no = lambda *a, **k: True
 app.restore_previous_version(); app.update()
 _dm_record()
 _mv_s = app.find_note(1)
-check(f"turning the repeat off takes the moves with the days, into the rescue copy "
-      f"({_mv_off})",
-      _mv_off == ('', {}, {'2026-10-12': '2026-10-17'}))
+check(f"turning the repeat off copies the moves with the days into the rescue copy "
+      f"and keeps them ({_mv_off})",
+      _mv_off == ('', {'2026-10-12': '2026-10-17'}, {'2026-10-12': '2026-10-17'}))
 check('...and Restore previous brings the series back with its day moved',
       _mv_s['recurrence']['freq'] == 'weekly'
       and _mv_s.get('moved') == {'2026-10-12': '2026-10-17'}
       and _mv_on('2026-10-17') == [1])
+# A series whose days hold no text of their own leaves no clutter behind:
+# its moves go with the repeat.
+app.notes.append(NO.normalize_note({
+    'id': 77, 'title': 'Plain series', 'body': 'x', 'date': '2026-10-05',
+    'recurrence': {'freq': 'weekly'}, 'moved': {'2026-10-12': '2026-10-17'}}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(77)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_mv_n = app.find_note(77)
+check(f"turning off a repeat whose days hold no text of their own leaves no moves "
+      f"behind ({_mv_n.get('moved')})",
+      _mv_n.get('moved') == {} and not _mv_n['recurrence'].get('freq'))
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.open_tabs = [t for t in app.open_tabs if t['state'].get('selected_note_id') != 77]
+app.notes = [n for n in app.notes if n.get('id') != 77]
+app.save_notes()
 
 # The buttons are long-lived: every colour they have follows the theme. And a
 # moved day with text of its own -- both buttons, the longest date line -- asks
@@ -4017,7 +5363,7 @@ app._autosave_now(); app.update()
 app.set_theme('light'); app.update()
 _mv_c = app.colors
 _mv_want = tuple(str(_mv_c[k]).lower() for k in (
-    'sidebar', 'text', 'card', 'text', 'bg', 'accent'))
+    'sidebar', 'text', 'card', 'text', 'bg')) + (app._focus_ring().lower(),)
 _mv_opts = ('bg', 'fg', 'activebackground', 'activeforeground',
             'highlightbackground', 'highlightcolor')
 _mv_got = tuple(str(app.day_move_btn.cget(o)).lower() for o in _mv_opts)
@@ -4058,7 +5404,7 @@ check(f'at an ordinary window Move and Reset sit beside the date, and a long tit
       _mv_lost == [] and app._day_btns_wrapped is False
       and app.day_btns.pack_info().get('side') == 'left'
       and app._is_placed(app.title_count_lbl))
-app.geometry('640x600')
+app.geometry('900x600')   # the smallest window, the sidebar beside the editor
 _mv_lost = _mv_in_sight()
 _mv_meta = app.day_btns.master
 check(f"at the smallest window every control of the day's title and date rows stays "
@@ -4095,7 +5441,7 @@ check(f'...a window made wider puts them back beside the date ({_mv_lost})',
 app._show_day_mode(); app.update()
 _mv_was = app._day_btns_wrapped
 app.day_date_lbl.pack_configure(padx=(6, 128))
-app.geometry('640x600')
+app.geometry('900x600')
 _mv_lost = _mv_in_sight()
 _mv_at = _mv_under_the_date()
 check(f'...and one made narrower puts them under it again ({_mv_was}; {_mv_lost}; '

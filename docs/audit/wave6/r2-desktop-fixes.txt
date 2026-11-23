@@ -1,0 +1,21 @@
+You are a skeptical reviewer in the SECOND round of re-attacking wave 6's fixes in Note Organizer, an offline Windows notes app (Python + Tkinter), D:\Projects\NoteOrganizer, branch audit/d-val6. Read each commit with `git -C D:\Projects\NoteOrganizer show <hash>` and the code around it.
+
+ROUND 1's fixes, attack these by name first:
+- 4075a35 fields: two more writers clear the hint's mark (calendar_view.py _open_history_searching; the date picker's _pick in note_organizer.py), and restore_editor_state refreshes the title's counter after show_hint. Is any writer into a hinted field (add_placeholder's four callers) still left that puts words in without clearing hint_shown, or that clears it when the hint is what it puts back?
+- e8c48c1 storage: paths.unused_path gives a stamped copy a name not yet used (notes_data_backup_, _replaced_, _corrupt_), and load_notes removes the cleanup's copy when its write did not land. Can the removal ever delete a copy that is the only one of something (a version backup made the same launch, a corrupt file's copy)? Does anything that lists, counts, purges or reads these copies by name (OWNED_PREFIXES, clean-ups, the corrupt notice, "an earlier one holding the same bytes") misread a name with _1? Is there a race between two app instances?
+- 18a7c30 import: _without_identity drops _prev from a backup's copies. Every other road that adds a note from outside (share code add, "Add them as new notes", templates, set-aside days becoming notes, a restore): any still carrying a field that belongs to the original?
+- 5e88b0d export: the error is never empty (str(e) or type(e).__name__); the session end records export_failed. Are the close, the session end and the poll now consistent for every combination of done / error / stop / left_out / session_only? Can the next start say two contradictory things?
+- 04aa67f series: storage.renew_in_trash restarts a held entry's clock; _say_trash_not_saved split out of _move_notes_to_trash. If renew fails, is the day still on the series and nothing half-written? Does the renewed stamp disturb an Undo that names Trash entries by (id, deleted_at)?
+- dc692cb tools: build_msix's code_newer_than, check_guest's DOCKER_STARTS read across lines, check_one_definition's widened rule 9, run_tests' sys.dont_write_bytecode. False positives on the repository as it is (prose in .md files the docker rule scans), or forms still missed?
+- ca356f3 and 8c033c8: shortened comments and the documents (ISSUES_LOG "Wave 6: the lows", RELEASE_ANDROID's mapping.txt sentence, TEST_PLAN_EXCERPT's counts, docs/audit/README's wave 6 table). True of the code and of the plan?
+
+Then what round 1 said it did NOT cover: the import's close path and the export worker under a real failure; build_msix, the spec and the qa diffs of wave 6 (c6ddc99..93645ff); check_guest's and run_tests' changes; spelling.py on the title field; the docs commits 75e7a4d and 93645ff.
+
+You MAY probe, only like this: a new folder under <scratchpad>\wave6\r2-desktop-fixes\ (the full path is <scratchpad>\wave6\r2-desktop-fixes\), a copy of note_organizer.py and the noteorganizer\ package there, small pure-Python probes of the core (no window). Do NOT build the Tk app, do NOT run any qa*.py or test_*.py, nothing heavy (no suite, no build, no emulator), nothing inside D:\Projects\NoteOrganizer, never edit a repository file, never run git commands that change anything, never open real data (notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves, or a document a release relies on says what is not true; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. VERDICT PER FIX -- holds / does not hold, one line each with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. NOT COVERED.

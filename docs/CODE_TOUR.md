@@ -39,6 +39,7 @@ here; go there when you want the summary.
 - [`noteorganizer/core/model.py`](#noteorganizercoremodelpy)
 - [`noteorganizer/core/welcome.py`](#noteorganizercorewelcomepy)
 - [`noteorganizer/core/diagnostics.py`](#noteorganizercorediagnosticspy)
+- [`noteorganizer/core/single_instance.py`](#noteorganizercoresingle_instancepy)
 - [Where the app starts](#where-the-app-starts)
 
 **Short on time?** Three sections repay a quick read:
@@ -59,7 +60,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~22,000 lines) because it is the UI hub the pieces
+file itself stays large (about 22,000 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -115,8 +116,9 @@ docs/                     these documents
 qa/                       headless GUI tests, the stories and the test plan
 test_*.py                 eight unit suites; seven need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
-├── check_*.py            nine static gates: eight in CI, the link check before a push
-├── pre_push_check.py     the gates, locally, in seconds (links in, mutant targets left to CI)
+├── check_*.py            fourteen static gates, all in CI: three of them on the documents (docs.yml)
+├── guest.py              a run's turn on the machine, its memory ceiling, the sweep of dead runs' folders
+├── pre_push_check.py     CI's gates, locally, in seconds
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
 ├── mutate.py             takes each fix away and checks a check fails
@@ -124,7 +126,10 @@ tools/                    what CI runs, and the tools behind the docs' numbers
 ├── call_graph.py         which methods call which: the measure behind the split
 ├── doc_screenshots.py    retakes the documentation's screenshots
 ├── make_icon.py          draws the app icon, rather than storing one
-└── linux-ci/             one Docker command reproduces the Ubuntu CI leg
+├── make_third_party_notices.py  the licenses the build ships, from the installed copies
+├── msix/                 packs the build as MSIX, and proves it in Windows Sandbox
+├── linux_ci.py           the Ubuntu CI leg in Docker: bounded, named, removed on every way out
+└── linux-ci/             the image it runs
 .github/workflows/        CI: tests on Windows and Linux; mutants and stories on demand
 ```
 
@@ -169,8 +174,8 @@ points to [the issues log](ISSUES_LOG.md), either by a story's title
 [smaller lessons](ISSUES_LOG.md#smaller-lessons-moved-out-of-the-code).
 A module's own docstring names what it is for in a few lines, and the walk
 through it is here. `tools/check_comments.py` checks that every pointer
-leads somewhere, and keeps the modules already condensed — `core/model.py`,
-`core/storage.py` and `ui/note_list.py` so far — that way.
+leads somewhere, and keeps every module, the entry file with them, that
+way.
 
 ---
 
@@ -353,11 +358,13 @@ Without those two lines every rule would point at the same list object, and
 adding a weekday to one note would change every other note too. Worth
 remembering generally: copying a container doesn't copy what's inside it.
 
-### Reading `expand_occurrences`
+### Reading `_expand_rule`
 
-It's the biggest function here, but it's one shape repeated four times —
-a branch per frequency. Each walks forward from the anchor and calls the
-same inner helper:
+`expand_occurrences` is the door: it asks `_expand_rule` for the days the
+rule gives, then puts the days held on another date ("Move this day")
+where they are held. `_expand_rule` is the biggest function here, but it's
+one shape repeated four times — a branch per frequency. Each walks forward
+from the anchor and calls the same inner helper:
 
 ```python
 def take(candidate):
@@ -386,8 +393,9 @@ current = anchor + step * skipped
 ```
 
 A daily note anchored in 1990 costs the same to display in 2026 as one
-made yesterday. `test_recurrence.py` pins this down with a 36-year-old
-recurrence that resolves in about **0.01 ms**.
+made yesterday. `test_recurrence.py` pins it: that note still draws its
+July 2026 days, which a day-by-day walk, stopped by `MAX_OCCURRENCES`,
+would never reach.
 
 **Guard rails.** Every loop counts iterations against `MAX_OCCURRENCES`
 (5000) as well as checking dates. If a rule were ever malformed such that
@@ -409,16 +417,17 @@ Two are handled explicitly, because dates are full of them:
 
 ### Where it's tested
 
-`test_recurrence.py` — over 120 checks, no GUI. Read it alongside the module: it
-covers the clamp/skip policies, count and end-date limits, exceptions, and
-the performance case above.
+`test_recurrence.py` — no GUI. Read it alongside the module: it covers the
+clamp/skip policies, count and end-date limits, exceptions, and the
+skip-ahead above.
 
 ---
 
 ## `noteorganizer/core/themes.py`
 
-**What it's for.** Eight colour palettes and a few fixed layout numbers.
-Pure data — no logic, no file access, nothing that can fail.
+**What it's for.** Eight colour palettes, a few fixed layout numbers, and
+the arithmetic over them (blending, contrast, the surfaces drawn from a
+palette) — no file access, nothing that can fail.
 
 The thing worth noticing is the *shape*. Every theme defines exactly the
 same keys:
@@ -458,8 +467,23 @@ role, and how they were chosen, is in
 
 Nothing in the app ever asks *"which theme is this?"* before picking a
 colour. It asks for `colors["card"]` and gets whatever that means right
-now. **Adding a ninth theme means adding one dict here and changing
-nothing else.**
+now. Adding a ninth theme takes more than one dict:
+
+1. the palette, one dict in `THEMES`, with every key the others have;
+2. its name in `DARK_THEMES` or `LIGHT_THEMES`, which the Settings picker,
+   the title bar and `tools/check_contrast.py` read, and its label in
+   `THEME_LABELS`;
+3. `py tools/make_icon.py --all` if its accent is new (the window icon is
+   named by the accent), and `py tools/check_contrast.py --markdown` pasted
+   over [ARCHITECTURE's contrast table](ARCHITECTURE.md#contrast-measured):
+   the gate fails until both are done;
+4. the same theme in the phone's `Themes.kt` (its `THEMES`, its dark or light
+   list and its label), which the phone's `tools/check_palettes.py` holds to
+   this file.
+
+No gate counts the themes in prose: the "eight" in the README, in
+ARCHITECTURE and in the phone's documents, and the theme-picker screenshots,
+are changed by hand.
 
 That uniformity also enables the theme-switch safety net: because every
 palette is known, the app can spot a widget still holding a colour from a
@@ -514,23 +538,22 @@ what the user meant; dropping is honest and can't corrupt the editor.
 A note carries formatting in two fields, because they answer different
 questions.
 
-`formatting` describes **characters** — bold, italic, colours, and now font
-size and family — as the spans above.
+`formatting` describes **characters** — bold, italic, colours, font size
+and family — as the spans above.
 
 `paragraphs` describes **whole lines** — which are list items, at what
-nesting depth, and how they are aligned — keyed by line number, since a
-line is the unit those apply to. Only non-default properties are stored, so
-an ordinary paragraph produces no entry at all.
+nesting depth, and how they are aligned — keyed by line number
+([what is stored](ARCHITECTURE.md#line-styles-paragraphs)).
 
 It has its own gatekeeper, `normalize_paragraphs()`, which drops bad
-entries the same way — and additionally throws away any pointing past the
+entries the same way — and throws away any pointing past the
 end of the body, so a note that was later shortened can't come back with
 an indent on a line that no longer exists.
 
 ### The rule that shapes most of this module
 
 **Two Tk tags that both set the widget's `font` option do not compose. One
-simply wins.**
+wins.**
 
 That single constraint explains a surprising amount:
 
@@ -559,12 +582,8 @@ A bullet really is a `"• "` at the start of the line, and a numbered item
 really begins `"1. "`. `parse_list_marker()` reads them back; `marker_for()`
 writes them.
 
-**Why store the marker instead of just drawing it?** Because `formatting`
-is character offsets into that same body. A marker that existed on screen
-but not in the text would put every offset after it out by the marker's
-length, on every line, forever. Keeping the text and the widget identical
-means the offsets need no translation — and a list still looks like a list
-when the note is exported, shared as a code, or pasted into an email.
+Why it is stored rather than only drawn is in
+[ARCHITECTURE](ARCHITECTURE.md#the-marker-lives-in-the-body-text).
 
 The cost is that renumbering rewrites real characters, which moves
 everything after them. So `renumber()` returns the shifts it caused and
@@ -610,8 +629,9 @@ reverse. `clipboard.py` is the part that talks to Windows.
 **Why two modules rather than one?** Because only one of them can be
 tested here. Tkinter's clipboard only offers plain text, so reaching
 `CF_HTML` means the Win32 API through `ctypes` — Windows-only, and the
-test suite runs on Linux. Keeping that to one small module, where every
-function returns None rather than failing when it cannot work, leaves all
+test suite runs on Linux as well. Keeping that to one small module, where
+every function returns None or False rather than failing when it cannot
+work, leaves all
 the actual decisions — what maps to what, how lists nest, where offsets
 land — in a module that turns strings into strings and can be tested
 anywhere. That is `test_richtext.py`, which needs no window and no
@@ -628,9 +648,9 @@ already stores bold. The note format and HTML line up almost one to one.
 **And one that does not.** Everything else. HTML can say things a note
 cannot, so `<sup>`, `<code>`, a background image and a CSS class are
 dropped and their words kept. Font size and family are dropped too, even
-though the app has both: a web page uses neither of the eight the app
-offers, so matching would mean picking a nearest value and claiming the
-note is set in something it never was.
+though the app has both: a page's sizes and fonts rarely match the app's
+lists exactly, so matching would mean picking a nearest value and claiming
+the note is set in something it never was.
 
 ---
 
@@ -840,7 +860,7 @@ in [ARCHITECTURE](ARCHITECTURE.md#background-work-exporting-and-importing).
 **What it's for.** Deciding when two notes are really the same note, so
 Settings can offer to tidy them up.
 
-Two normalisations do the real work:
+The words are compared after two normalisations:
 
 - `_strip_copy_suffix` removes any number of trailing `" (copy)"` markers,
   so a note and its duplicate match *even though the app renamed one of
@@ -848,9 +868,12 @@ Two normalisations do the real work:
 - `_normalize_ws` collapses runs of whitespace, so a stray blank line
   doesn't hide a match.
 
-Date, colour, attachments and pinned state are ignored **on purpose**. Two
-notes with identical text are the same note to a person, even if one is
-pinned — the comparison encodes a human judgement, not a mechanical one.
+Beside the words, `_dup_key` asks for the same category, checklist, repeat
+rule, a series' own days and fields a newer version wrote: no clean-up
+merges those, and left out, the copy dropped took them with it. Date,
+colour, attachments and pinned state are ignored **on purpose**. Two notes
+with identical words are the same note to a person, even if one is pinned —
+the comparison encodes a human judgement, not a mechanical one.
 
 ### One performance idea
 
@@ -883,7 +906,7 @@ files* — and it's worth reading precisely for that reason.
 |---|---|---|
 | a `.py` script | beside the script | convenient while developing |
 | a `.py` script with a `notebook_location.txt` beside it | the folder that file names | the developer's own notebook, out of the working tree |
-| a `.exe` | your `%APPDATA%` folder | always writable, never auto-cleaned |
+| a `.exe`, or the Store's package | the `Note Organizer` folder in your profile | writable, never auto-cleaned, and kept when the Store's package is uninstalled — a package's AppData is not ([why](ARCHITECTURE.md#the-notebook-outside-appdata)) |
 
 `chosen_notebook_dir` reads that file: its first line that is not blank or
 a `#` comment, with environment variables expanded. The file is git-ignored
@@ -914,8 +937,9 @@ check:
    `settings.json` also has to carry keys only this app writes, because in
    the built app one of the folders it looks at is wherever the zip was
    unpacked.
-2. The `%APPDATA%` folder is **permanently exempt**, no matter how
-   redundant it looks.
+2. The durable stores — the `%APPDATA%` folder an older `.exe` used and
+   the profile folder the built app uses now — are **permanently exempt**,
+   no matter how redundant they look.
 3. It deletes **file by file, only what it proved it had** — never a whole
    folder in one go.
 
@@ -926,10 +950,11 @@ The third is newer: the purge used to compare attachments by name, at the
 top level only, and then remove the whole attachments tree, so a file in a
 subfolder was destroyed without ever having been copied.
 
-`is_redundant_copy()` is the judgement behind it: a folder counts as
-redundant only if every note in it is already present locally *and* every
-attachment in it exists locally byte for byte, with nothing else beside
-them. Content is compared by **signature**, not by counting files — "10
+`is_redundant_copy()` and `_attachments_are_covered()` are the judgement
+behind it: a folder counts as redundant only if every note in it is already
+present locally (the first) *and* every attachment in it exists locally byte
+for byte, with nothing else beside them (the second). Notes are compared by
+**signature**, not by counting them — "10
 notes here, 10 notes there" must never be mistaken for "the same 10 notes".
 
 ### Two bugs this extraction caused — both worth learning from
@@ -1133,7 +1158,10 @@ function that returns a note of known shape:
 - a category that no longer exists falls back to "General"
 
 So a corrupt entry degrades into a slightly emptier note instead of taking
-down the note list.
+down the note list. And a top-level field it does not know (a newer
+version's) is kept as it came, within bounds, by `unknown_fields`: an older
+app must not erase what a newer one added. One inside a checklist item, an
+attachment or the repeat rule is still shaped away.
 
 **Validate once, at the edge, then trust the data inwards.** You've now
 seen the same idea three times — `normalize_recurrence`,
@@ -1143,11 +1171,17 @@ one habit applied consistently, not three separate tricks.
 
 ### Richness, and why it exists
 
-`note_is_empty` and `note_richness` support cleanup. When duplicates are
-merged, richness decides *which copy to keep* — the one carrying the most
-actual content — rather than picking arbitrarily and hoping. `clean_notes`
-uses both to drop blank notes and de-duplicate on load, and reports what it
-did so the app can tell you rather than silently changing your notebook.
+`note_is_empty` and `note_richness` support the one-time cleanup a
+notebook gets on its first load (`clean_notes`, run once and then marked
+`cleanup_done` in settings): blank notes dropped, and only exact duplicates
+merged. Richness decides *which copy to keep*, the one carrying the most
+actual content; since `content_signature` already holds nearly everything
+it scores, copies of one group almost always tie and the first is kept
+(comments of spaces alone are one exception: signed as none, they still
+score). It reports what it did
+so the app can tell you rather than silently changing your notebook.
+Settings → Duplicates is a different, later clean-up: it keeps the first
+copy of each group.
 
 ---
 
@@ -1211,6 +1245,9 @@ kept apart from the apps ([site/README](../site/README.md#kept-apart-from-the-ap
 `STORE_REVIEW_URL` is the Store's review page once there is
 one: until then it is `None`, and About shows no Feedback card. The app
 opens a page and nothing more; it makes no connection of its own.
+`NOTICES` names the licenses file the build ships beside the package,
+which About opens in the person's text editor
+([RELEASE_WINDOWS](RELEASE_WINDOWS.md#the-licenses-that-ship-with-it)).
 
 ### One writer for the crash log
 
@@ -1220,6 +1257,36 @@ a dated line, the details on one line, then the trace. It never raises —
 it runs where something has already failed — and a crash before the data
 folder is known writes nothing rather than taking the crash window with it,
 which a hand-written writer once did.
+
+---
+
+## `noteorganizer/core/single_instance.py`
+
+**What it's for.** One window per notebook. The app reads the whole
+notebook at start and writes it back whole on every save, so two windows
+on one folder would each hold a copy, and whichever saved last would
+erase what the other wrote.
+
+### A lock the system lets go of
+
+`acquire()` takes an operating-system lock on `.notebook.lock` in the data
+folder (`msvcrt` on Windows, `fcntl` elsewhere, both standard library).
+The system releases it when the process ends, however it ends, so a crash
+never leaves a person locked out of their notes, as a stale PID file
+would. `_main()` takes it after the folder is resolved and before
+`initialise()` runs the migrations; refused, it shows the system's own
+"Note Organizer is already open" box (there is no app window yet) and
+stops.
+
+### Failing open, on purpose
+
+Only the answers that mean "another process holds it" refuse the start. A
+folder that cannot hold the lock file, or a filesystem that cannot lock at
+all (network shares answer with other errors), lets the app open: an app
+that will not start is a worse failure than the accident the lock guards
+against. A first version read every error as "already open" and left the
+app unable to start on such folders. A second window inside the same
+process — the qa suite builds several — counts as the owner.
 
 ---
 

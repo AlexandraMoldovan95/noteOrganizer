@@ -1,0 +1,66 @@
+# play-desktop-2, the same agent's second task: using the desktop app in a throwaway copy, on Sonnet
+# started 2026-11-22 12:27 UTC
+
+SECOND TASK: USE THE APP (PLAY-W7)
+
+Your review is finished and stays as it is: nothing you find now changes its scores or its text. This task
+is a help to the owner: use the desktop app the way your two roles would, and report bugs and anything that
+confuses or looks wrong. An ordinary person's use matters most; an impatient or hostile one counts too.
+
+YOUR FOLDER: <scratchpad>/panel7/play/desktop-2
+It holds a copy of the app (note_organizer.py, noteorganizer/) and the play kit. Work ONLY there.
+
+HOW
+- First read the docstring at the top of <scratchpad>/panel7/play/desktop-2/desk_play.py: it is the whole kit (start, click_on,
+  type_text, press, paste, answer, files, shot, close, words, find).
+- Write small Python scripts in your folder that start the app, act, photograph and close. Run each with:
+    cd "<scratchpad>/panel7/play/desktop-2" && NOTEORG_SCRATCH=1 timeout 300 py <script>.py
+- Look at every photograph you take with the Read tool: the photo is what a person sees.
+- To find a widget's name, Grep the copy in your folder (note_organizer.py, noteorganizer/); do not review
+  the code. What each feature should do is in D:/Projects/NoteOrganizer/docs/USER_GUIDE.md (read only).
+- Prefer the kit's real keys and clicks. When you call one of the app's methods yourself, say so in the
+  finding (via_kit false).
+- The notebook stays in your folder between runs, so each new script is a restart on what the last left.
+  A notebook written by hand (notes_data.json in your folder) is a case the app supports too.
+- The machine runs one heavy job at a time: each run takes its turn first, so a run may wait for another
+  reviewer's. That is expected; it is not a hang.
+
+YOUR TWO ROLES PLAY LIKE THIS
+- tech-lead: the paths the code you read guards: settings, storage, a notebook file damaged by hand, repeating notes, the list; what a change in one breaks in another.
+- experienced-dev: edge cases a reviewer would ask about: empty and very long input, odd characters, the same action twice, a restart between two steps, undo after save.
+
+HARD RULES
+- Work only in your folder. Do not create, change or delete anything anywhere else; read nothing outside
+  your folder except D:/Projects/NoteOrganizer/docs/USER_GUIDE.md and README.md.
+- Never open %APPDATA%\NoteOrganizer, C:/Users/<name>/Note Organizer, C:/Users/<name>/Desktop, or any
+  notes_data.json, settings.json, trash.json or templates.json outside your folder: those are a person's
+  own notes.
+- Never run anything inside D:/Projects; never run qa*.py, test_*.py or tools/*; no installs, no network,
+  no git commands, no deleting files (no rm, no del).
+- Photographs only with the kit's shot() (the app's window, nothing else). Never move windows to another
+  screen and never change display settings.
+- Files you give the app (to attach, to import) are made inside your folder; the kit refuses others.
+- Every run with timeout 300. If something hangs, say so in the report rather than retrying it again and
+  again. At most about 30 runs; stop sooner when you run out of ideas.
+
+HOW TO ANSWER
+Your final message starts with the line PLAY-W7 desktop tech-lead+experienced-dev and ends with ONE fenced ```json block:
+{"found": [...], "tried_fine": [...], "not_covered": "..."}. Each found item has: persona; title; steps
+(numbered, what a person does); expected; actual; evidence (the photo paths you looked at, the script path,
+the lines it printed); how_often ("every time", or "N of M runs", or "seen once"); severity (high = notes lost or damaged, or a crash or freeze; medium = an ordinary path gives a wrong result, a trap, or words that are untrue; low = cosmetic, wording, or reachable only through a long recipe nobody follows by accident); kind (bug /
+confusing / looks-wrong / untrue-words); via_kit (true or false, and which method you called). tried_fine is
+a short list of what you tried that worked as it should. Report only what you reproduced. Write the text
+fields in ROMANIAN, in plain language. Write nothing after the block.
+
+--- a later message to the same agent, 2026-11-22 12:30 UTC ---
+Thank you. You stopped after 3 runs of the ~30 the task allows, and your not_covered lists most of the app. Please continue the same task (same folder, same hard rules, same answer form) through what you listed there: the calendar and editing one day of a series, moving a day, templates, the Trash, a backup and its import, a share code and its import, attachments, search and grouping, Ctrl+T in a table cell and beside an emoji, Settings, a notes file that is broken JSON or a damaged settings.json. Up to about 25 more runs.
+
+Two kit changes, already in your folder's desk_play.py: tab("Calendar") clicks a tab of the window (the tabs are drawn by Tk, which is why click_on could not find "Calendar"); and use ONE start() per script (a second app in one process is not what a person runs, which explains the "invalid command name ... after script" lines you saw).
+
+When you finish, send the whole answer again in the same form (PLAY-W7 line, then the json block), with what you found in the first three runs included.
+
+--- a later message to the same agent, 2026-11-22 12:32 UTC ---
+One more kit addition, already in your folder's desk_play.py (no need to answer): click_drawn("text") clicks text drawn on a canvas, such as a note card's title or a calendar day, which click_on cannot find.
+
+--- a later message to the same agent, 2026-11-22 12:34 UTC ---
+A kit fix, already in your folder's desk_play.py (no need to answer): close() did not go through the app's own close handler (the app's start binds the window's X to on_app_close; the kit had not), so a close right after typing could skip the save a real X does. start() now binds it as the app does. If any of your findings involve closing right after typing, repeat them with the fixed kit before you report them.

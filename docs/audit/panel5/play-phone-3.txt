@@ -1,0 +1,42 @@
+# play-phone-3, the same agent's second task: using the phone app in a throwaway copy, on Sonnet
+# started 2026-11-22 13:30 UTC
+
+SECOND TASK: USE THE APP (PLAY-W7)
+
+Your review is finished and stays as it is: nothing you find now changes its scores or its text. This task
+is a help to the owner: use the phone app the way your two roles would, on an Android EMULATOR, and report
+bugs and anything that confuses or looks wrong. An ordinary person's use matters most; an impatient or
+hostile one counts too.
+
+YOUR FOLDER: <scratchpad>/panel7/play/phone-3 (for your screenshots and any file you make). Work ONLY there.
+THE EMULATOR is already running, with the release app 0.15.1 installed. You have it to yourself while you
+work; the other reviewers wait for you.
+
+HOW
+- Everything goes through ONE tool: py -I <scratchpad>/panel7/kit/phone_play.py <command>. Read its docstring first
+  (py -I <scratchpad>/panel7/kit/phone_play.py with no command prints it). It reaches the emulator only, never a phone.
+- Start with: py -I <scratchpad>/panel7/kit/phone_play.py fresh   (the app's data emptied, a first start).
+- Read the screen with "tree" (texts and their x,y) and "shot <scratchpad>/panel7/play/phone-3/<name>.png"; look at every shot with
+  the Read tool: the shot is what a person sees. Act with tapt / tap / long / swipe / type / key.
+- Letters outside ASCII cannot be typed with "type"; say so where it matters, do not work around it.
+- What each feature should do: D:/Projects/androidVersion/README.md and docs/STATUS.md (read only).
+
+YOUR TWO ROLES PLAY LIKE THIS
+- senior-designer: how it looks and reads: several themes, a small window and a large one, the keyboard only (Tab, Enter, Escape), focus you can see, empty states, long titles and texts.
+- qa-lead: failure modes: doing a thing twice, slowly, half-entered (a date half typed), interrupted or closed in the middle, undo/redo, restarts, tables, checklists, repeating notes, the round trips (a backup and its import, a share code and its import), the Trash.
+
+HARD RULES
+- Never call adb or any other tool directly: only phone_play.py. Never another device than the emulator.
+- Work only in your folder; read nothing outside it except the two documents above. No installs, no
+  network, no git, no deleting files on the computer.
+- Do not stop or restart the emulator itself; if it stops answering, say so in the report and end.
+- At most about 60 commands; stop sooner when you run out of ideas. End with: py -I <scratchpad>/panel7/kit/phone_play.py crashes
+
+HOW TO ANSWER
+Your final message starts with the line PLAY-W7 phone senior-designer+qa-lead and ends with ONE fenced ```json block:
+{"found": [...], "tried_fine": [...], "not_covered": "..."}. Each found item has: persona; title; steps
+(numbered, what a person does); expected; actual; evidence (the shot paths you looked at, the commands and
+what they printed); how_often ("every time", or "N of M tries", or "seen once"); severity (high = notes lost or damaged, or a crash or freeze; medium = an ordinary path gives a wrong result, a trap, or words that are untrue; low = cosmetic, wording, or reachable only through a long recipe nobody follows by accident); kind (bug /
+confusing / looks-wrong / untrue-words). tried_fine is a short list of what you tried that worked as it
+should. Report only what you reproduced. Write the text fields in ROMANIAN, in plain language. Write nothing
+after the block.

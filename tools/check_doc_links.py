@@ -24,7 +24,8 @@ a link crawler, and a network check would make it flaky.
 ANCHORS
 -------
 GitHub's slug rules, which are not obvious: lowercase, drop everything
-that is not a letter, digit, space or hyphen, spaces to hyphens. So
+that is not a letter, digit, space or hyphen (an underscore inside a code
+span is kept; outside, it is emphasis and goes), spaces to hyphens. So
 ``## "Recently updated" sort`` becomes ``recently-updated-sort``, and a
 heading holding a version like ``0.71.155 — 2026-09-11`` becomes
 ``071155--2026-09-11`` (the em dash vanishes, the spaces around it each
@@ -36,6 +37,7 @@ Usage:  py tools/check_doc_links.py            (whole repo)
 """
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,19 +46,18 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # nested parens inside a target are not something this repo's links use.
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$", re.M)
-FENCE = re.compile(r"^```", re.M)
-
-SKIP_DIRS = {".git", "build", "dist", "__pycache__", ".github"}
 
 
 def slug(text):
     """GitHub's heading -> anchor rule."""
     # Link syntax inside a heading contributes only its text.
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"[`*_~]", "", text)
+    # An underscore in code is a character, kept; outside, it is emphasis.
+    text = re.sub(r"`([^`]*)`", lambda m: m.group(1).replace("_", "\0"), text)
+    text = re.sub(r"[`*_~]", "", text).replace("\0", "_")
     out = []
     for ch in text.lower():
-        if ch.isalnum() or ch in " -":
+        if ch.isalnum() or ch in " -_":
             out.append(ch)
     return "".join(out).strip().replace(" ", "-")
 
@@ -65,7 +66,6 @@ def anchors_of(path):
     """Every anchor a reader can jump to in this file."""
     text = read(path)
     # Headings inside fenced code blocks are not headings.
-    parts, keep = FENCE.split(text), True
     lines = []
     for i, part in enumerate(text.split("```")):
         if i % 2 == 0:
@@ -91,18 +91,23 @@ def read(path):
 
 
 def md_files(targets):
+    """The files named, or every .md file git tracks. Walking the disk read
+    a leftover agent worktree's copies too (44 files for 22 tracked); with
+    nothing tracked to read, the gate refuses rather than passing."""
     if targets:
         return [os.path.abspath(t) for t in targets]
-    found = []
-    for base, dirs, names in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        for name in names:
-            if name.lower().endswith(".md"):
-                found.append(os.path.join(base, name))
-    return sorted(found)
+    out = subprocess.run(["git", "ls-files", "*.md"], cwd=ROOT, capture_output=True,
+                         text=True, encoding="utf-8", errors="replace", timeout=120)
+    names = [line.strip() for line in out.stdout.splitlines() if line.strip()]
+    if out.returncode != 0 or not names:
+        print("Cannot list the tracked .md files (is %s a git checkout?)." % ROOT)
+        sys.exit(2)
+    return sorted(os.path.join(ROOT, name) for name in names)
 
 
 def main(argv):
+    import guest  # the memory ceiling, before git starts (tools/guest.py)
+    guest.settle(heavy=False)
     files = md_files(argv[1:])
     cache = {}
     problems = []

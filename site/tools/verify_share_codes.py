@@ -22,7 +22,6 @@ import json
 import os
 import shutil
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,6 +29,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def main():
     # Titles carry emoji; a Windows console's default code page cannot print them.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # The memory ceiling, before the app's code is imported (the repository's
+    # tools/guest.py).
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "tools"))
+    import guest
+    guest.settle(heavy=False)
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     # site/tools/ is two folders down from the app's repository.
@@ -39,7 +43,8 @@ def main():
     out = os.path.abspath(args.out)
     os.makedirs(out, exist_ok=True)
 
-    work = tempfile.mkdtemp(prefix="no-share-verify-")
+    # Marked (guest.scratch): a run killed before its finally is swept later.
+    work = guest.scratch("noteorg-share-verify-")
     try:
         shutil.copytree(os.path.join(repo, "noteorganizer"), os.path.join(work, "noteorganizer"))
         for name in ("APPDATA", "LOCALAPPDATA"):
@@ -60,7 +65,6 @@ def run(out):
     from noteorganizer.core.model import normalize_note
     from noteorganizer.core.formatting import (normalize_formatting, normalize_paragraphs,
                                                parse_list_marker)
-    from noteorganizer.core.recurrence import normalize_recurrence
     from noteorganizer.core.tables import is_table_row, is_separator_row
     from noteorganizer.core.welcome import build_welcome_note, TITLE
 
@@ -166,9 +170,11 @@ def run(out):
                     break
         check("  the checklist arrives whole", len(note["checklist"]) == len(raw.get("checklist") or []))
         if raw.get("recurrence", {}).get("freq"):
+            # Each part the demo set, read back as it set it: compared with the
+            # normalizer's own answer, the check could only see a bad date.
             check("  the repeat rule arrives as sent",
-                  note["recurrence"] == normalize_recurrence(raw["recurrence"]) and note["recurrence"]["freq"],
-                  repr(note["recurrence"]))
+                  all(note["recurrence"].get(k) == v for k, v in raw["recurrence"].items()),
+                  "%r, sent %r" % (note["recurrence"], raw["recurrence"]))
         lines = note["body"].split("\n")
         if any(line.startswith("|") for line in lines):
             rows = [l for l in lines if is_table_row(l)]

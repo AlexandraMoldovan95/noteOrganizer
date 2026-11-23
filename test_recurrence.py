@@ -1,7 +1,14 @@
 """Dedicated recurrence-engine test suite, separate from the GUI-based QA
 scripts — runs headlessly with no tkinter needed, fast enough to run after
 every change to expand_occurrences/normalize_recurrence."""
-import note_organizer as NO
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+import note_organizer as NO  # noqa: E402
 from datetime import date
 import time
 import sys
@@ -135,6 +142,12 @@ d_stress = NO.expand_occurrences(n_stress, date(2026,7,1), date(2026,7,31))
 elapsed = (time.perf_counter()-t0)*1000
 check(f'36-year-old yearly recurrence still finds July 2026 occurrence ({elapsed:.2f}ms)',
       d_stress==['2026-07-04'])
+# The daily skip-ahead, pinned: walked day by day from 1990, MAX_OCCURRENCES
+# ends the walk around 2004 and July 2026 draws nothing.
+d_daily = NO.expand_occurrences({'id': 98, 'date': '1990-07-04', 'recurrence': {'freq': 'daily'}},
+                                date(2026, 7, 1), date(2026, 7, 3))
+check(f'a daily note anchored in 1990 still draws its July 2026 days ({d_daily})',
+      d_daily == ['2026-07-01', '2026-07-02', '2026-07-03'])
 
 # ---- next_occurrence_on_or_after: the "Calendar: soonest" sort key ----
 from noteorganizer.core.recurrence import next_occurrence_on_or_after as _nxt
@@ -221,6 +234,34 @@ check("a child with no override title borrows the series'",
       and _s3['children'][1]['title'] == 'Year-end sync')
 check('a series with no edited days still gets a row',
       any(e['note_id'] == 4 and e['kind'] == 'series' for e in _all))
+# The edited days a search or a year leaves out are counted, for the row to
+# say "1 of 2": it said "1 edited day", and that every other day shows the
+# series content, of a series with two.
+# (2025-12-01 lies before the series' start: off the schedule, counted apart
+# from the edited days, filtered or not.)
+_lb = next(e for e in _hist(_h_notes, query='budget', today=_H_TODAY) if e['note_id'] == 3)
+_lr = next(e for e in _hist(_h_notes, query='retro', today=_H_TODAY) if e['note_id'] == 3)
+_ly = next(e for e in _hist(_h_notes, year_bucket='Last year', today=_H_TODAY) if e['note_id'] == 3)
+check(f"the edited days a search or a year leaves out are counted "
+      f"({_s3.get('n_edited_left_out')}, "
+      f"{[(e['n_edited'], e.get('n_edited_left_out')) for e in (_lb, _lr, _ly)]})",
+      _s3.get('n_edited_left_out') == 0
+      and [(e['n_edited'], e.get('n_edited_left_out')) for e in (_lb, _lr, _ly)]
+      == [(1, 0), (0, 1), (0, 1)])
+check(f"...and the days off the schedule the same "
+      f"({[(e['n_off'], e.get('n_off_left_out')) for e in (_s3, _lb, _lr, _ly)]})",
+      [(e['n_off'], e.get('n_off_left_out')) for e in (_s3, _lb, _lr, _ly)]
+      == [(1, 0), (0, 1), (1, 0), (1, 0)])
+# ...a bounded series too, which lists every one of its days.
+_hb = _hist([{'id': 8, 'title': 'Bounded', 'body': 'base', 'date': '2026-06-01',
+              'recurrence': {'freq': 'monthly', 'count': 3},
+              'overrides': {'2026-07-01': {'title': 'Jul', 'body': 'alpha'},
+                            '2026-08-01': {'title': 'Aug', 'body': 'beta'}}}],
+            query='alpha', today=_H_TODAY)
+check(f"...and of a bounded series, every day of which it lists "
+      f"({[(e['children_kind'], e['n_edited'], e.get('n_edited_left_out')) for e in _hb]})",
+      [(e['children_kind'], e['n_edited'], e.get('n_edited_left_out')) for e in _hb]
+      == [('occurrences', 1, 1)])
 
 _q = _hist(_h_notes, query='budget', today=_H_TODAY)
 check('search reaches into a day\'s own override content',
@@ -230,6 +271,11 @@ check('search reaches into a day\'s own override content',
 _q2 = _hist(_h_notes, query='agenda', today=_H_TODAY)
 check('a base-only match keeps the group collapsed (no auto-expand)',
       [e['note_id'] for e in _q2] == [3] and _q2[0]['auto_expand'] is False)
+# Folded as the list's search folds: "creme" missed "Crème" here.
+_qf = _hist([{'id': 9, 'title': 'Crème brûlée night', 'body': 'x', 'comments': '',
+              'date': '2026-05-04'}], query='CREME BRULEE', today=_H_TODAY)
+check("the History's search folds case and diacritics, as the list's does",
+      [e['note_id'] for e in _qf] == [9])
 
 _y = _hist(_h_notes, year_bucket='Last year', today=_H_TODAY)
 check('the year filter keeps only that year\'s activity',
@@ -240,6 +286,12 @@ check('"Older" catches everything before two years ago',
       [e['note_id'] for e in _o] == [2])
 check('"2 years ago" is its own bucket, not part of Older',
       _hist(_h_notes, year_bucket='2 years ago', today=_H_TODAY) == [])
+# A day of a year to come is this year's work, not the archive's (it was
+# filed under Older).
+_next = [{'id': 9, 'title': 'Booked', 'body': '', 'date': '%d-01-05' % (_H_TODAY.year + 1)}]
+check('a day of next year is under "This year", not "Older"',
+      [e['note_id'] for e in _hist(_next, year_bucket='This year', today=_H_TODAY)] == [9]
+      and _hist(_next, year_bucket='Older', today=_H_TODAY) == [])
 
 # ---- off_schedule_days: a day's own edit the schedule no longer reaches ----
 # A day saved "only this occurrence" keeps its edit under its date; change
@@ -407,6 +459,24 @@ check("...and among a bounded series' days, on its new date",
       [c['date'] for c in _mhb['children']]
       == ['2026-10-19', '2026-10-13', '2026-10-05']
       and [c['moved_from'] for c in _mhb['children']] == [None, '2026-10-12', None])
+# A search that lists another day leaves the moved ones out, counted: plain
+# and edited, endless and bounded; and a bounded series' day off the schedule.
+_retro = {'title': 'Retro', 'body': 'retro'}
+_mlo = [_hist([n], query='retro', today=_H_TODAY)[0] for n in (
+    _weekly(moved={'2026-10-12': '2026-10-13'}, overrides={'2026-10-26': dict(_retro)}),
+    _weekly(moved={'2026-10-12': '2026-10-13'},
+            overrides={'2026-10-13': {'title': 'Moved', 'body': 'm'},
+                       '2026-10-26': dict(_retro)}),
+    _weekly(moved={'2026-10-12': '2026-10-13'},
+            recurrence={'freq': 'weekly', 'weekdays': [0], 'count': 3},
+            overrides={'2026-10-19': dict(_retro)}),
+    _weekly(recurrence={'freq': 'weekly', 'weekdays': [0], 'count': 3},
+            overrides={'2026-10-14': {'title': 'Off', 'body': 'o'},
+                       '2026-10-19': dict(_retro)}))]
+check(f"the moved days and a bounded series' days off the schedule a search leaves out are counted "
+      f"({[(e['n_moved'], e['n_moved_left_out'], e['n_off'], e['n_off_left_out']) for e in _mlo]})",
+      [(e['n_moved'], e['n_moved_left_out'], e['n_off'], e['n_off_left_out']) for e in _mlo]
+      == [(0, 1, 0, 0), (0, 1, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)])
 _mn = NO.normalize_note(_weekly(
     exceptions=['2026-10-26'],
     moved={'2026-10-12': '2026-10-13', '2026-10-19': '2026-10-13',
@@ -613,6 +683,200 @@ check('the "until" of a repeat is shown day first',
       NO.describe_recurrence({'recurrence': {'freq': 'weekly', 'interval': 2,
                                              'end': '2026-12-31'}})
       == 'Every 2 weeks, until 31.12.2026')
+check('a series of one is "1 time", not "1 times", and more are "times"',
+      NO.describe_recurrence({'recurrence': {'freq': 'daily', 'count': 1}})
+      == 'Every day, 1 time'
+      and NO.describe_recurrence({'recurrence': {'freq': 'daily', 'count': 2}})
+      == 'Every day, 2 times')
+
+
+# ---- moved days at the cap: the per-day questions asked of all at once ----
+# A series with 5,000 moved days (the cap normalize_note keeps) took 90 s to
+# open: the banner, the History and the days off the schedule each asked the
+# calendar about one day at a time, and every question read every moved day
+# (ISSUES_LOG: "Limits that held at the door but not after it"). Measured as
+# WORK -- how many times the moved days are read whole -- never as time, so
+# a slow machine cannot fail it: the old shape read them once per day asked,
+# 2,000 times here; the new one a handful of times in all.
+import random as _random
+from datetime import timedelta as _td
+import noteorganizer.core.recurrence as _R
+from noteorganizer.core.recurrence import drawn_moves as _drawn
+
+
+class _ReadCount(dict):
+    """The moved days, counting each time they are walked whole."""
+    reads = 0
+
+    def items(self):
+        _ReadCount.reads += 1
+        return super().items()
+
+    def __iter__(self):
+        _ReadCount.reads += 1
+        return super().__iter__()
+
+
+def _whole_reads(fn):
+    _ReadCount.reads = 0
+    fn()
+    return _ReadCount.reads
+
+
+_CAP_N = 2000
+# Ending before the dates its days are moved to: a day moved onto a date the
+# rule gives by itself goes home at a read.
+_cap_note = NO.normalize_note({
+    'id': 1, 'title': 's', 'date': '2020-01-01',
+    'recurrence': {'freq': 'daily', 'end': '2035-12-31'},
+    'moved': {(date(2020, 1, 1) + _td(days=i)).isoformat():
+              (date(2040, 1, 1) + _td(days=i)).isoformat() for i in range(_CAP_N)},
+    'overrides': {(date(2030, 1, 1) + _td(days=i)).isoformat(): {'title': 'o'}
+                  for i in range(_CAP_N)}})
+_cap_note['moved'] = _ReadCount(_cap_note['moved'])
+
+check(f'the banner counts {_CAP_N:,} moved days reading them a few times in '
+      'all, not once per day',
+      _whole_reads(lambda: _drawn(_cap_note)) <= 10
+      and len(_drawn(_cap_note)) == _CAP_N)
+check('...the days off the schedule likewise',
+      _whole_reads(lambda: _off(_cap_note)) <= 10)
+check('...and the History likewise',
+      _whole_reads(lambda: _hist([_cap_note], today=_H_TODAY)) <= 20
+      and _hist([_cap_note], today=_H_TODAY)[0]['n_moved'] == _CAP_N)
+_walks = [0]
+_real_rule = _R._expand_rule
+
+
+def _counting_rule(*args, **kwargs):
+    _walks[0] += 1
+    return _real_rule(*args, **kwargs)
+
+
+_R._expand_rule = _counting_rule
+try:
+    _drawn(dict(_cap_note, recurrence={'freq': 'daily', 'count': 5000}))
+finally:
+    _R._expand_rule = _real_rule
+check('a series that stops after N times is walked once for all its moved '
+      'days, not once per day from its first',
+      _walks[0] <= 2)
+
+
+class _EqCount(str):
+    """A deleted day, counting each comparison made against it."""
+    compared = 0
+    __hash__ = str.__hash__
+
+    def __eq__(self, other):
+        _EqCount.compared += 1
+        return str.__eq__(self, other)
+
+
+_EqCount.compared = 0
+_ld = NO.normalize_note({
+    'id': 1, 'date': '2020-01-01', 'recurrence': {'freq': 'daily'},
+    'exceptions': [_EqCount((date(2020, 1, 1) + _td(days=i)).isoformat())
+                   for i in range(_CAP_N)],
+    'moved': {(date(2020, 1, 1) + _td(days=i)).isoformat():
+              (date(2200, 1, 1) + _td(days=i)).isoformat() for i in range(_CAP_N)}})
+check('a load of 2,000 deleted days and 2,000 moves of them looks each move '
+      'up once, not along every deleted day',
+      _ld['moved'] == {} and _EqCount.compared <= 10 * _CAP_N)
+
+
+def _per_day_moves(note):
+    """The banner's question as it was asked, one day at a time."""
+    return [(o, n) for o, n in (note.get('moved') or {}).items()
+            if NO.parse_date(n) and NO.expand_occurrences(
+                note, NO.parse_date(n), NO.parse_date(n)) == [n]]
+
+
+def _per_day_off(note):
+    # A deleted date a day was moved onto is asked of the series as it is;
+    # any other, with no day skipped.
+    sched = dict(note, exceptions=[])
+    exc = set(note.get('exceptions') or [])
+    landed = set((note.get('moved') or {}).values())
+    return [d for d in sorted(note.get('overrides') or {})
+            if NO.parse_date(d) and (d not in exc or d in landed)
+            and NO.expand_occurrences(note if d in exc else sched,
+                                      NO.parse_date(d), NO.parse_date(d)) != [d]]
+
+
+_rng = _random.Random(20261028)
+_agree_moves = _agree_off = True
+for _i in range(300):
+    _a = date(2026, 1, 1) + _td(days=_rng.randint(-300, 300))
+    _span = [(_a + _td(days=_rng.randint(-20, 700))).isoformat() for _ in range(40)]
+    _sn = NO.normalize_note({
+        'id': 1, 'date': _a.isoformat(),
+        'recurrence': {'freq': _rng.choice(['daily', 'weekly', 'monthly', 'yearly']),
+                       'interval': _rng.choice([1, 2, 3]),
+                       'count': _rng.choice([0, 0, 6, 40]),
+                       'weekdays': _rng.sample(range(7), _rng.randint(0, 3)),
+                       'month_days': _rng.sample(range(1, 32), _rng.randint(0, 2)),
+                       'month_day_policy': _rng.choice(['clamp', 'skip'])},
+        'exceptions': _rng.sample(_span, _rng.randint(0, 6)),
+        # a date written with a space is a different text for the same day
+        'moved': {_rng.choice(_span): _rng.choice(_span) + _rng.choice(['', '', ' '])
+                  for _ in range(_rng.randint(0, 15))},
+        'overrides': {_rng.choice(_span): {'title': 't'}
+                      for _ in range(_rng.randint(0, 10))}})
+    _agree_moves = _agree_moves and _drawn(_sn) == _per_day_moves(_sn)
+    _agree_off = _agree_off and _off(_sn) == _per_day_off(_sn)
+check('...and the answers are the ones the calendar gives day by day: moved days',
+      _agree_moves)
+check('...and days off the schedule', _agree_off)
+
+# ---- Days a note keeps after its repeat is turned off steer nothing ----
+# Kept for a turn-back-on, they
+# were still read: the one-off showed its first day's words on its date, and a
+# deleted first day took it off the calendar.
+_kd = NO.normalize_note({'id': 1, 'title': 'Weekly sync', 'body': 'SERIES TEXT',
+           'date': '2026-09-07', 'recurrence': {'freq': ''},
+           'exceptions': ['2026-09-07'],
+           'overrides': {'2026-09-07': {'title': 'Kickoff', 'body': 'FIRST DAY'}}})
+check('a note that no longer repeats is itself on every day, kept days or not',
+      NO.effective_note(_kd, '2026-09-07') is _kd)
+check('...and is on the calendar on its date though the series deleted that day',
+      [str(x) for x in NO.expand_occurrences(_kd, date(2026, 9, 1), date(2026, 9, 30))]
+      == ['2026-09-07'])
+_kd_series = dict(_kd, recurrence={'freq': 'weekly'})
+check('...while a series still shows its day\'s own words',
+      NO.effective_note(_kd_series, '2026-09-07').get('body') == 'FIRST DAY')
+check('...and what a kept day holds is still read, for the saves that keep it',
+      NO.day_as_kept(_kd, '2026-09-07').get('body') == 'FIRST DAY')
+
+# ---- ...and come back only onto the series they belong to ----
+# Turned back on from another date, an old deleted day hid the new series' own
+# first day. Her answer: they come back only with the same date and
+# rule; a deleted day holds nothing, and the rescue copy keeps them all.
+import copy
+_rs_days = {'exceptions': ['2026-09-14'],
+            'overrides': {'2026-09-21': {'body': 'DAY 21 OWN'}}}
+_rs = NO.normalize_note(dict({'id': 2, 'uid': 'kept-days-restart', 'title': 'Gym',
+                              'body': 'x', 'date': '2026-09-07',
+                              'recurrence': {'freq': ''}}, **_rs_days))
+_rs['_prev'] = dict({'title': 'Gym', 'body': 'x', 'date': '2026-09-07',
+                     'recurrence': NO.normalize_recurrence({'freq': 'weekly'})}, **_rs_days)
+check('kept days fit the series they were kept from, and only it',
+      NO.kept_days_fit(_rs, '2026-09-07', {'freq': 'weekly'})
+      and not NO.kept_days_fit(_rs, '2026-09-14', {'freq': 'weekly'})
+      and not NO.kept_days_fit(_rs, '2026-09-07', {'freq': 'daily'})
+      and NO.kept_days_fit(dict(_rs, _prev=None), '2026-09-14', {'freq': 'weekly'}))
+_rs_code = NO.apply_shared_update(copy.deepcopy(_rs), {
+    'uid': 'kept-days-restart', 'title': 'Gym', 'body': 'x', 'date': '2026-09-14',
+    'recurrence': {'freq': 'weekly'}})
+check(f'...a share code restarting it from another date drops only the deleted days, '
+      f'kept in its copy ({_rs_code.get("exceptions")}, '
+      f'{(_rs_code.get("_prev") or {}).get("exceptions")}, '
+      f'{sorted(_rs_code.get("overrides") or {})})',
+      _rs_code.get('exceptions') == []
+      and (_rs_code.get('_prev') or {}).get('exceptions') == ['2026-09-14']
+      and '2026-09-21' in (_rs_code.get('overrides') or {})
+      and '2026-09-14' in [str(x) for x in NO.expand_occurrences(
+          _rs_code, date(2026, 9, 1), date(2026, 9, 30))])
 
 
 print()

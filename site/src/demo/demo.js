@@ -277,7 +277,7 @@
     } else if (rec.freq === "monthly" && rec.month_days.length) {
       base += " on day " + rec.month_days.join(", ");
     }
-    if (rec.count) base += ", " + rec.count + " times";
+    if (rec.count) base += ", " + rec.count + (rec.count === 1 ? " time" : " times");
     else if (rec.end) base += ", until " + showDate(rec.end);
     return base;
   }
@@ -534,7 +534,7 @@
     var welcome = add({
       title: "Welcome to the demo \u{1F44B}", pinned: true,
       html: "<div>This page is a re-creation of Note Organizer's interface, so you can try it " +
-        "without installing anything. The real app is a Windows program; what you do here is " +
+        "without installing anything. The real app is a Windows 11 program; what you do here is " +
         "kept in this browser only.</div><div><br></div>" +
         "<div><b>\u{1F4DD} Write</b></div><ul><li><b>+ New Note</b> starts a note. Give it a title " +
         "and write; it saves itself as you go.</li><li>The toolbar shapes your words: bold, " +
@@ -1293,8 +1293,8 @@
     });
     // The two lists show what the text at the caret wears, as the app's do.
     var font = fontAtCaret(), family = $("#tb-family .tb-label"), size = $("#tb-size .tb-label");
-    if (family) family.textContent = font.family || "Default";
-    if (size) size.textContent = font.size ? String(font.size) : "Default";
+    if (family) family.textContent = font.family || "Font";
+    if (size) size.textContent = font.size ? String(font.size) : "Size";
   }
 
   function updateCount() {
@@ -1336,13 +1336,14 @@
       tool(t[1], t[2], function () { exec(t[0]); }, { class: "tb " + t[3], "data-state": t[0], "aria-pressed": "false" });
     });
     newGroup();
-    // Font and size, as the app's two lists: "Default" first, which is the
-    // editor's own and stores nothing.
-    function chooser(id, title, choices, show, pick) {
-      var btn = tool(el("span", null, el("span", { class: "tb-label", text: "Default" }), el("span", { class: "tb-caret", text: "▾" })),
+    // Font and size, as the app's two lists: unchosen, each says what it is
+    // for; "Default font" or "Default size" first, the editor's own, which
+    // stores nothing.
+    function chooser(id, title, unset, listed, choices, show, pick) {
+      var btn = tool(el("span", null, el("span", { class: "tb-label", text: unset }), el("span", { class: "tb-caret", text: "▾" })),
         title, function () {
           rememberRange();
-          popup([menuItem("Default", function () { pick(null); })].concat(choices.map(function (c) {
+          popup([menuItem(listed, function () { pick(null); })].concat(choices.map(function (c) {
             var item = menuItem(String(c), function () { pick(c); });
             show(item, c);
             return item;
@@ -1350,9 +1351,9 @@
         }, { id: id, class: "tb tb-select", "aria-haspopup": "menu" });
       return btn;
     }
-    chooser("tb-family", "Font", A.fontFamilies,
+    chooser("tb-family", "Font", "Font", "Default font", A.fontFamilies,
       function (item, f) { item.style.fontFamily = '"' + f + '"'; }, applyFontFamily);
-    chooser("tb-size", "Font size", A.fontSizes, function () {}, applyFontSize);
+    chooser("tb-size", "Font size", "Size", "Default size", A.fontSizes, function () {}, applyFontSize);
     newGroup();
     var colourBtn = tool(el("span", null, "A", el("span", { class: "bar", vars: { "--bar": "#e63946" } })), "Text colour", function () {
       rememberRange();
@@ -1435,7 +1436,7 @@
 
     if (rec.freq) {
       inner.appendChild(el("div", { class: "ed-banner",
-        text: "\u{1F501} This note repeats (" + describeRec(rec) + ") — edits here apply to every day" }));
+        text: "\u{1F501} This note repeats (" + describeRec(rec) + ") — edits here apply to the whole series" }));
     }
 
     var title = el("input", { id: "ed-title", class: "ed-title", type: "text", placeholder: "Title",
@@ -1443,9 +1444,6 @@
     title.value = n.title;
     title.addEventListener("input", function () { n.title = title.value; touched(); });
     title.addEventListener("focus", function () { lastField = title; });
-    title.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); $("#ed-body").focus(); }
-    });
     var catBtn = el("button", { type: "button", class: "ed-cat", "aria-haspopup": "menu", "aria-label": "Category: " + cat.name,
       onclick: function () {
         var items = S.categories.map(function (c) {
@@ -1912,7 +1910,7 @@
         var left = Math.max(0, TRASH_DAYS - Math.floor((Date.now() - t.deletedAt) / 86400000));
         list.appendChild(el("div", { class: "trash-row" },
           el("div", { class: "tr-text" }, el("b", { text: t.note.title || "Untitled" }),
-            el("small", { text: "deleted " + showDate(iso(new Date(t.deletedAt))) + " · " + left + " day(s) left" })),
+            el("small", { text: "deleted " + showDate(iso(new Date(t.deletedAt))) + " · " + left + (left === 1 ? " day left" : " days left") })),
           el("button", { type: "button", class: "btn-accent small", onclick: function () { restore(i); } }, "Restore"),
           el("button", { type: "button", class: "btn-danger small", onclick: function () { deleteForever(i); } }, "Delete")));
       });
@@ -1926,14 +1924,14 @@
       body.appendChild(el("p", { class: "lead", text: "The ones this demo knows. The desktop app has more, listed on this same page." }));
       var rowsK = [["Ctrl+S", "Save now"], ["Ctrl+B / Ctrl+I / Ctrl+U", "Bold / italic / underline"],
                    ["Ctrl+Z", "Undo, in the note"], ["↑ ↓", "Walk the note list, and the items of a menu"],
-                   ["Enter", "From the title, go to the note's text"], ["Esc", "Close a menu or a question"]];
+                   ["Esc", "Close a menu or a question"]];
       var table = el("table", { class: "kbd-table" });
       rowsK.forEach(function (r) { table.appendChild(el("tr", null, el("td", null, el("kbd", { text: r[0] })), el("td", { text: r[1] }))); });
       body.appendChild(el("div", { class: "set-panel" }, table));
     } else {
       body.appendChild(el("h2", { text: "About this demo" }));
       body.appendChild(el("div", { class: "set-panel about" },
-        el("p", { text: "Note Organizer is a desktop app for Windows, written in Python with Tkinter. A browser cannot run it, so this page is a re-creation of its interface in HTML and JavaScript, written to let you try the everyday parts without installing anything." }),
+        el("p", { text: "Note Organizer is a desktop app for Windows 11, written in Python with Tkinter. A browser cannot run it, so this page is a re-creation of its interface in HTML and JavaScript, written to let you try the everyday parts without installing anything." }),
         el("p", { text: "Where the app has an exact rule, the demo follows it, taken from the app's own code: the eight themes and the arithmetic that picks readable letters on every colour, how a repeating note lands on the calendar, the order of each sort, the share-code format, and the fonts, sizes and indent the formatting bar offers." }),
         el("p", { text: "Only in the desktop app: attachments, templates, backups to another computer, statistics, finding duplicates, editing a single day of a repeating note, a list you arrange by hand, find-in-note, and a calculator." }),
         el("p", null, "It mirrors version " + A.version + ". Everything you type is kept in this browser's storage, on this device, and nowhere else. ",

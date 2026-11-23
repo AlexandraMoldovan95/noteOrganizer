@@ -9,8 +9,8 @@ the first thing to notice was CI -- twenty minutes and one push later.
 
 CI's first step runs cheap, purely-static gates. There was never a
 reason to discover their verdict remotely; this script is those same
-gates, in the same order, on the machine where the fix is one keystroke
-away. It complements ``run_tests.py`` (the full suite in a safe scratch
+gates, in CI's order, plus the link check CI leaves out and a compile
+pass, on the machine where the fix is one keystroke away. It complements ``run_tests.py`` (the full suite in a safe scratch
 folder, minutes) -- this is the two-second half you run before EVERY
 push, that one is the real verdict you run before asking for one.
 
@@ -26,9 +26,11 @@ WHAT IT RUNS
    places, answered by a hand-rolled field list at each one. Every
    omission an adversarial review has caught in this project had that
    shape; this is the grep that catches it.
-4. ``check_doc_links`` and ``check_english`` -- anchors that still go
-   somewhere, and no Romanian in anything a reader of this repository
-   sees. The app's interface is English; the qa stories had drifted.
+4. ``check_doc_links``, ``check_test_plan`` and ``check_english`` --
+   anchors that still go somewhere, the test plan's numbers as the
+   documents give them, and no Romanian in anything a reader of this
+   repository sees. The app's interface is English; the qa stories had
+   drifted.
 5. ``check_agent_rules`` -- the agent's committed deny rules cover every
    script that wipes its working folder, in every spelling.
 6. ``check_comments`` -- no release named in the app's comments, every
@@ -36,7 +38,19 @@ WHAT IT RUNS
    keep their comments to a reason.
 7. ``check_contrast`` -- every theme's text against WCAG AA; the pairs
    still below it are listed, and the list can only shrink.
-8. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+8. ``check_mutant_targets`` -- every mutant in tools/mutants.json still
+   finds the code it mutates.
+9. ``check_shipped`` -- the Pillow CI tests is the one the .exe ships,
+   and the licenses the build bundles name it.
+10. ``check_guest`` -- every runner sets tools/guest.py's ceiling before it
+   starts anything and bounds its children; the ceiling and the
+   one-heavy-job turn are proved on this machine.
+11. ``check_workflows`` -- every workflow's token may only read, every
+   action is pinned to a commit, and no trigger hands a fork the
+   repository's rights.
+12. ``check_fix_mutants`` -- every commit that changes the app's code
+   names its mutant, or why it has none.
+13. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -47,8 +61,8 @@ USAGE
     py tools/pre_push_check.py
 
 Exits non-zero on the first failing gate, so it can sit in front of any
-push ritual. Read-only: nothing here writes, so there is nothing it can
-break.
+push ritual. It writes nothing in the repository (check_guest proves the
+machine's guards with stand-in folders in the temporary folder, removed).
 """
 
 import os
@@ -61,7 +75,11 @@ ROOT = os.path.dirname(HERE)
 
 def _run_gate(label, args):
     print("== %s" % label, flush=True)
-    proc = subprocess.run([sys.executable] + args, cwd=ROOT)
+    try:
+        proc = subprocess.run([sys.executable] + args, cwd=ROOT, timeout=600)
+    except subprocess.TimeoutExpired:
+        print("\nPRE-PUSH: HANG at '%s' -- it did not finish within 600 s." % label)
+        sys.exit(1)
     if proc.returncode != 0:
         print("\nPRE-PUSH: FAILED at '%s' -- fix it here, not on CI."
               % label)
@@ -69,6 +87,11 @@ def _run_gate(label, args):
 
 
 def main():
+    # The memory ceiling (tools/guest.py). No turn: these gates are small and
+    # quick, and never wait for a suite running elsewhere.
+    import guest
+    for line in guest.settle(heavy=False):
+        print(line)
     scanned = []
     for layer in ("core", "ui"):
         scanned += [os.path.join("noteorganizer", layer, f)
@@ -98,6 +121,9 @@ def main():
     # Cheap enough to run on every push rather than once a release.
     _run_gate("documentation links resolve",
               [os.path.join("tools", "check_doc_links.py")])
+    # The test plan's counts were copied into three documents by hand, and drifted.
+    _run_gate("the test plan counted right",
+              [os.path.join("tools", "check_test_plan.py")])
     # The work is discussed in Romanian and written down in English. The
     # qa stories crossed that line without anybody noticing, and every CI
     # run then printed Romanian check names into a public log.
@@ -114,10 +140,29 @@ def main():
     # Every theme's text measured against WCAG, and kept from getting worse.
     _run_gate("contrast measured",
               [os.path.join("tools", "check_contrast.py")])
+    # A mutant whose code moved finds nothing to mutate; CI refuses it.
+    _run_gate("mutants find their code",
+              [os.path.join("tools", "check_mutant_targets.py")])
+    _run_gate("what ships is what is tested",
+              [os.path.join("tools", "check_shipped.py")])
+    # Every runner settles first and bounds its children, the Linux image has
+    # one door, and the ceiling and the one-heavy-job turn hold here.
+    _run_gate("a test run is a guest",
+              [os.path.join("tools", "check_guest.py")])
+    # What CI may do: a token that only reads, actions pinned to a commit.
+    _run_gate("CI may only read",
+              [os.path.join("tools", "check_workflows.py")])
+    # A change to the app's code names its mutant, or why it has none.
+    _run_gate("every fix names its mutant",
+              [os.path.join("tools", "check_fix_mutants.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, timeout=120)
+    if listed.returncode != 0 or not listed.stdout.strip():
+        print("  git could not list the tracked files: %s" % listed.stderr.strip())
+        print("\nPRE-PUSH: FAILED at 'every tracked .py compiles'.")
+        sys.exit(1)
     bad = []
     for rel in listed.stdout.split():
         path = os.path.join(ROOT, rel)

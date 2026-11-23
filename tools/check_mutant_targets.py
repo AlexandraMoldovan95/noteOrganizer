@@ -4,7 +4,9 @@ tools/mutate.py reports a mutant whose text has gone as PATTERN -- but only
 when someone runs that mutant, and a run names the mutants it is asked for.
 A later fix split the two lines Q05 mutated, and for a day it guarded
 nothing without anyone being told. This reads the catalogue on every run of
-the gates: each "find" must occur exactly once in its file.
+the gates: each "find" must occur exactly once in its file, and a mutant
+expected to live, or killed only on one system ("only_on"), must say why in
+its note.
 
     py tools/check_mutant_targets.py
 """
@@ -20,6 +22,24 @@ def main():
     with io.open(os.path.join(ROOT, "tools", "mutants.json"), encoding="utf-8") as fh:
         entries = json.load(fh)
     sources, lost = {}, []
+    # An id is how a mutant is asked for: two with one id, and mutate.py ran
+    # both under it without a word (TB01 was given twice, 2026-10-27).
+    seen = set()
+    for entry in entries:
+        if entry["id"] in seen:
+            lost.append("%s: the id is used twice in the catalogue" % entry["id"])
+        seen.add(entry["id"])
+        # One left alive says why it may be, as the phone's catalogue does
+        # since one of its equivalents said only what it would do.
+        if entry.get("expect", "killed") != "killed" and not entry.get("note", "").strip():
+            lost.append("%s: expected to live (%s), with no note saying why" % (entry["id"], entry["expect"]))
+        # One that only a system can kill says why, and names a system the
+        # runner knows: misspelt, it is run nowhere (tools/mutate.py).
+        if "only_on" in entry:
+            if entry["only_on"] not in ("win32", "linux"):
+                lost.append("%s: only_on %r is not win32 or linux" % (entry["id"], entry["only_on"]))
+            if not entry.get("note", "").strip():
+                lost.append("%s: only_on %s, with no note saying why" % (entry["id"], entry["only_on"]))
     for entry in entries:
         for edit in entry["edits"]:
             path = os.path.join(ROOT, edit["file"])
@@ -34,11 +54,12 @@ def main():
     for line in lost:
         print("  " + line)
     if lost:
-        print("%d mutant(s) no longer find what they mutate: aim each at the "
-              "code as it is now, or drop it with the check it guarded."
+        print("%d problem(s) in the catalogue: aim each mutant at the code as it "
+              "is now, or drop it with the check it guarded; one left alive says why."
               % len(lost))
         return 1
-    print("Every one of the %d mutants finds the code it mutates." % len(entries))
+    print("Every one of the %d mutants has its own id and finds the code it mutates."
+          % len(entries))
     return 0
 
 

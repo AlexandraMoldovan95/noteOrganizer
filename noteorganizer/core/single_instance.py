@@ -1,48 +1,18 @@
 """One notebook, one app — an advisory lock on the data directory.
 
-WHY THIS EXISTS
----------------
-The whole notebook is read into memory once at startup and written back
-whole on every save. That is a perfectly good design for one process and
-a data-shredder for two: open the app twice (a taskbar pin, the Start
-menu while the window is minimised, a second double-click of the ``.exe``
-— all one careless moment) and both windows hold their own copy of the
-same file. Whichever autosaves last wins, and everything the other window
-wrote that session is gone, silently, with both windows still cheerfully
-showing it on screen.
-
-There was no guard of any kind before: no lock, no mtime check, no reload.
-A product reviewer reproduced the loss with two real windows in under a
-minute.
-
-WHY A FILE LOCK RATHER THAN A PID FILE
---------------------------------------
-A PID file has to answer "is that process still alive?", which is a
-different, worse question on every platform — and it goes stale the
-moment the app is killed rather than closed, leaving the user locked out
-of their own notes. An OS file lock is released by the kernel when the
-process dies, however it dies, so a crash cannot strand anybody.
-
-``msvcrt`` on Windows and ``fcntl`` elsewhere; both are standard library,
-which keeps the app's one-dependency promise.
-
-THE DELIBERATE FAILURE MODE
----------------------------
-If the lock cannot be *taken* for any reason other than "another process
-holds it" — a read-only folder where the file can't be created, or a
-filesystem that refuses byte-range locks outright (network shares and
-exotic mounts answer the locking call with EINVAL/ENOLCK/EOPNOTSUPP, not
-the open) — this reports success. Refusing to start because a *lock*
-failed would turn a cosmetic problem into "the app won't open", which is
-worse than the risk it guards against; the first version got this wrong
-by reading EVERY locking error as "already open", which permanently
-bricked the app on exactly those folders. Only the errnos that
-specifically mean "someone else holds it" refuse. The lock is advisory:
-it stops the ordinary accident, not a determined user.
+The notebook is read whole at start and written whole at every save, so two
+windows on one folder lose whatever the first saved. A file lock, not a PID
+file: the kernel releases it however the process dies, so a crash strands
+nobody (``msvcrt`` / ``fcntl``, standard library). The deliberate failure
+mode: a lock that cannot be *taken* for any reason but "another process
+holds it" -- a read-only folder, a filesystem with no byte-range locks --
+reports success, as refusing to start would be worse than the risk. The
+story: ISSUES_LOG: "Two windows, one file, and the last one to autosave wins".
 """
 
 import errno
 import os
+import time
 
 from . import paths
 
@@ -66,10 +36,18 @@ def acquire(path=None):
     if _held is not None:
         return True
     target = path or _lock_path()
-    try:
-        handle = open(target, "a+")
-    except (IOError, OSError):
-        return True  # see "the deliberate failure mode" above
+    for attempt in range(3):
+        try:
+            handle = open(target, "a+")
+            break
+        except (IOError, OSError) as exc:
+            # A sharing violation (open() says EACCES, the C runtime's errno)
+            # is another program holding the file a moment: tried again, as
+            # the data files are, failing open let a second window in.
+            if (getattr(exc, "winerror", None) != 32
+                    and getattr(exc, "errno", None) != errno.EACCES) or attempt == 2:
+                return True  # see "the deliberate failure mode" above
+            time.sleep(0.5)
     try:
         handle.seek(0)
         if os.name == "nt":
@@ -83,11 +61,9 @@ def acquire(path=None):
             handle.close()
         except (IOError, OSError):
             pass
-        # Only the errnos that mean "another process holds this byte"
-        # refuse: msvcrt answers EACCES (or EDEADLK after its retries),
-        # fcntl with LOCK_NB answers EAGAIN/EWOULDBLOCK. Every other
-        # errno is the filesystem saying it cannot do locking AT ALL,
-        # which must fail open — see the module docstring.
+        # Only "another process holds this byte" refuses: msvcrt's EACCES or
+        # EDEADLK, fcntl's EAGAIN/EWOULDBLOCK. Any other errno is a filesystem
+        # that cannot lock at all, which fails open (the module docstring).
         if getattr(exc, "errno", None) in (errno.EACCES, errno.EAGAIN,
                                            errno.EWOULDBLOCK, errno.EDEADLK):
             return False

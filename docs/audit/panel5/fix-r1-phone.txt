@@ -1,0 +1,23 @@
+# fix-r1-phone, the first round on the fixes, on Sonnet
+# started 2026-11-22 21:34 UTC
+
+You are an adversarial reviewer. Attack the fixes made after the review panel of 22 November on an Android notes app (Kotlin + Jetpack Compose, a port of a desktop Python app), repository D:\Projects\androidVersion, branch audit/a-val6. The commits, oldest first (read each with `git -C D:/Projects/androidVersion show <hash>`, and the code around every change):
+
+- 8285233 trash: the Undo opens the note again only if it was the open one (AppState.trash, `wasOpen`)
+- 0f13337 repeat: AppState.setRepeat goes through `outside(..., writes = false)`, so the editor is not read back and keeps its Undo/Redo — the claim is that Days.setRepeat writes no field the editor holds (title, body, date, category, colour, pin, formatting, comments, paragraphs): check it, on turning a series on, off, and changing its rule or start
+- 405d8cf appearance: the line under Light | Dark names the theme the other mode gives until a theme of it was chosen (Settings.wornInMode)
+- 7bbb957 backup: a ZipException is said as Backup.NOT_WHOLE
+- 865fca5 import: Importing.Outcome.alsoInTrash and importMessage's "It is in your Trash too"
+- e68c560 tables: the cell's field says once a cell that a "|" is kept as "/"
+- 4a5f054 large letters: the list's pills in a FlowRow, one line each; CategoryEditor and RepeatSheet buttons out of the scrolling column
+- b138a36 duplicates: plural resources for the counts
+- 88642cc attachments: Organizing.alreadyAttached, AppState.askAttachAgain (a question drawn in MainActivity), attachPicked's filtering and the empty-file word
+- 38b34ef, e01df1c: a workflow comment, and walk fixes (tools/emulator/walk.py)
+
+Look for, in each: an ordinary road where the fix does not hold (a sibling missed: the same question asked elsewhere — another sheet with buttons under a scroll, another place a "|" or a count is written, another Undo that opens a note), a regression in a feature it crosses (tables, a series and a day of it, attachments, formatting, the Trash and its Undo, a share code or import arriving over the open note, the editor's Undo, a wide screen with two panes, rotation, the app ended behind the picker), state left behind or a question left waiting (askAttachAgain when the editor closes, the app is sent to the background, or a second pick arrives while one waits), words untrue in some case, and a unit test, walk check or mutant (tools/mutants.json AS876–AS892) that does not guard what it claims.
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run gradle, adb, an emulator, tools/mutate.py, tools/emulator/*.py or anything that builds or starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict per commit (holds / does not hold); then "Not covered".

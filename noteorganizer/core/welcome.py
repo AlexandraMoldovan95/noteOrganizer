@@ -1,32 +1,20 @@
 """The note a brand-new notebook opens with.
 
-WHO SEES IT
------------
 A notebook that did not exist until this launch -- a first install -- opens
-on this note, once. One that was upgraded, moved in from an older folder,
-or emptied by hand never sees it: each of those has a notes file already.
-Settings -> About offers it again, for whoever deleted it and wants it back.
-
-WHY IT IS BUILT HERE
---------------------
-So it can be checked without a window, and so it is stored exactly as the
-editor itself would have stored it had it been typed: the list markers in
-the text, bold as character spans, the bullet lines as paragraph entries
-(``formatting.py`` explains that shape). The words are the owner's, worded
-with her over three drafts: every main feature once, none twice.
+on it, once; an upgraded, moved-in or emptied one has a notes file already
+and never sees it. Settings -> About offers it again. Built here to be
+checked without a window, and stored as the editor would have stored it
+typed: list markers in the text, bold as spans, bullets as paragraph entries
+(``formatting.py`` explains that shape). The words are the owner's.
 """
 
 from .formatting import BULLET
 
 TITLE = "Welcome to Note Organizer 👋"
 
-# The text, a line at a time: "# " starts a heading, "- " a bullet, "" is a
-# blank line and anything else a paragraph. **Double asterisks** make bold.
-# No icon carries the emoji variation selector (U+FE0F): Tk draws it as a
-# blank the width of two letters, after the icon. And every heading's icon
-# is from the emoji block (U+1F000 up), which only the emoji font draws: Tk
-# finds an older symbol such as ℹ or ✍ in the text font, as narrow as a
-# letter, and its title then starts left of the others.
+# A line at a time: "# " a heading, "- " a bullet, "" a blank, else a
+# paragraph; **double asterisks** bold. No U+FE0F (Tk draws a blank after
+# it); heading icons from the emoji block, so every title starts level.
 LINES = (
     "Hi, and welcome! This is your own space for everything worth keeping: "
     "ideas, plans, lists, recipes, the things you don't want to forget. It "
@@ -69,7 +57,7 @@ LINES = (
     "",
     "# 🛡 Your privacy",
     "- The app collects nothing and sends nothing anywhere. A note leaves "
-    "this computer only when you share it or save a backup.",
+    "this computer only when you share or export it, or save a backup.",
     "- **Settings → About → Privacy policy** has the whole of it.",
     "",
     "# 🎨 Make it yours",

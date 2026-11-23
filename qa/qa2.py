@@ -162,7 +162,7 @@ app.show_day_summary_tooltip(_D13)
 app.update()
 _lbls = _tip_labels()
 check('the day tooltip lists both titles under a 2-note header',
-      _lbls is not None and any('2 note(s)' in t for t in _lbls)
+      _lbls is not None and any('2 notes' in t for t in _lbls)
       and any('ZiNota0' in t for t in _lbls)
       and any('ZiNota1' in t for t in _lbls))
 app.hide_day_tooltip()
@@ -883,11 +883,8 @@ app.group_by_category.set(True)
 # the wrong order.
 app.sort_var.set(next(o for o in app.SORT_OPTIONS if o.startswith('Title A')))
 app.refresh_note_list(); app.update()
-_b3_order = [n['title'] for n in app._visible_notes_in_order()] \
-    if hasattr(app, '_visible_notes_in_order') else None
-if _b3_order is None:
-    # The cards in the order they are drawn, top to bottom.
-    _b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
+# The cards in the order they are drawn, top to bottom.
+_b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
 check('sorting A-Z orders the notes inside each group (plan 83)',
       _b3_order == ['Delta', 'Gamma', 'Alpha', 'Beta']
       or _b3_order == ['Alpha', 'Beta', 'Delta', 'Gamma'])
@@ -1054,6 +1051,912 @@ check('...and the editor reads as saved afterwards',
 app.ask_yes_no = _od_yes
 app.new_note(); app.update()
 app.notes = _od_saved
+app.save_notes()
+
+# ---- LONG LISTS SCROLL TO THEIR END ----
+# Every long list was one frame on a canvas, and
+# Tk keeps a canvas window's place in 16 bits, so none scrolled past about
+# 32,767 px (ISSUES_LOG: "The list that ended in the middle"). Each list here
+# runs past that -- reaches_the_end refuses one that does not -- and is
+# asked for its last row, which is then pressed or ticked from the keyboard.
+import time
+from _qa_support import reaches_the_end as _ll_reaches
+
+
+def _ll_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+def _ll_all(w):
+    for c in w.winfo_children():
+        yield c
+        yield from _ll_all(c)
+
+
+def _ll_focus(widget):
+    """The keyboard on *widget*, by Tk's own record: True once it is."""
+    try:
+        widget.focus_force()
+    except tk.TclError:
+        return False
+    for _ in range(60):
+        app.update()
+        if str(app.tk.call('focus')) == str(widget):
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def _ll_in_view(w, canvas):
+    top = w.winfo_rooty() - canvas.winfo_rooty()
+    return (bool(w.winfo_viewable()) and 0 <= top
+            and top + w.winfo_height() <= canvas.winfo_height())
+
+
+def _ll_stack_canvas(top):
+    return next((c for c in _ll_all(top)
+                 if getattr(c, '_row_stack', None) is not None), None)
+
+
+def _ll_text(row, needle=''):
+    return next((c for c in _ll_all(row) if isinstance(c, tk.Label)
+                 and needle in str(c.cget('text'))), None)
+
+
+def _ll_note(i, **fields):
+    return NO.normalize_note(dict({'id': i, 'title': f'Note {i}', 'body': '',
+                                   'category': 'General'}, **fields))
+
+
+_ll_kept = (list(app.notes), list(app.templates), list(app.trash))
+_ll_yes = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: False
+_ll_toasts = []
+app._show_toast = lambda *a, **k: _ll_toasts.append(k.get('action'))
+_LL_WORDS = ('steady ' * 290)[:1990]       # as long as an item may be
+
+
+# The note's checklist: 100 items of 1,000 letters, each row some hundreds of
+# px tall -- on Linux taller than the list's own view.
+app.notebook.select(app.TAB_NOTES)
+app.new_note(); _ll_settle()
+app._working_checklist = [{'text': f'{i:03d} {_LL_WORDS[:996]}', 'done': False}
+                          for i in range(100)]
+if app._checklist_open:
+    app._render_checklist_items()
+else:
+    app.toggle_checklist_section()
+_ll_settle(10)
+_ll_rows = app._checklist_rows.rows()
+_ll_box = (next((c for c in _ll_rows[-1].winfo_children()
+                 if isinstance(c, tk.Checkbutton)), None) if _ll_rows else None)
+_ll_ok, _ll_said = (_ll_reaches(app, app._checklist_canvas, _ll_rows[-1], _ll_settle)
+                    if _ll_box is not None else (False, 'no rows'))
+_ll_ticked = False
+if _ll_ok and _ll_focus(_ll_box):
+    # Where Tab would put it: the box stands in its row's middle.
+    app._bring_into_sight(_ll_box); _ll_settle(2)
+    _ll_box.event_generate('<space>')
+    _ll_settle(2)
+    _ll_ticked = (app._working_checklist[-1]['done'] is True
+                  and _ll_in_view(_ll_box, app._checklist_canvas))
+check(f'a note\'s checklist longer than one frame can scroll shows its last item '
+      f'at its end, and Space ticks it there ({_ll_said}; ticked: {_ll_ticked})',
+      _ll_ok and _ll_ticked)
+
+
+def _ll_cl_label(r):
+    return next((c for c in r.winfo_children() if isinstance(c, tk.Label)
+                 and '▲' not in str(c.cget('text'))), None)
+
+
+def _ll_cl_shown():
+    """The items as drawn, chunk by chunk in packing order; as Tab walks."""
+    drawn = [str(_ll_cl_label(r).cget('text'))
+             for c in app._checklist_rows.chunks for r in c.pack_slaves()]
+    walked = [str(_ll_cl_label(r).cget('text')) for r in app._checklist_rows.rows()]
+    return drawn, walked
+
+
+# A row cannot leave its chunk: Alt+Down over the edge of one makes both rows
+# again, each in the other's place, and the keyboard goes with the item.
+# Short items to a chunk, as the list says -- at most 64 here: a mutant that
+# makes the list one frame says 10 ** 9, and the fixtures below were built
+# that long, so the suite never reached its end.
+_LL_N = min(app._checklist_rows.every, 64)
+app._working_checklist = [{'text': f'item {i}', 'done': False}
+                          for i in range(2 * _LL_N)]
+app._render_checklist_items(); _ll_settle()
+_ll_chunks = [len(c.winfo_children()) for c in app._checklist_rows.chunks]
+_ll_b3 = next(c for c in app._checklist_rows.rows()[_LL_N - 1].winfo_children()
+              if isinstance(c, tk.Checkbutton))
+_ll_moved = None
+if _ll_focus(_ll_b3):
+    _ll_b3.event_generate('<Alt-Down>')
+    _ll_settle(2)
+    _ll_moved = _ll_cl_shown()
+_ll_want = [f'item {i}' for i in range(2 * _LL_N)]
+_ll_want[_LL_N - 1], _ll_want[_LL_N] = _ll_want[_LL_N], _ll_want[_LL_N - 1]
+_ll_now = app._checklist_rows.rows()[_LL_N]
+check(f'Alt+Down over the edge of a chunk moves the item, drawn and walked in '
+      f'its new order, the keyboard with it (chunks {_ll_chunks}; '
+      f'{_ll_moved and _ll_moved[0][_LL_N - 2:_LL_N + 2]})',
+      _ll_chunks == [_LL_N, _LL_N]
+      and [it['text'] for it in app._working_checklist] == _ll_want
+      and _ll_moved == (_ll_want, _ll_want)
+      and str(app.tk.call('focus')) == str(next(
+          (c for c in _ll_now.winfo_children() if isinstance(c, tk.Checkbutton)),
+          None)))
+
+
+def _ll_bin_of(row):
+    return next((c for c in row.winfo_children()
+                 if isinstance(c, tk.Button) and '🗑' in str(c.cget('text'))), None)
+
+
+def _ll_delete_undo(count, at, first_empty=0):
+    """Item *at* of *count* deleted by its bin and put back by the toast's
+    Undo -- after the bins of the *first_empty* items from *at* on emptied
+    its chunk down to it: (chunk sizes, the items in order, its chunk)."""
+    app._working_checklist = [{'text': f'item {i}', 'done': False}
+                              for i in range(count)]
+    app._render_checklist_items(); _ll_settle()
+    for _ in range(first_empty):
+        _ll_bin_of(app._checklist_rows.rows()[at]).invoke()
+    _ll_settle(2)
+    kept = [it['text'] for it in app._working_checklist]
+    del _ll_toasts[:]
+    _ll_bin_of(app._checklist_rows.rows()[at]).invoke(); _ll_settle(2)
+    if _ll_toasts and callable(_ll_toasts[-1]):
+        _ll_toasts[-1](); _ll_settle(2)
+    back = app._checklist_rows.rows()[at].master
+    return ([len(c.winfo_children()) for c in app._checklist_rows.chunks],
+            _ll_cl_shown() == (kept, kept),
+            next((k for k, c in enumerate(app._checklist_rows.chunks)
+                  if c is back), None))
+
+
+# An item deleted and put back stands where it was, in a chunk with room for
+# it: at the end of a chunk, first in the next, alone at the list's end, and
+# alone in a chunk between two full ones. Put back into the chunk before, a
+# chunk's first item grew that chunk at every delete and Undo, until it was
+# taller than where a chunk is parked, and hung over the list.
+_ll_undo = {'end of a chunk': _ll_delete_undo(2 * _LL_N, _LL_N - 1),
+            'first of a chunk': _ll_delete_undo(2 * _LL_N, _LL_N),
+            'alone at the end': _ll_delete_undo(2 * _LL_N + 1, 2 * _LL_N),
+            'alone between': _ll_delete_undo(3 * _LL_N, _LL_N, _LL_N - 1)}
+check(f'an item deleted at the end of a chunk and put back stands there again, '
+      f'as one first in its chunk or alone in it does ((chunk sizes, in order, '
+      f'its chunk): {_ll_undo})',
+      _ll_undo == {'end of a chunk': ([_LL_N, _LL_N], True, 0),
+                   'first of a chunk': ([_LL_N, _LL_N], True, 1),
+                   'alone at the end': ([_LL_N, _LL_N, 1], True, 2),
+                   'alone between': ([_LL_N, 1, _LL_N], True, 1)})
+
+
+def _ll_after_space(widget):
+    """Space on *widget*, from the keyboard, and the widget holding it after:
+    Tk runs a button's command 100 ms after the key."""
+    if not _ll_focus(widget):
+        return None
+    widget.event_generate('<space>')
+    for _ in range(25):
+        app.update()
+        time.sleep(0.02)
+    try:
+        return app.nametowidget(str(app.tk.call('focus')))
+    except (KeyError, tk.TclError):
+        return None
+
+
+def _ll_row_text(widget, needle):
+    """The words of the row *widget* stands in, or what holds the keyboard."""
+    label = _ll_text(widget.master, needle) if widget is not None else None
+    return str(label.cget('text')) if label is not None else str(widget)[-30:]
+
+
+def _ll_bin_by_key(count, at):
+    app._working_checklist = [{'text': f'item {i}', 'done': False}
+                              for i in range(count)]
+    app._render_checklist_items(); _ll_settle()
+    held = _ll_after_space(_ll_bin_of(app._checklist_rows.rows()[at]))
+    return _ll_row_text(held, 'item ') if isinstance(held, tk.Button) else str(held)[-30:]
+
+
+# Space on a bin: the keyboard goes to the bin drawn in its place -- the next
+# item's, or the new last one's -- wherever the item stood among the chunks.
+# Its place was a place in its chunk: alone in the last one, the chunk went,
+# and the keyboard went to the chunk before's FIRST item, which the next
+# Space removed.
+_LL_E = 2 * _LL_N
+_ll_keys = {'the first': _ll_bin_by_key(_LL_E, 0),
+            'end of a chunk': _ll_bin_by_key(_LL_E, _LL_N - 1),
+            'first of a chunk': _ll_bin_by_key(_LL_E, _LL_N),
+            "the list's last": _ll_bin_by_key(_LL_E, _LL_E - 1),
+            'alone at the end': _ll_bin_by_key(_LL_E + 1, _LL_E)}
+check(f'Space on a checklist bin hands the keyboard to the bin in its place, '
+      f'or to the last, at every place among the chunks ({_ll_keys})',
+      _ll_keys == {'the first': 'item 1', 'end of a chunk': f'item {_LL_N}',
+                   'first of a chunk': f'item {_LL_N + 1}',
+                   "the list's last": f'item {_LL_E - 2}',
+                   'alone at the end': f'item {_LL_E - 1}'})
+
+# A chunk out of sight is parked beside the list, never over it, however tall
+# it has grown; and one scrolled further into than its parking place stands at
+# its true place. Parked only above, a chunk taller than its 20,000 px hung
+# down over the rows in sight, and one scrolled 20,000 px into was drawn short
+# of where it stood, its last rows never shown. TALLEST is lifted here, so
+# long items make chunks that tall, as the fonts on each system decide.
+_LLS = type(app._checklist_rows.stack)
+_ll_tallest, _ll_every = _LLS.TALLEST, app._checklist_rows.every
+_ll_park = {}
+try:
+    _LLS.TALLEST = 10 ** 9
+    app._working_checklist = [{'text': f'000 {_LL_WORDS}', 'done': False}]
+    app._render_checklist_items(); _ll_settle(6)
+    _ll_h = max(1, app._checklist_rows.rows()[0].winfo_height())
+    _ll_k = app._checklist_rows.every = max(2, int(25_000 // _ll_h) + 1)
+    app._working_checklist = [{'text': f'{i:03d} {_LL_WORDS}', 'done': False}
+                              for i in range(3 * _ll_k)]
+    app._render_checklist_items(); _ll_settle(10)
+    _ll_stk, _ll_cv = app._checklist_rows.stack, app._checklist_canvas
+    _ll_stk.size(); _ll_settle(4)
+    _ll_hs = [c.winfo_height() for c in app._checklist_rows.chunks]
+    _ll_park['chunks'] = _ll_hs
+
+    def _ll_overlaps_view(c):
+        """Whether *c* is drawn anywhere in the canvas's view."""
+        x, y = c.winfo_x(), c.winfo_y()
+        return (x < _ll_cv.winfo_width() and x + c.winfo_width() > 0
+                and y < _ll_cv.winfo_height() and y + c.winfo_height() > 0)
+
+    def _ll_out_of_view(c):
+        box, top = _ll_stk.box(c), _ll_cv.canvasy(0)
+        return box[3] <= top or box[1] >= top + _ll_cv.winfo_height()
+
+    if len(_ll_hs) == 3 and all(_LLS.PARK < h < 32_000 for h in _ll_hs):
+        _ll_cv.yview_moveto(0); _ll_settle(4)
+        _ll_park['parked over the view'] = [
+            k for k, c in enumerate(app._checklist_rows.chunks)
+            if _ll_out_of_view(c) and _ll_overlaps_view(c)]
+        _ll_c1 = app._checklist_rows.chunks[1]
+        _ll_cv.yview_moveto((_ll_stk.box(_ll_c1)[1] + _LLS.PARK + 1000) / _ll_stk.total)
+        _ll_settle(6)
+        _ll_top = _ll_cv.canvasy(0)
+        _ll_park['rows in sight, true and drawn'] = [
+            (int(_ll_stk.box(_ll_c1)[1] + r.winfo_y() - _ll_top),
+             r.winfo_rooty() - _ll_cv.winfo_rooty())
+            for r in _ll_c1.winfo_children()
+            if -r.winfo_height() < _ll_stk.box(_ll_c1)[1] + r.winfo_y() - _ll_top
+            < _ll_cv.winfo_height()]
+finally:
+    _LLS.TALLEST, app._checklist_rows.every = _ll_tallest, _ll_every
+check(f'a chunk taller than its parking place is parked beside the list, not over '
+      f'it, and stands at its true place when scrolled further into ({_ll_park})',
+      _ll_park.get('parked over the view') == []
+      and len(_ll_park.get('rows in sight, true and drawn', [])) >= 1
+      and all(abs(t - d) <= 2 for t, d in _ll_park['rows in sight, true and drawn']))
+
+# ...and a list of tall items is built in chunks that stay inside 16 bits:
+# thirty-two items of 100 lines made one chunk past the 32,767 px X and
+# Windows place a window within. A chunk takes no row more once it is
+# RowStack.TALLEST tall, by its rows' heights as they are made.
+app._working_checklist = [{'text': f'{i:02d} ' + 'line\n' * 99 + 'end', 'done': False}
+                          for i in range(40)]
+app._render_checklist_items(); _ll_settle(10)
+app._checklist_rows.stack.size(); _ll_settle(4)
+_ll_hs = [c.winfo_reqheight() for c in app._checklist_rows.chunks]
+_ll_rows = app._checklist_rows.rows()
+_ll_ok, _ll_said = _ll_reaches(app, app._checklist_canvas, _ll_rows[-1], _ll_settle)
+check(f'a checklist of 40 items of 100 lines is built in chunks inside 16 bits, '
+      f'its last item drawn at its end ({_ll_said}; {len(_ll_hs)} chunks, the '
+      f'tallest {max(_ll_hs)} px)',
+      _ll_ok and max(_ll_hs) < 32_767 and len(_ll_hs) > 2)
+
+# ...and long items moved together by the keyboard do not gather in one chunk:
+# each trade over a chunk's edge brings one in, and enough of them passed what
+# X and Windows can place. Past four times TALLEST the rows are chunked again.
+# TALLEST is lowered here, so two items of 100 lines are enough. The move asks
+# at once: a restack's own chunking again comes once for each width, and is
+# taken here as spent, as it is after a window narrowed.
+_ll_tall = 'line\n' * 99 + 'end'
+app._working_checklist = (
+    [{'text': f's{i}', 'done': False} for i in range(3)]
+    + [{'text': f'Ta {_ll_tall}', 'done': False}, {'text': f'Tb {_ll_tall}', 'done': False}]
+    + [{'text': f's{i}', 'done': False} for i in range(5, 8)])
+_ll_grp = app._checklist_rows
+_ll_gather = {}
+try:
+    _LLS.TALLEST = 600
+    app._render_checklist_items(); _ll_settle(6)
+    _ll_grp.rechunked = True
+    _ll_gather['chunks made'] = [len(c.winfo_children()) for c in _ll_grp.chunks]
+
+    def _ll_box_of(prefix):
+        rec = next(r for r in app._checklist_drawn['rows']
+                   if r[0]['text'].startswith(prefix))
+        return next(c for c in rec[1].winfo_children() if isinstance(c, tk.Checkbutton))
+
+    for _ll_who in ('Tb', 'Tb', 'Ta'):
+        _ll_b = _ll_box_of(_ll_who)
+        if _ll_focus(_ll_b):
+            _ll_b.event_generate('<Alt-Up>')
+            _ll_settle(3)
+    _ll_gather['order'] = [it['text'][:2] for it in app._working_checklist]
+    _ll_gather['tallest chunk'] = max(_ll_grp.height(c) for c in _ll_grp.chunks)
+    _ll_gather['keyboard on Ta'] = str(app.tk.call('focus')) == str(_ll_box_of('Ta'))
+finally:
+    _LLS.TALLEST = _ll_tallest
+    _ll_grp.rechunked = False
+check(f'long checklist items moved together by Alt+Up are chunked again before '
+      f'one chunk holds them all ({_ll_gather})',
+      _ll_gather.get('chunks made') == [4, 1, 3]
+      and _ll_gather.get('order') == ['s0', 's1', 'Tb', 'Ta', 's2', 's5', 's6', 's7']
+      and _ll_gather.get('tallest chunk', 10 ** 9) <= 4 * 600
+      and _ll_gather.get('keyboard on Ta') is True)
+
+# A chunk was measured once, as its rows were made, and never again.
+# Long items gathered by moves in a wide window, then narrowed, wrapped again
+# and stood 2.7 times what the chunk was taken for -- past what X places, and
+# the list was blank 32,767 px into it while Space ticked an item there. Here
+# a block whose rows grew past four times TALLEST is chunked again, cut where
+# its rows as they now stand reach TALLEST, the keyboard on the item it held;
+# each chunk's height is read as its rows stand, after a wider window too and
+# after a row grown by a route that says nothing. The thirty items are made
+# one chunk, as moves gathered them, TALLEST lifted; then TALLEST is set where
+# four times it lies between the chunk's height wide and narrow, as measured.
+_ll_geo = app.geometry()
+_ll_grow = {}
+_ll_rebuilds = []
+_ll_grp = app._checklist_rows
+_ll_rebuild = _ll_grp.rebuild
+
+
+def _ll_rebuild_seen():
+    _ll_rebuilds.append({'tallest before': max(c.winfo_reqheight()
+                                               for c in _ll_grp.chunks),
+                         'top before': app._checklist_canvas.canvasy(0)})
+    _ll_rebuild()
+    _ll_rebuilds[-1]['top after'] = app._checklist_canvas.canvasy(0)
+
+
+def _ll_honest():
+    """Each chunk's rows above its last, as they stand: under TALLEST."""
+    return [sum(r.winfo_reqheight() for r in c.pack_slaves()[:-1])
+            for c in _ll_grp.chunks]
+
+
+def _ll_measured():
+    """(read, standing) for each chunk: what the stack reads and what is."""
+    return [(_ll_grp.height(c), c.winfo_reqheight()) for c in _ll_grp.chunks]
+
+
+def _ll_one_row(text):
+    app._working_checklist = [{'text': text, 'done': False}]
+    app._render_checklist_items(); _ll_settle(10)
+    return app._checklist_rows.rows()[0].winfo_reqheight()
+
+
+_ll_long = ('plan the garden beds, ' * 30)[:600]
+_ll_tall_t = 600
+try:
+    _ll_grp.rebuild = _ll_rebuild_seen
+    # The editor's narrowest: beside the sidebar, at the window's floor.
+    app.geometry('900x600'); _ll_settle(10)
+    _ll_grow['a long row, narrow'] = _ll_one_row('L0 ' + _ll_long)
+    app.geometry('1400x900'); _ll_settle(10)
+    _ll_grow['a long row, wide'] = _ll_one_row('L0 ' + _ll_long)
+    _LLS.TALLEST = 10 ** 9
+    app._working_checklist = (
+        [{'text': f'L{i} {_ll_long}', 'done': False} for i in range(6)]
+        + [{'text': f's{i:02d}', 'done': False} for i in range(24)])
+    app._render_checklist_items(); _ll_settle(10)
+    _ll_grow['gathered, wide'] = _ll_wide = max(c.winfo_reqheight()
+                                                for c in _ll_grp.chunks)
+    _ll_narrow = _ll_wide + 6 * (_ll_grow['a long row, narrow']
+                                 - _ll_grow['a long row, wide'])
+    _ll_tall_t = _LLS.TALLEST = max(50, (_ll_wide + _ll_narrow) // 8)
+    _ll_grow['TALLEST'] = _ll_tall_t
+    _ll_held = next(r for r in app._checklist_drawn['rows']
+                    if r[0]['text'].startswith('L3 '))
+    _ll_hb = next(c for c in _ll_held[1].winfo_children()
+                  if isinstance(c, tk.Checkbutton))
+    _ll_grow['keyboard on L3'] = _ll_focus(_ll_hb)
+    app._bring_into_sight(_ll_hb); _ll_settle(4)
+    del _ll_rebuilds[:]
+    app.geometry('900x600'); _ll_settle(30)
+    app._checklist_rows.stack.size(); _ll_settle(4)
+    _ll_grow['rebuilds'] = _ll_rebuilds[:]
+    _ll_grow['tallest of many rows'] = max(
+        [c.winfo_reqheight() for c in _ll_grp.chunks if len(c.winfo_children()) > 1]
+        or [0])
+    _ll_grow['above the last'] = max(_ll_honest())
+    # By the window's own record: under Xvfb, with no window manager, the
+    # resize takes the display's keyboard from the app, and "focus" says "".
+    _ll_now = next((r for r in app._checklist_drawn['rows'] if r[0] is _ll_held[0]), None)
+    _ll_grow['keyboard still on L3'] = _ll_now is not None and str(
+        app.tk.call('focus', '-lastfor', app)) == str(next(
+            c for c in _ll_now[1].winfo_children() if isinstance(c, tk.Checkbutton)))
+    app.geometry('1400x900'); _ll_settle(20)
+    app._checklist_rows.stack.size(); _ll_settle(4)
+    _ll_grow['read as it stands, wide again'] = all(
+        abs(r - s) <= 4 for r, s in _ll_measured())
+    # A row grown by a route that says nothing of it: its words drawn larger.
+    _ll_big = next(c for c in _ll_grp.rows()[0].winfo_children()
+                   if isinstance(c, tk.Label) and str(c.cget('text')).startswith('L'))
+    _ll_big.configure(font=('Segoe UI', 20))
+    _ll_settle(6)
+    _ll_grow['read as it stands, a row grown'] = (
+        _ll_grp.height(_ll_grp.chunks[0]) >= _ll_grp.chunks[0].winfo_reqheight() - 4)
+finally:
+    _LLS.TALLEST = _ll_tallest
+    _ll_grp.rebuild = _ll_rebuild
+    app.geometry(_ll_geo); _ll_settle(10)
+_ll_rb = _ll_grow.get('rebuilds') or [{}]
+check(f'long checklist items that grow in a narrower window are chunked again as '
+      f'they stand, the keyboard and the view kept, and each chunk is read as it '
+      f'stands ({_ll_grow})',
+      _ll_grow.get('a long row, narrow', 0) > 1.5 * _ll_grow.get('a long row, wide', 10 ** 9)
+      and _ll_grow.get('gathered, wide', 10 ** 9) <= 4 * _ll_tall_t
+      and 1 <= len(_ll_rb) <= 2 and _ll_rb[0].get('tallest before', 0) > 4 * _ll_tall_t
+      and abs(_ll_rb[0].get('top before', 0) - _ll_rb[0].get('top after', 10 ** 9)) <= 2
+      and 0 < _ll_grow.get('tallest of many rows', 10 ** 9) <= 4 * _ll_tall_t
+      and _ll_grow.get('above the last', 10 ** 9) < _ll_tall_t + 4
+      and _ll_grow.get('keyboard on L3') is True
+      and _ll_grow.get('keyboard still on L3') is True
+      and _ll_grow.get('read as it stands, wide again') is True
+      and _ll_grow.get('read as it stands, a row grown') is True)
+
+# ...and whatever its rows do, no chunk is placed past the 32,767 px X and
+# Windows keep a window's place in (RowStack.REACH): one that tall, scrolled
+# 33,500 px into, was placed at -33,500, and X drew it nowhere. The reach is
+# lowered here to 5,000 and TALLEST lifted, so a chunk of items of 100 lines
+# passes it without a window taller than 16 bits.
+_ll_reach = {}
+_ll_reach_was = _LLS.REACH
+try:
+    _LLS.TALLEST, _LLS.REACH = 10 ** 9, 5_000
+    app._checklist_rows.every = 64
+    _ll_h = max(1, _ll_one_row('00 ' + 'line\n' * 99 + 'end'))
+    app._working_checklist = [{'text': f'{i:02d} ' + 'line\n' * 99 + 'end', 'done': False}
+                              for i in range(min(60, 9_000 // _ll_h + 1))]
+    app._render_checklist_items(); _ll_settle(10)
+    _ll_stk, _ll_cv = app._checklist_rows.stack, app._checklist_canvas
+    _ll_stk.size(); _ll_settle(4)
+    _ll_c0 = app._checklist_rows.chunks[0]
+    _ll_reach['chunk'] = _ll_c0.winfo_reqheight()
+    if _ll_reach['chunk'] > 6_000 + _ll_cv.winfo_height():
+        _ll_cv.yview_moveto((_ll_stk.box(_ll_c0)[1] + 6_000) / _ll_stk.total)
+        _ll_settle(6)
+        _ll_reach['placed at'] = _ll_c0.winfo_y()
+finally:
+    _LLS.TALLEST, _LLS.REACH = _ll_tallest, _ll_reach_was
+    app._checklist_rows.every = _ll_every
+    _ll_settle(4)
+check(f'a chunk taller than 16 bits is never placed past them ({_ll_reach})',
+      _ll_reach.get('chunk', 0) > 6_000
+      and -5_000 <= _ll_reach.get('placed at', -10 ** 9) <= 0)
+
+# A scroll step moves only the chunks in the view, or coming into it or leaving
+# it: one stood at its true place for a view above and two below, and every
+# step moved them all, 7.4 a step at 1,000 items, 18 ms on Windows. And short
+# items go 32 to a chunk, so fewer move.
+app._working_checklist = [{'text': f'item {i:04d}', 'done': False} for i in range(1000)]
+app._render_checklist_items(); _ll_settle(10)
+_ll_stk, _ll_cv = app._checklist_rows.stack, app._checklist_canvas
+_ll_cv.yview_moveto(0.5); _ll_settle(4)
+
+
+def _ll_in_sight():
+    top, view = _ll_cv.canvasy(0), _ll_cv.winfo_height()
+    return {c for c in app._checklist_rows.chunks
+            if _ll_stk.box(c) is not None and _ll_stk.box(c)[3] > top
+            and _ll_stk.box(c)[1] < top + view}
+
+
+_ll_moves = []
+tk.Frame.place_configure = (lambda self, *a, **k:
+                            (_ll_moves.append(self), tk.Place.place_configure(self, *a, **k))[1])
+_ll_strays, _ll_all_moves = [], 0
+_ll_chunkset = set(app._checklist_rows.chunks)
+try:
+    for _ in range(90):
+        _ll_before = _ll_in_sight()
+        del _ll_moves[:]
+        _ll_cv.yview_scroll(1, 'units'); app.update_idletasks(); app.update()
+        _ll_moved_now = [c for c in _ll_moves if c in _ll_chunkset]
+        _ll_all_moves += len(_ll_moved_now)
+        _ll_strays += [c for c in _ll_moved_now
+                       if c not in _ll_before | _ll_in_sight()]
+finally:
+    del tk.Frame.place_configure
+check(f'a scroll step of a 1,000-item checklist moves only the chunks in sight '
+      f'({_ll_all_moves} moves in 90 steps, {len(_ll_strays)} of chunks out of '
+      f'sight; {len(app._checklist_rows.chunks)} chunks)',
+      _ll_all_moves > 0 and not _ll_strays
+      and len(app._checklist_rows.chunks) <= 1000 // 32 + 1)
+app._working_checklist = []
+app._render_checklist_items()
+app.new_note(); _ll_settle()
+
+# The template picker, with the 1,000 templates a notebook may hold. End goes
+# to the last of them and shows it; Up from there goes to the one before.
+app.templates = [{'name': 'Template %04d' % i, 'title': '', 'body': 'x',
+                  'comments': '', 'category': 'General', 'checklist': []}
+                 for i in range(1000)]
+app.show_template_picker(); _ll_settle(10)
+_ll_pop = app._mini_popup
+_ll_btns = [b for b in _ll_all(_ll_pop) if isinstance(b, tk.Button)
+            and 'Template ' in str(b.cget('text'))]
+_ll_view = _ll_stack_canvas(_ll_pop)
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_btns[-1], _ll_settle)
+                    if _ll_view is not None and _ll_btns else (False, 'no picker'))
+_ll_keys = []
+if _ll_ok:
+    _ll_view.yview_moveto(0); _ll_settle()
+    if _ll_focus(_ll_btns[0]):
+        _ll_btns[0].event_generate('<End>'); _ll_settle(4)
+        _ll_keys.append(str(app.tk.call('focus')) == str(_ll_btns[-1])
+                        and _ll_in_view(_ll_btns[-1], _ll_view))
+        _ll_btns[-1].event_generate('<Up>'); _ll_settle(4)
+        _ll_keys.append(str(app.tk.call('focus')) == str(_ll_btns[-2])
+                        and _ll_in_view(_ll_btns[-2], _ll_view))
+check(f'the picker with 1,000 templates scrolls to the last; End takes the '
+      f'keyboard there, in sight, and Up to the one before ({_ll_said}; {_ll_keys})',
+      _ll_ok and _ll_keys == [True, True])
+# ...and Left and Right find nothing beside a template in its one column:
+# a chunk parked out of sight stands 20,000 px to the left of the view, and
+# Left went to a template 30 further down, parked there.
+_ll_sides = {}
+if _ll_ok:
+    _ll_view.yview_moveto(0); _ll_settle()
+    for _ll_at in (0, 5):
+        for _ll_key in ('Left', 'Right'):
+            if _ll_focus(_ll_btns[_ll_at]):
+                _ll_btns[_ll_at].event_generate(f'<KeyPress-{_ll_key}>'); _ll_settle(4)
+                _ll_on = str(app.tk.call('focus'))
+                _ll_sides[f'{_ll_key} from {_ll_at}'] = next(
+                    (k for k, b in enumerate(_ll_btns) if str(b) == _ll_on), _ll_on[-20:])
+check(f'Left and Right in the picker leave the keyboard on its template ({_ll_sides})',
+      _ll_sides == {'Left from 0': 0, 'Right from 0': 0, 'Left from 5': 5,
+                    'Right from 5': 5})
+app._dismiss_mini_popup(); _ll_settle()
+
+# The template editor, its checklist 70 of the longest items: its Add box and
+# Category at the end; an item typed there is drawn where it can be seen, and
+# Tab from the last row, drawn again since, goes on to the Add box.
+_ll_tpl = {'name': 'Long', 'title': '', 'body': '', 'comments': '',
+           'category': 'General',
+           'checklist': [{'text': f'{i:02d} {_LL_WORDS}', 'done': False}
+                         for i in range(70)]}
+app.templates = [_ll_tpl]
+app._edit_template(_ll_tpl, lambda: None); _ll_settle(10)
+_ll_pop = app._mini_popup
+_ll_view = _ll_stack_canvas(_ll_pop)
+_ll_stack = _ll_view._row_stack if _ll_view is not None else None
+_ll_tail = _ll_stack.groups[-1].rows() if _ll_stack is not None else []
+_ll_add = next((e for t in _ll_tail[:1] for e in _ll_all(t)
+                if isinstance(e, tk.Entry)), None)
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_tail[-1], _ll_settle)
+                    if _ll_tail else (False, 'no editor'))
+_ll_seen = {'its Add box': _ll_add is not None and _ll_in_view(_ll_add, _ll_view)}
+if _ll_add is not None and _ll_focus(_ll_add):
+    _ll_add.insert(0, 'NEWEST ITEM')
+    _ll_add.event_generate('<Return>'); _ll_settle(6)
+    _ll_new = _ll_text(_ll_stack.groups[1].rows()[-1], 'NEWEST ITEM')
+    if _ll_new is not None:
+        app._bring_into_sight(_ll_new); _ll_settle(4)
+    _ll_seen['the item typed there'] = (_ll_new is not None
+                                        and _ll_in_view(_ll_new, _ll_view))
+    _ll_icons = [c for c in _ll_stack.groups[1].rows()[-1].winfo_children()
+                 if getattr(c, '_icon_kind', None) == 'trash']
+    if _ll_icons and _ll_focus(_ll_icons[0]):
+        _ll_icons[0].event_generate('<Tab>'); _ll_settle(4)
+        _ll_seen['Tab from the last row'] = str(app.tk.call('focus')) == str(_ll_add)
+# ...in chunks inside 16 bits, as the note's is: a chunk past them is placed no
+# further than RowStack.REACH, and its last rows, drawn a few hundred px short
+# of their place, could still read as in sight.
+_ll_cl_chunks = _ll_stack.groups[1].chunks if _ll_stack is not None else []
+_ll_seen['in chunks inside 16 bits'] = (
+    len(_ll_cl_chunks) > 1
+    and max(c.winfo_reqheight() for c in _ll_cl_chunks) < 32_767)
+check(f'the template editor with 70 long checklist items scrolls to its Add box '
+      f'and Category ({_ll_said}; {_ll_seen})',
+      _ll_ok and len(_ll_seen) == 4 and all(_ll_seen.values()))
+app._dismiss_mini_popup(); _ll_settle()
+
+
+def _ll_tpl_bin_by_key(count, at):
+    """The template editor's checklist of *count* items: Space on item *at*'s
+    bin, and the item whose bin holds the keyboard after."""
+    tpl = {'name': 'Keys', 'title': '', 'body': '', 'comments': '',
+           'category': 'General',
+           'checklist': [{'text': f'item {i}', 'done': False} for i in range(count)]}
+    app._edit_template(tpl, lambda: None); _ll_settle(8)
+    stack = _ll_stack_canvas(app._mini_popup)._row_stack
+    icon = next(c for c in stack.groups[1].rows()[at].winfo_children()
+                if getattr(c, '_icon_kind', None) == 'trash')
+    held = _ll_after_space(icon)
+    said = (_ll_row_text(held, 'item ')
+            if getattr(held, '_icon_kind', None) == 'trash' else str(held)[-30:])
+    app._dismiss_mini_popup(); _ll_settle()
+    return said
+
+
+# The same in the template editor's checklist, drawn again whole at each
+# delete: alone in its chunk, the last item's bin sent the keyboard past the
+# block's end, to "+ Add" -- the place counted the chunk among the canvas's.
+app._edit_template(None, lambda: None); _ll_settle(4)
+_LL_T = 2 * min(_ll_stack_canvas(app._mini_popup)._row_stack.groups[1].every, 64)
+app._dismiss_mini_popup(); _ll_settle()
+_ll_tkeys = {'end of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2 - 1),
+             'first of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2),
+             'alone at the end': _ll_tpl_bin_by_key(_LL_T + 1, _LL_T)}
+check(f"Space on a template checklist's bin hands the keyboard to the bin in its "
+      f"place, or to the last, at every place among the chunks ({_ll_tkeys})",
+      _ll_tkeys == {'end of a chunk': f'item {_LL_T // 2}',
+                    'first of a chunk': f'item {_LL_T // 2 + 1}',
+                    'alone at the end': f'item {_LL_T - 1}'})
+
+# A table in a template's body given more columns, at the same height and
+# with no scrollbar of its own: no chunk changes height, and the editor is
+# measured again for it all the same. Columns are added until the preview
+# is wider than the editor was, as the fonts on each system decide.
+_ll_tpl = {'name': 'Wide', 'title': '', 'body': '| c0 | c1 |\n| x | x |',
+           'comments': '', 'category': 'General', 'checklist': []}
+app._edit_template(_ll_tpl, lambda: None); _ll_settle(10)
+_ll_pop = app._mini_popup
+_ll_view = _ll_stack_canvas(_ll_pop)
+_ll_body = next((t for t in _ll_all(_ll_pop) if isinstance(t, tk.Text)
+                 and '| c0 |' in t.get('1.0', 'end')), None)
+_ll_wide = None
+if _ll_view is not None and _ll_body is not None and _ll_focus(_ll_body):
+    _ll_was = _ll_view.winfo_width()
+    _ll_prev = next((c for c in _ll_all(_ll_pop) if isinstance(c, tk.Canvas)
+                     and c.find_all() and c is not _ll_view), None)
+    _ll_tall = int(str(_ll_prev.cget('height'))) if _ll_prev is not None else None
+    for _ll_n in range(3, 40):
+        _ll_body.delete('1.0', 'end')
+        _ll_body.insert('1.0', '| ' + ' | '.join('c%d' % i for i in range(_ll_n))
+                        + ' |\n| ' + ' | '.join('x' * _ll_n) + ' |')
+        _ll_body.event_generate('<KeyRelease-a>'); _ll_settle(4)
+        if (_ll_prev is None or getattr(_ll_prev, '_preview_overflows_x', False)
+                or int(str(_ll_prev.cget('width'))) > _ll_was + 20):
+            break
+    _ll_settle(6)
+    if _ll_prev is not None:
+        _ll_wide = {'before': _ll_was, 'after': _ll_view.winfo_width(),
+                    'preview': int(str(_ll_prev.cget('width'))),
+                    'same height': int(str(_ll_prev.cget('height'))) == _ll_tall,
+                    'no scrollbar': not getattr(_ll_prev, '_preview_overflows_x', True),
+                    'shown whole': _ll_prev.winfo_rootx() + int(str(_ll_prev.cget('width')))
+                    <= _ll_view.winfo_rootx() + _ll_view.winfo_width() + 1}
+check(f'a template\'s table given more columns at the same height widens its '
+      f'editor to show it whole ({_ll_wide})',
+      _ll_wide is not None and _ll_wide['preview'] > _ll_wide['before']
+      and _ll_wide['same height'] and _ll_wide['no scrollbar']
+      and _ll_wide['after'] > _ll_wide['before'] and _ll_wide['shown whole'])
+app._dismiss_mini_popup(); _ll_settle()
+
+# Settings > Templates, the only place a template is deleted: its last row's
+# pencil, at the end, opens that template.
+app.templates = [{'name': 'Template %04d' % i, 'title': '', 'body': 'x',
+                  'comments': '', 'category': 'General', 'checklist': []}
+                 for i in range(1000)]
+app.show_settings_page(); app.toggle_settings_panel('templates'); _ll_settle(10)
+_ll_view = app._active_panel_canvas
+_ll_pencils = [c for c in _ll_all(_ll_view) if getattr(c, '_icon_kind', None) == 'pencil']
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_pencils[-1], _ll_settle)
+                    if _ll_pencils else (False, 'no rows'))
+_ll_opened = None
+if _ll_ok and _ll_focus(_ll_pencils[-1]):
+    _ll_pencils[-1].event_generate('<space>'); _ll_settle(6)
+    _ll_opened = getattr(app._mini_popup, 'edited_template', None)
+check(f'Settings > Templates with 1,000 templates scrolls to the last, whose '
+      f'pencil opens it ({_ll_said}; opened {(_ll_opened or {}).get("name")})',
+      _ll_ok and _ll_opened is app.templates[-1])
+app._dismiss_mini_popup(); _ll_settle()
+# Emptied again before the next section: on Windows every widget is a window,
+# and a process may hold only 10,000 of them (a long list left built here and
+# another built beside it ran Tk out of them: "No more menus can be allocated").
+app.templates = []
+app._refresh_templates_panel(); _ll_settle()
+
+# Recently deleted, a page as long as the Trash: its last row's box ticks.
+app.trash = [{'id': 70000 + i, 'uid': f'll-{i}', 'title': f'Gone {i:04d}',
+              'body': 'x', 'category': 'General',
+              'deleted_at': f'2026-10-{1 + i % 25:02d} 10:{i % 60:02d}:00'}
+             for i in range(1000)]
+app.TRASH_PAGE_SIZE = 1000
+app.toggle_settings_panel('trash'); _ll_settle(10)
+_ll_view = app._active_panel_canvas
+_ll_ticks = [c for r in _ll_view._row_stack.rows()
+             if getattr(r, '_trash_buttons', None)
+             for c in r.winfo_children() if isinstance(c, tk.Checkbutton)]
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_ticks[-1], _ll_settle)
+                    if _ll_ticks else (False, 'no rows'))
+_ll_picked = None
+if _ll_ok and _ll_focus(_ll_ticks[-1]):
+    _ll_ticks[-1].event_generate('<space>'); _ll_settle(4)
+    _ll_picked = [str(b.cget('text')) for b in _ll_all(app.settings_trash_panel)
+                  if isinstance(b, tk.Button) and str(b.cget('text')).startswith('↩')
+                  and b.winfo_manager()]
+check(f'Recently deleted with 1,000 rows on its page scrolls to the last, whose '
+      f'box ticks ({_ll_said}; {_ll_picked})',
+      _ll_ok and _ll_picked == ['↩ Restore 1 selected'])
+
+
+def _ll_trash_by_key(count, at, which):
+    """Recently deleted with *count* rows: Space on row *at*'s Restore or
+    Delete, and whether the keyboard is then on that button of the row drawn
+    in its place, or of the new last row."""
+    app.trash = [{'id': 71000 + i, 'uid': f'lk-{i}', 'title': f'Gone {i:02d}',
+                  'body': 'x', 'category': 'General',
+                  'deleted_at': f'2026-10-{1 + i % 25:02d} 11:{i % 60:02d}:00'}
+                 for i in range(count)]
+    app._trash_panel_redraw(); _ll_settle(6)
+    rows = [r for r in app._active_panel_canvas._row_stack.rows()
+            if getattr(r, '_trash_buttons', None)]
+    titles = [_ll_row_text(r._trash_buttons[which], 'Gone ') for r in rows]
+    held = _ll_after_space(rows[at]._trash_buttons[which])
+    said = (_ll_row_text(held, 'Gone ')
+            if held is not None and getattr(held.master, '_trash_buttons', {})
+            .get(which) is held else str(held)[-30:])
+    return said == (titles[at + 1] if at + 1 < len(titles) else titles[at - 1])
+
+
+# Restore or Delete from the keyboard: the same button of the row drawn in its
+# place. Counted in its chunk, the place sent the keyboard 16 rows up from a
+# last row alone in its chunk -- and a second Space restored a note nobody
+# chose. Sixteen rows to a chunk here.
+app.ask_yes_no = lambda *a, **k: True
+_ll_tr = {'Restore, end of a chunk': _ll_trash_by_key(33, 15, 'restore'),
+          'Restore, first of a chunk': _ll_trash_by_key(33, 16, 'restore'),
+          'Restore, alone at the end': _ll_trash_by_key(33, 32, 'restore'),
+          'Delete, alone at the end': _ll_trash_by_key(33, 32, 'delete')}
+app.ask_yes_no = lambda *a, **k: False
+app.notes = []
+check(f'Restore and Delete pressed by key in Recently deleted hand the keyboard '
+      f'to the same button in the row in its place, at every place among the '
+      f'chunks ({_ll_tr})', all(_ll_tr.values()))
+del app.TRASH_PAGE_SIZE
+app.trash = []
+app._trash_panel_redraw(); _ll_settle()
+
+# Duplicates: one note copied 2,400 times is one group as long as all of
+# them; its own buttons stand at its end.
+app.notes = [_ll_note(90000 + i, title='Twin', body='same',
+                      created='2026-01-01 10:00:00', updated='2026-01-01 10:00:00')
+             for i in range(2400)]
+app.toggle_settings_panel('duplicates'); _ll_settle(10)
+_ll_view = app._active_panel_canvas
+_ll_btn = [b for b in _ll_all(_ll_view) if isinstance(b, tk.Button)
+           and str(b.cget('text')) == 'Tick all but first']
+_ll_boxes = [c for c in _ll_all(_ll_view) if isinstance(c, tk.Checkbutton)]
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_btn[-1], _ll_settle)
+                    if _ll_btn else (False, 'no group'))
+_ll_last_ticked = None
+if _ll_ok and _ll_focus(_ll_btn[-1]):
+    _ll_btn[-1].event_generate('<space>'); _ll_settle(6)
+    _ll_last_ticked = int(app.getvar(_ll_boxes[-1].cget('variable')))
+check(f'Duplicates with a group of 2,400 copies scrolls to the group\'s own '
+      f'buttons, which tick its copies ({_ll_said}; last copy {_ll_last_ticked})',
+      _ll_ok and _ll_last_ticked == 1)
+app.notes = []
+app.toggle_settings_panel('duplicates'); _ll_settle()
+app.hide_settings_page(); _ll_settle()
+
+# Share: 2,500 notes, every page shown, the last box ticks. The two images
+# every drawn tick box shows are painted once, not for each box made: each
+# paint redrew every box before it, and these 2,500 took 150 s on Windows.
+app.notes = [_ll_note(80000 + i, title=f'Shared {i:04d}') for i in range(2500)]
+_ll_paints = []
+_ll_paint = app._paint_tick_images
+app._paint_tick_images = lambda: (_ll_paints.append(1), _ll_paint())[1]
+app.toggle_share_panel(); _ll_settle(6)
+_ll_view = app._share_checklist_canvas
+for _ in range(40):
+    _ll_more = next((b for b in _ll_all(_ll_view) if isinstance(b, tk.Button)
+                     and 'more' in str(b.cget('text'))), None)
+    if _ll_more is None:
+        break
+    _ll_more.invoke(); app.update()
+_ll_settle(6)
+del app._paint_tick_images
+_ll_boxes = [c for c in _ll_all(_ll_view) if isinstance(c, tk.Checkbutton)]
+check(f'2,500 drawn tick boxes paint the images they share no more than once '
+      f'({len(_ll_paints)} paints for {len(_ll_boxes)} boxes)',
+      len(_ll_boxes) == 2500 and len(_ll_paints) <= 1)
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_boxes[-1], _ll_settle)
+                    if _ll_boxes else (False, 'no boxes'))
+_ll_shared = None
+if _ll_ok and _ll_focus(_ll_boxes[-1]):
+    _ll_boxes[-1].event_generate('<space>'); _ll_settle(2)
+    _ll_shared = (len(_ll_boxes), int(app.getvar(_ll_boxes[-1].cget('variable'))))
+check(f'Share with every page of 2,500 notes shown scrolls to the last box, '
+      f'which ticks ({_ll_said}; {_ll_shared})',
+      _ll_ok and _ll_shared == (2500, 1))
+app.toggle_share_panel(); _ll_settle()
+
+# A day holding 1,000 notes: its list scrolls to the last, which opens.
+app.notes = [_ll_note(60000 + i, title=f'Day note {i:04d}', date='2026-11-03')
+             for i in range(1000)]
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 11
+app.render_calendar(); _ll_settle(4)
+app.open_day_popup('2026-11-03'); _ll_settle(10)
+_ll_view = _ll_stack_canvas(app.day_panel)
+_ll_days = [r for r in (_ll_view._row_stack.rows() if _ll_view is not None else [])
+            if getattr(r, '_key_press', None)]
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_days[-1], _ll_settle)
+                    if _ll_days else (False, 'no rows'))
+_ll_title = str(_ll_text(_ll_days[-1]).cget('text')) if _ll_days else ''
+_ll_open = None
+if _ll_ok and _ll_focus(_ll_days[-1]):
+    _ll_days[-1].event_generate('<Return>'); _ll_settle(4)
+    _ll_open = (app._day_panel_mode, (app._day_panel_shows or (None,) * 3)[2])
+check(f'a day of 1,000 notes scrolls to the last, which Return opens '
+      f'({_ll_said}; {_ll_title!r} -> {(_ll_open or ("",))[0]})',
+      _ll_ok and _ll_open is not None and _ll_open[0] == 'note'
+      and str((_ll_open[1] or {}).get('title', '')) in _ll_title)
+app.close_day_panel(); _ll_settle()
+
+# The calendar's History: 30 series of 50 days, each unfolded to its days (a
+# series of 50 or fewer lists them all). The page under it is a row stack
+# too, the month in one chunk and the days in their own.
+app.notes = [_ll_note(95000 + s, title=f'Routine {s:02d}',
+                      date=f'2025-{1 + s % 12:02d}-01',
+                      recurrence={'freq': 'daily', 'interval': 1, 'count': 50})
+             for s in range(30)]
+app._show_calendar_history(); _ll_settle(6)
+app._history_expanded = {app._order_identity(n) for n in app.notes}
+app._render_calendar_history(); _ll_settle(10)
+_ll_days = [r for r in app._history_rows.rows() if getattr(r, '_key_press', None)]
+_ll_ok, _ll_said = (_ll_reaches(app, app.cal_scroll_canvas, _ll_days[-1], _ll_settle)
+                    if _ll_days else (False, 'no rows'))
+_ll_title = str(_ll_text(_ll_days[-1]).cget('text')) if _ll_days else ''
+_ll_landed = None
+if _ll_ok and _ll_focus(_ll_days[-1]):
+    _ll_days[-1].event_generate('<Return>'); _ll_settle(6)
+    _ll_landed = (app._history_visible, app.selected_day)
+check(f'the History with 30 series of 50 days unfolded scrolls to its last day, '
+      f'which Return opens ({_ll_said}; {len(_ll_days)} rows; {_ll_title!r} -> '
+      f'{_ll_landed})',
+      _ll_ok and _ll_landed is not None and _ll_landed[0] is False
+      and bool(_ll_landed[1]) and NO.show_date(_ll_landed[1]) in _ll_title)
+if app._history_visible:
+    app._hide_calendar_history()
+app.close_day_panel(); _ll_settle()
+
+# The calculator's history after a long sitting: its oldest line inserts.
+app.notebook.select(app.TAB_NOTES)
+app.new_note(); _ll_settle()
+if not app._calculator_open:
+    app.toggle_calculator_section()
+if not app._calc_history_open:
+    app._toggle_calc_history()
+app._calc_history = ['%d+1=%d' % (i, i + 1) for i in range(2500)][::-1]
+app._calc_render_history(); _ll_settle(10)
+_ll_lines = [w for w in app.calculator_history_rows.rows()
+             if isinstance(w, tk.Label) and '<Button-1>' in w.bind()]
+_ll_view = app.calculator_history_rows.stack.canvas
+_ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_lines[-1], _ll_settle)
+                    if _ll_lines else (False, 'no lines'))
+if _ll_ok:
+    _qa_click(_ll_lines[-1]); _ll_settle(2)
+check(f'the calculator\'s history of 2,500 sums scrolls to the oldest, which a '
+      f'click inserts ({_ll_said})',
+      _ll_ok and '0+1=1' in app.body_text.get('1.0', 'end'))
+app._calc_history = []
+app._calc_render_history()
+app.new_note(); _ll_settle()
+
+del app._show_toast
+app.ask_yes_no = _ll_yes
+app.notes, app.templates, app.trash = (list(_ll_kept[0]), list(_ll_kept[1]),
+                                       list(_ll_kept[2]))
 app.save_notes()
 
 

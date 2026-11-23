@@ -11,6 +11,7 @@ the AI agent I build it with. This page is mine.*
 - [The rules I set](#the-rules-i-set)
 - [Decisions I made](#decisions-i-made)
 - [How I test](#how-i-test)
+- [The app on Android](#the-app-on-android)
 - [What I learned](#what-i-learned)
 - [What I would do differently](#what-i-would-do-differently)
 - [What comes next](#what-comes-next)
@@ -118,6 +119,9 @@ way: the agent puts forward options, and I choose what the app does and how it b
   a safety net: deleting a template shows a clear warning that it is gone for good. A template is
   also easy to write again, and you can keep copies. I weighed the need against the work it would
   take and decided it wasn't worth it; if it had been truly important, I would have made the time.
+  It would also have filled the app with code for no good reason and cost it its simplicity: in
+  the Trash, templates would have mixed with notes, the Trash would have needed a new design, and
+  the app might not even have told a template from an ordinary note reliably.
 - **The checklist's arrows sit beside the checkboxes.** Priorities change, so a to-do list needs
   to be reordered. At first the ▲ ▼ arrows were beside each item's bin. I moved them next to the
   checkboxes, because a slip of the mouse could delete an item instead of moving it.
@@ -183,14 +187,41 @@ through the Share panel. I always test on a dark and a light theme, usually on o
 sometimes on the blue, green or brown ones too. What it taught me: colours and functions can
 overlap until something becomes invisible, so we always have to make sure they fit together.
 
-All twenty bugs my manual passes found are listed in [Bug reports](BUG_REPORTS.md), three of
-them written out in a standard bug-report format.
+Some of the bugs my manual testing found are in [Bug reports](BUG_REPORTS.md), as examples, three
+of them written out in a standard bug-report format; all the others are recorded in the test plan.
 
 **What surprised me most** was how long and careful testing can be. But that is how I learned to
 describe a problem clearly enough for a developer to know what to look at and fix. A small feature
 everyone knows can be hard to explain if you don't have the words for it. It was a challenge, and
 I'm glad I went through it. It also made me decide to take the ISTQB Foundation certification,
 which I'm preparing for.
+
+## The app on Android
+
+The phone app is not very different from the desktop one: I wanted it to mirror every feature
+of the desktop as closely as possible. The big difference was how everything had to be laid
+out. A phone's screen is not a desktop's, and there is no mouse or keyboard, only a finger, taps
+and the phone's own keyboard, so with the agent's help we rethought the design to make it
+simpler and easy to use.
+
+I built it because I use Android and can test on it, and because I have always wanted to
+publish a project of my own that anyone can use. I didn't consider iOS: I have no way to test on
+those devices, and rather than guess and get it wrong, I made a conscious and responsible
+decision to work where I can test.
+
+Three of the phone's design decisions:
+
+- **The checklist, the comments and the calculator are added from the ⋮ menu at the top
+  right.** We built the options; each user takes what a note needs. If a note doesn't need a
+  checklist, there is no reason to show one in it and weigh the page down.
+- **The table is as adjustable as I could make it.** There is no mouse on a phone, so its cells
+  are written in place, its rows can be dragged taller or shorter, and its columns made wider or
+  narrower, to fit whatever the user needs it for.
+- **One Light | Dark switch in Settings → Appearance.** I kept it as simple as possible, so the
+  user is free to choose any theme in light or in dark mode.
+
+It is a simple app, so I wanted its features to be as easy to use as possible. The bugs I found
+on my own phone, one written out in full, are in [Bug reports](BUG_REPORTS.md#on-the-phone).
 
 ## What I learned
 
@@ -214,6 +245,36 @@ Three moments taught me the most:
   the weakest and the strongest PCs it can run on, to avoid crashes, slow loading, flicker and
   other problems.
 
+**From the final audit.** I learned how organised I have to keep my work to be able to check it
+again at the end. The audit took a long time to carry out and to finish, because many things
+had not been set up well from the start. What surprised me was how many small things the agents
+caught in their checks: bugs that my own testing of the app had not found. Expecting that we
+would keep running into them, I wanted the audit as thorough as it could be, in a loop, checking
+and re-checking the whole test plan, the code, the app's logic, its security and robustness, and
+that it works as expected, as an ordinary offline notes app should.
+
+**When to stop.** As the principles of testing say, testing can show that defects are present
+but cannot show that there are none, and exhaustive testing is impossible. No app can be tested
+and confirmed free of bugs; there will always be defects, smaller or larger. So we prioritised
+what mattered most for the app to be good to use, and whenever it is needed, we test again and
+fix what we find. I set the rule of two clean rounds in a row so that the most important things
+pass the filter of testing clean, and left the small ones to be fixed at the end, so the app
+could be finished and published. Testing and retesting without end could break it for no
+reason, or turn into rituals that never end.
+
+**Working with the agent.** I thought I could work with the agent in broad strokes, but testing
+showed me that requests have to be as specific as possible for the communication to work - and
+so do test cases: if they are not written clearly and to the point, a problem cannot be fixed
+precisely. Two moments showed me why the checking has to be mine:
+
+- On 15 November the rounds were reading the test plan in samples, and the agent proposed
+  stopping there; I asked for the whole plan to be read again, case by case. It showed us how much was still left to fix in the code and the app.
+  Had we not gone through all of it, we would not have found the remaining defects before
+  publishing.
+- The phone's test plan had not been walked correctly by the agents: cases had been marked Pass
+  from runs that covered only part of them. I realised it through the checks and re-checks, set
+  them back to Not Tested, and then tested them as they should be.
+
 ## What I would do differently
 
 I would make a more detailed work plan at the start, get to know the AI before giving it work - so it knows who it is working with - and set clearer working rules from the beginning.
@@ -231,6 +292,8 @@ More concretely:
   choice.
 - I might have built the app in HTML from the start instead of Python, to make it more modern and
   nicer to look at. Python was still a good way to learn.
+- If I started again, I would pass my ideas and features through many more filters before
+  building them, so each one could be added properly everywhere it belongs.
 
 Now I know how to organise my work better, and what approach to take for the next apps I build.
 
@@ -239,10 +302,22 @@ Now I know how to organise my work better, and what approach to take for the nex
 It is hard to judge my own app objectively. What bothers me is that it is still a first version,
 when other apps are so far ahead. I plan to keep improving it as I gain experience; I don't intend
 to leave it. There are always details to consider - some I can't see yet, but I'm sure I will.
-After the desktop app, an Android version will follow, so your notes can come with you. When the
-app launches, I will ask for feedback - from colour-blind readers too - and improve it from there.
+The Android app now follows the desktop, so your notes can come with you. When the apps launch,
+I will ask for feedback - from colour-blind readers too - and improve them from there.
+
+I left for after the launch what changes much of what a user sees, or touches the code in many
+files: one set of icons, a screen that says clearly when no note is open, splitting the largest
+files, and automated tests on the phone's screens. All of them are useful, but each could have
+broken something that works now, and would have called for the whole audit again. I preferred
+to publish an app that has been checked, and to do them one at a time after the launch, guided
+also by what the people who use it tell me.
+
+One person has tried the app so far, mostly out of curiosity. They noticed how simple it is, how
+easy to use, and how handy it can be for anyone. On the minus side, it still had small bugs at
+the time, since it was not yet fully checked; they did not look at it in depth, and found
+nothing serious to correct.
 
 ---
 
 *Everything here comes from me: what I lived, what I decided and why. The agent helped me put it
-into a page, and I checked every sentence. - Alexandra Moldovan, October 2026*
+into a page, and I checked every sentence. - Alexandra Moldovan, October and November 2026*

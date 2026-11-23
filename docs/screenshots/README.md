@@ -4,8 +4,8 @@ Every image in this folder is a capture of **this app running** — taken
 here, on the build named below, by the person or the script that wrote the
 line beside it. None of it comes from anywhere else, and the app's icon is
 not a picture at all: it is drawn from code by
-[`tools/make_icon.py`](../../tools/make_icon.py) every time the app is
-built.
+[`tools/make_icon.py`](../../tools/make_icon.py), run by hand when the icon
+changes; the build takes the `assets/icon*` files it wrote as they are.
 
 The images illustrate [`docs/USER_GUIDE.md`](../USER_GUIDE.md)
 and [`README.md`](../../README.md). They are referenced by exact filename, so
@@ -14,12 +14,17 @@ renders automatically everywhere the docs reference it, no other change needed.
 
 ## They are taken by a script, not by hand
 
-    py tools/doc_screenshots.py            # every scene
-    py tools/doc_screenshots.py tables     # just one
+    py doc_screenshots.py            # every scene
+    py doc_screenshots.py tables     # just one
 
 Run it from a scratch copy, never in place -- the qa safety rule applies
 here too, and the script refuses to start beside a `notes_data.json` that
-holds real notes.
+holds real notes. The copy is one flat folder: `note_organizer.py`, the
+`noteorganizer/` package, the script, and `tools/guest.py` and
+`qa/_qa_support.py` beside it, without which it refuses to start: the first takes the
+machine's turn and the memory ceiling before the app is built, the second is
+the shutter every picture goes through, which refuses one that another
+program's window is over (its docstring says what to copy).
 
 Every picture in the table below has a scene in that file which stages it
 deliberately: it writes a small notebook of its own, opens the panel,
@@ -33,8 +38,8 @@ either.
 Five things the script does that a careful hand cannot promise:
 
 - **It refuses to photograph a covered window.** Before each shutter it
-  asks, at forty-nine points across the frame, which window is actually
-  on top there; a window from another program means the shot is not
+  asks, at points every 16 pixels across the frame, which window is
+  actually on top there; a window from another program means the shot is not
   taken. An Android emulator sat in the middle of nineteen pictures on
   the first full run, and a browser did it once before that.
 - **A crop can never leave the window.** The checklist shot came back
@@ -63,7 +68,8 @@ Rules that keep the set reading as one app:
   produces a mixed set.
 
 **Current set:** retaken 2026-10-08 in the default dark (purple) theme, all
-twenty-two and the demo GIF by `tools/doc_screenshots.py`, on app version
+but `tables.png` (kept from 2026-09-14) and the demo GIF by
+`tools/doc_screenshots.py`, on app version
 0.89.371 — the open tab raised, the open note's card ringed, dates shown
 day first, both calendar pictures on the month they stage and nothing cut
 at the bottom edge. On 2026-10-09 the search picture was retaken with three
@@ -73,8 +79,15 @@ nothing). On 2026-10-15 `theme-picker.png` was retaken by the same script,
 on 0.94.379, to show the Sharp text and Spelling rows added since. On
 2026-10-22 `emoji-picker.png` was retaken the same way, on 0.96.392: the
 picker opens on the same three groups, and only its scrollbar is shorter,
-the picker holding more emoji since. Update this line whenever the set is
-recaptured.
+the picker holding more emoji since. On 2026-11-07 the set was
+retaken by the same script, on the final audit's branch, all but
+`checklist.png` (last taken on 2026-10-08): the format bar's lists say Font
+and Size, and a series' line says "the whole series". `search-and-sort.png`
+again on 2026-11-08, a preview now cut at its last whole word; on
+2026-11-11 eight of the set (`attachments`, `categories-panel`, `demo.gif`,
+`duplicates-panel`, `import-backup`, `templates-panel`, `theme-picker`,
+`trash-panel`) after the cards' second line and Settings' ring. Update this
+line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|
@@ -118,7 +131,8 @@ below, are the deliberate exception to *one theme throughout*. The
 what its card is about, then grown to the card's 16:10 so the card crops
 none of it away. Whole windows shrunk to a card's size, as the cards had
 before 2026-10-24, showed no feature a visitor could make out. Taken on
-2026-10-24 on 0.96.395.
+2026-10-24 on 0.96.395; the repeat, search and Trash pairs again on
+2026-11-07, and the search pair on 2026-11-11.
 
 The website shows every picture of the apps in the theme its page is in
 (the owner's rule, 2026-10-24), and its build refuses a page with a

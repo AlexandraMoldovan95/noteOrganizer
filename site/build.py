@@ -14,7 +14,7 @@ What it does, in order:
    resized to WebP.
 3. Checks what it built: every internal link and anchor resolves, no
    {{token}} is left unfilled, and nothing private (a home folder, a
-   private account or folder name: FORBIDDEN) reached a page.
+   private account or folder name: FORBIDDEN, PRIVATE_WORDS) reached a page.
 4. Only then puts it in public/'s place. Any failure stops the build with
    a non-zero exit and leaves the last good site in public/ untouched.
 
@@ -24,6 +24,7 @@ edit public/ by hand, because the next build replaces it.
 
 import argparse
 import ast
+import hashlib
 import html
 import json
 import os
@@ -68,8 +69,32 @@ PAGES = {
 
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.
-FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
-             r"[A-Za-z]:\\Users\\", r"stepIT"]
+FORBIDDEN = [r"[A-Za-z]:\\Users\\"]
+# ...and private words -- an account, a home folder's name, a folder of
+# notes -- kept as the SHA-256 of each, lowercased, by its length: listed
+# as words, the guard published what it guarded. Any run of letters and
+# digits in a page that holds one stops the build too.
+PRIVATE_WORDS = {
+    5: {"0d7d48a65e977aff4d6360550c5bd34225aa217a68b495a898708a3dd561e2a2"},
+    6: {"ef034696c770ea75c312c7be5d421e4cb9872dfab54fd21ed388525d6e9d9389"},
+    11: {"a8885707c07fe4e003bb49e0f1519239d48ca8454fd82e70d4d07ca1e997aa0e"},
+    23: {"808a8aa57b09e9f4d849741fe212622e62e20c99f22cd7f3c1e534275cf2f769"},
+}
+
+
+def private_text(text):
+    """What private text *text* holds: each FORBIDDEN pattern it matches,
+    and how many PRIVATE_WORDS -- never the words themselves."""
+    found = ["text matching %r" % p for p in FORBIDDEN if re.search(p, text, re.IGNORECASE)]
+    words = 0
+    for token in re.findall(r"[a-z0-9]+", text.lower()):
+        for length, digests in PRIVATE_WORDS.items():
+            for at in range(len(token) - length + 1):
+                piece = token[at:at + length].encode("utf-8")
+                words += hashlib.sha256(piece).hexdigest() in digests
+    if words:
+        found.append("%d private word(s)" % words)
+    return found
 
 # Pages are linked by file, never by folder ("demo/index.html", not
 # "demo/"): a server opens a folder's index.html by itself, but a page
@@ -90,8 +115,10 @@ ANDROID_SECTIONS = ["What it does", "What it is not"]
 # one row of them, then three on its side, each a row of its own (the
 # owner's choice, 2026-10-24; four and then two upright looked unplaced).
 # The calendar and Settings are shown on its side instead, the calendar
-# with a note open beside it, Settings with Categories open.
-ANDROID_GALLERY = ["01-note-list", "02-a-note", "03-a-table", "04-search",
+# with a note open beside it, Settings with Categories open. The note is
+# shown being written in, its format bar on the keyboard, in place of the
+# same note at rest (2026-11-21, the review panel's ask; the row stays four).
+ANDROID_GALLERY = ["01-note-list", "12-writing", "03-a-table", "04-search",
                    "08-wide", "09-wide-calendar", "10-wide-settings"]
 
 
@@ -176,9 +203,15 @@ def project_numbers(repo):
     plan = os.path.join(repo, "qa", "NoteOrganizer_TestPlan.xlsx")
     workbook = openpyxl.load_workbook(plan, read_only=True)
     sheet = workbook["Test Cases"]
-    numbers["test_cases"] = sum(
-        1 for row in sheet.iter_rows(min_row=2, values_only=True)
-        if row and row[0] not in (None, ""))
+    rows = sheet.iter_rows(values_only=True)
+    head = [str(h or "").strip() for h in next(rows)]
+    status, tested_by = head.index("Status"), head.index("Tested By")
+    cases = [row for row in rows if row and row[0] not in (None, "")]
+    numbers["test_cases"] = len(cases)
+    # Passed by a person, not by the scripts' run ("Claude (automated, ...)").
+    numbers["hand_passed"] = sum(
+        1 for row in cases
+        if row[status] == "Pass" and not str(row[tested_by] or "").startswith("Claude"))
     workbook.close()
 
     with open(os.path.join(repo, "tools", "mutants.json"), encoding="utf-8") as f:
@@ -342,8 +375,17 @@ class Renderer:
 
     def starts_block(self, lines, i):
         s = lines[i].strip()
-        return (s.startswith(("#", "```", ">", "|")) or bool(self.LIST_RE.match(lines[i]))
+        m = self.LIST_RE.match(lines[i])
+        return (s.startswith(("#", "```", ">", "|")) or bool(m and self.may_interrupt(m))
                 or bool(re.match(r"^(-{3,}|\*{3,})\s*$", s)))
+
+    @staticmethod
+    def may_interrupt(m):
+        """Whether a line LIST_RE matched may start a list right under a line
+        of running text: GitHub's rule, CommonMark's, is that a numbered line
+        may only when its number is 1. A sentence wrapped before "2026. I
+        walk it" was drawn as a list counted from 2026 (2026-11-21)."""
+        return not m.group(2)[0].isdigit() or m.group(2) == "1."
 
     def table(self, lines, i, out):
         def cells(row):
@@ -404,11 +446,13 @@ class Renderer:
         items = []
         while i < len(lines):
             m = self.LIST_RE.match(lines[i])
-            if not m or len(m.group(1)) != indent:
+            # A list of the other kind is a list of its own, as on GitHub.
+            if not m or len(m.group(1)) != indent or m.group(2)[0].isdigit() != ordered:
                 break
             text = [m.group(3)]
             children = []
             i += 1
+            blank = False
             while i < len(lines):
                 nxt = lines[i]
                 if not nxt.strip():
@@ -419,22 +463,65 @@ class Renderer:
                              and len(self.LIST_RE.match(lines[i + 1]).group(1)) >= indent)
                             or (lines[i + 1].startswith(" " * (indent + 2)) and lines[i + 1].strip())):
                         i += 1
+                        blank = True
                         continue
                     break
                 sub = self.LIST_RE.match(nxt)
-                if sub and len(sub.group(1)) > indent:
-                    child, i = self.list_block(lines, i, len(sub.group(1)))
-                    children.append(child)
-                    continue
                 if sub:
-                    break
+                    depth = len(sub.group(1))
+                    if depth < indent:
+                        break                   # the outer list's
+                    if depth == indent and sub.group(2)[0].isdigit() == ordered:
+                        break                   # this list's next item
+                    # After a blank line nothing runs on to be interrupted:
+                    # any number starts a list there, as on GitHub.
+                    if blank or self.may_interrupt(sub):
+                        if depth > indent:
+                            child, i = self.list_block(lines, i, depth)
+                            children.append(child)
+                            blank = False
+                            continue
+                        break                   # a list of another kind
+                    # A numbered line that may not start a list here: the
+                    # item's words go on, as they do on GitHub.
+                    text.append(nxt.strip())
+                    i += 1
+                    continue
                 if len(nxt) - len(nxt.lstrip()) > indent:
                     text.append(nxt.strip())
                     i += 1
+                    blank = False
                     continue
                 break
             items.append("<li>%s%s</li>" % (self.inline(" ".join(text)), "".join(children)))
         return "<%s%s>%s</%s>" % (tag, start, "".join(items), tag), i
+
+
+# Markdown the documents write, and what GitHub draws of it, which the
+# pages must draw too. Held at every build: two sentences wrapped before a
+# year ("27 October / 2026. Ready", "14 November / 2026. I walk it") were
+# drawn on the site as lists counted from 2026, while GitHub drew them
+# whole (2026-11-21).
+RENDER_CASES = [
+    ("on 14 November\n2026. I walk it", "<p>on 14 November 2026. I walk it</p>"),
+    ("- a bullet that wraps\n  2026. on", "<ul><li>a bullet that wraps 2026. on</li></ul>"),
+    ("- a bullet that wraps\n2026. on", "<ul><li>a bullet that wraps 2026. on</li></ul>"),
+    ("Steps:\n1. one\n2. two", "<p>Steps:</p>\n<ol><li>one</li><li>two</li></ol>"),
+    ("Text\n- a bullet under it", "<p>Text</p>\n<ul><li>a bullet under it</li></ul>"),
+    ("1. a\n   - x\n2. b", "<ol><li>a<ul><li>x</li></ul></li><li>b</li></ol>"),
+    ("2026. A list counted from a year", '<ol start="2026"><li>A list counted from a year</li></ol>'),
+    # After a blank line nothing runs on to be interrupted: a number starts a
+    # list, of its own when the list before was of the other kind.
+    ("- a bullet\n\n2026. a year", '<ul><li>a bullet</li></ul>\n<ol start="2026"><li>a year</li></ol>'),
+    ("- a bullet\n\n  2. a nested list", '<ul><li>a bullet<ol start="2"><li>a nested list</li></ol></li></ul>'),
+]
+
+
+def check_renderer():
+    for markdown, wanted in RENDER_CASES:
+        drawn = Renderer(lambda href, image=False: href).render(markdown)
+        if drawn != wanted:
+            fail("the Markdown %r is drawn %r, where GitHub draws %r" % (markdown, drawn, wanted))
 
 
 # ---------------------------------------------------------------------
@@ -664,18 +751,20 @@ def build_images(repo):
 
 def android_facts(android):
     """What the pages say about the Android app, each from its own source
-    in that repository: the version from its build file, the figures and
-    the description from its README, the pictures' captions from the
-    README beside them."""
+    in that repository: the version from its build file, the figures from
+    its qa/README, the description from its README, the pictures' captions
+    from the README beside them."""
     gradle = read(os.path.join(android, "app", "build.gradle.kts"))
     m = re.search(r'versionName\s*=\s*"([^"]+)"', gradle)
     if not m:
         fail("the Android app's build.gradle.kts no longer names a versionName")
     readme = read(os.path.join(android, "README.md"))
-    unit = re.search(r"# ([0-9][0-9,]*) JVM unit tests", readme)
-    walk = re.search(r"([0-9][0-9,]*) checks, each reading the file the app wrote", readme)
+    # The counts' one home there is its qa/README, which says so.
+    qa_readme = read(os.path.join(android, "qa", "README.md"))
+    unit = re.search(r"^([0-9][0-9,]*) tests across \S+ suites", qa_readme, re.M)
+    walk = re.search(r"[0-9]+ parts and about\s+([0-9][0-9,]*)\s+checks", qa_readme)
     if not unit or not walk:
-        fail("the Android README no longer gives its unit tests and walk checks "
+        fail("the Android qa/README no longer gives its unit tests and walk checks "
              "in the words build.py reads; update one of them")
     captions = {}
     shots_readme = read(os.path.join(android, "docs", "screenshots", "README.md"))
@@ -787,7 +876,7 @@ def android_page(shell, config, facts, sizes, version):
     parts.append(
         '<h2 id="where-it-stands">Where it stands</h2>'
         "<p>Version %s, on its way to Google Play and not published there yet. It is checked by "
-        "%s unit tests and by a walk of %s checks on an emulator, each reading the file the app "
+        "%s unit tests and by a walk of about %s checks on an emulator, each reading the file the app "
         "wrote; a note, a share code and a backup it makes are read back by the desktop app's own "
         "code. Its code lives %s.</p>"
         % (facts["version"], facts["unit_tests"], facts["walk_checks"], where))
@@ -820,9 +909,8 @@ def check_output():
         rel = os.path.relpath(path, OUT)
         if "{{" in text:
             problems.append("%s: an unfilled {{token}}" % rel)
-        for pattern in FORBIDDEN:
-            if re.search(pattern, text, re.IGNORECASE):
-                problems.append("%s: private text matching %r" % (rel, pattern))
+        for what in private_text(text):
+            problems.append("%s: private %s" % (rel, what))
         if re.search(r"<form\b", text, re.IGNORECASE):
             problems.append("%s: a form, which cannot send: _headers says form-action "
                             "'none', and feedback goes through the stores" % rel)
@@ -862,10 +950,8 @@ def check_output():
     for root, _, files in os.walk(OUT):
         for name in files:
             if name.endswith((".js", ".css", ".txt")):
-                text = read(os.path.join(root, name))
-                for pattern in FORBIDDEN:
-                    if re.search(pattern, text, re.IGNORECASE):
-                        problems.append("%s: private text matching %r" % (name, pattern))
+                for what in private_text(read(os.path.join(root, name))):
+                    problems.append("%s: private %s" % (name, what))
     return problems, len(pages)
 
 
@@ -915,6 +1001,7 @@ def main():
     if not os.path.isfile(os.path.join(android, "app", "build.gradle.kts")):
         fail("no Android app in %s; pass --android-repo" % android)
 
+    check_renderer()
     version, themes, ui = app_facts(repo)
     numbers = project_numbers(repo)
     droid = android_facts(android)
@@ -985,7 +1072,7 @@ def main():
     index_values.update({
         "version": version,
         "og": og_tags(config, "", "Note Organizer",
-                      "An offline notes app for Windows, with a web demo you can try "
+                      "An offline notes app for Windows 11, with a web demo you can try "
                       "in the browser."),
         "nav": nav_html("index.html"),
         "android_version": droid["version"],

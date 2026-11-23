@@ -1,0 +1,20 @@
+# lows-r6-desktop, on Sonnet: the lows wave's sixth round
+# started 2026-11-22 00:12 UTC
+
+You are an adversarial reviewer. Attack two commits on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: 025dfdb2 and 1d736e05. Read with `git -C D:/Projects/NoteOrganizer show <commit>`. Read only; change nothing.
+
+What they do:
+- 025dfdb2: removes a guard from `_transpose_keeping_styles` (note_organizer.py near line 566; the Ctrl+T swap) that refused a swap beside an emoji. The claim: the swap reckons its two places with "-2c" and "-1c", which in Tk 8.6.15 step over an emoji whole (an emoji takes two index places, but index arithmetic never lands inside one), so the swap moves an emoji whole, as Tk's own swap does. qa1's two emoji checks now expect the swap made ("ab😀 here" → "a😀b here"; "a😀b here" with the caret after the emoji → "ab😀 here"), raising nothing. It also makes a table cell's Ctrl+T (search "swap_keeping_styles") lay the `cellalign` tag again over the whole cell after the swap, with a qa1 check and mutant TX05; and edits case 480's automation cell in qa/NoteOrganizer_TestPlan.xlsx.
+- 1d736e05: keeps mutant TX04 in tools/mutants.json, re-aimed at "-2 indices"/"-1 indices" and marked "survives" (equivalent), because commit 04af5cd5 names TX04 and the gate tools/check_fix_mutants.py fails when a named mutant is missing.
+
+You may read Tk's own `C:\Programs\Python313\tcl\tk8.6\text.tcl` (TextTranspose) and Tk's text index documentation if present under C:\Programs\Python313\tcl. Look for:
+- Is the emoji claim right on every road a person takes: the caret placed by a click or arrow keys beside an emoji (can the insert mark end up inside an emoji's two places, e.g. after a click, a selection, a paste, Home/End?), an emoji at a line's end, two emoji side by side, a flag (two regional indicators), a skin-tone or ZWJ sequence, a BMP emoji with U+FE0F? Would any of these make the swap delete or split part of one, or raise? Does the swap's "tag_names" or "get" on such a place misbehave?
+- The cell: does re-adding `cellalign` from 1.0 to end over-reach (a cell whose alignment was not set, a header cell, a cell holding a line break, the emoji face tag `emojif`)? Is the TX05 check on a person's road?
+- Is a "survives" mutant a fair way to keep the catalogue consistent with a past commit, or does it hide something; does the note say truly why?
+- Every claim in both commit messages true?
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims, a claim that misleads; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict line per commit; then "Not covered".

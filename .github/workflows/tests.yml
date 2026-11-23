@@ -1,6 +1,8 @@
 name: QA Tests
 
-# Runs automatically on every push and on every Pull Request, against main.
+# Runs automatically on every push to main and on every pull request, unless the
+# change is only to the documents, the test plan or the site (docs.yml checks
+# the documents and the plan; the site has checks of its own, in site/tools).
 # GitHub's own machines (not your computer) check out the code fresh and run
 # the whole test suite. If anything fails, the commit/PR gets a clear red X
 # instead of finding out later by hand.
@@ -44,7 +46,8 @@ name: QA Tests
 # NOTE, if required status checks are ever turned on for `main`: a
 # documentation-only PR will not run this workflow at all, so a required
 # "qa" check would stay pending forever and block the merge. Say so and
-# this gets solved a different way.
+# this gets solved a different way. Such a PR runs docs.yml instead: the
+# test plan's numbers, the links between the documents, and English.
 on:
   push:
     branches: [main]
@@ -70,6 +73,11 @@ on:
 concurrency:
   group: qa-${{ github.ref }}
   cancel-in-progress: true
+
+# The token GitHub gives each run may read the code and nothing more:
+# nothing here pushes, comments or publishes.
+permissions:
+  contents: read
 
 jobs:
   qa:
@@ -104,10 +112,14 @@ jobs:
         shell: bash
     steps:
       - name: Check out the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # All of the history: check_fix_mutants reads every commit since
+          # its start, and a cut one reads as changing every file.
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           # Kept in step with the development machine (and therefore the
           # packaged .exe, which bundles that same Python). A mismatch
@@ -165,6 +177,10 @@ jobs:
           python tools/check_comments.py
           python tools/check_contrast.py
           python tools/check_mutant_targets.py
+          python tools/check_shipped.py
+          python tools/check_guest.py
+          python tools/check_workflows.py
+          python tools/check_fix_mutants.py
 
       - name: Recurrence engine tests
         run: python test_recurrence.py
@@ -200,11 +216,13 @@ jobs:
         # keys off the module's own location. The noteorganizer/ package has
         # to travel with it now that note_organizer.py imports from it;
         # copying rather than relying on PYTHONPATH keeps everything the
-        # tests touch inside this one folder. Both persist for the QA2-QA9
-        # steps below, which only clear the data files between runs.
+        # tests touch inside this one folder. The licenses go too: About
+        # opens them from beside the package, and qa6 presses that button.
+        # All three persist for the QA2-QA9 steps below, which only clear
+        # the data files between runs.
         run: |
           cd qa
-          cp ../note_organizer.py .
+          cp ../note_organizer.py ../THIRD_PARTY_NOTICES.txt .
           cp -r ../noteorganizer .
           rm -rf attachments *.json
           $GUI qa1.py
@@ -275,10 +293,10 @@ jobs:
       PYTHONIOENCODING: utf-8
     steps:
       - name: Check out the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13"
 
@@ -296,6 +314,7 @@ jobs:
         run: pip install -r requirements.txt coverage==7.16.0
 
       - name: Measure, with a floor
-        # 80: the suite executes 89.2% of the app's lines on Windows (3 Oct);
-        # Linux runs fewer Windows-only branches, hence the margin.
+        # 80: the suite executes more of the app's lines on Windows (qa/README
+        # gives the measurement); Linux runs fewer Windows-only branches, hence
+        # the margin.
         run: xvfb-run -a python tools/run_coverage.py --fail-under 80

@@ -2,9 +2,10 @@
 
 WHY THIS EXISTS
 ---------------
-The UI is being split from one ~9,700-line class into several files using
-mixins: each group of methods moves to its own class, and `NoteOrganizer`
-inherits from all of them. Done correctly this changes nothing at all — the
+The UI was split from one class into several files using mixins (the split
+is complete, and stopped deliberately: CLAUDE.md): each group of methods
+moved to its own class, and `NoteOrganizer` inherits from all of them. A
+move done correctly changes nothing at all — the
 same methods, with the same names and arguments, end up on the same class.
 
 The failure modes are all quiet ones:
@@ -94,6 +95,9 @@ def load_baseline():
 
 
 def main(argv):
+    # The memory ceiling, before the app's code is imported (tools/guest.py).
+    import guest
+    guest.settle(heavy=False)
     api, duplicates = current_api()
 
     if duplicates:

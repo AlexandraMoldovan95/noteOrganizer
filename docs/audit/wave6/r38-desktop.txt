@@ -1,0 +1,19 @@
+You are a skeptical reviewer in the THIRTY-EIGHTH round of wave 6's review of Note Organizer, an offline Windows notes app (Python + Tkinter), D:\Projects\NoteOrganizer, branch audit/d-val6. You are the round's one agent (by the owner's rule, one agent on the fixes by name and their neighbourhood). Round 37 found the code holding and, reading every test plan case's automation column from 1059 on, two cases claiming more than their checks do (1069, 1079), with lows. All fixed in f2dfe831. Two clean rounds in a row end the desktop's loop, so look hard, but grade honestly.
+
+Two parts.
+
+FIRST, f2dfe831 by name. Read it with `git -C D:\Projects\NoteOrganizer show f2dfe831`: qa3's new reading of "Also restored 2 category/categories" and mutant SN175 (does it take the count away, compile, and fail for that reason and no other?); SN104's renamed must_fail (does it now name the check exactly as it prints?); the rewritten claims of cases 1067, 1069 and 1079, case 1085's precondition, the How to use tab's sentence and TEST_PLAN_EXCERPT's (true of the checks and of how the plan is kept?).
+
+SECOND, the class further back: for every case of qa/NoteOrganizer_TestPlan.xlsx from 800 to 1058, read its "Automation status (Claude)" column against the code of the checks it names (qa\*.py, test_*.py, the story scripts under qa\, tools\mutants.json): where it says "Automated" (or "A hand check is a choice"), does a named check walk the case's own steps end to end, and does each named mutant exist and guard that case's promise? Where it says "Automated in part", does it name truly what is left to the hand? Where it names a check or a mutant, does one by that name exist, and does each mutant's must_fail still name its check as it prints (a renamed check makes the runner call the mutant survived)? The How to use tab defines the words.
+
+The documents also: the issues log's thirty-sixth and thirty-seventh rounds, and docs/audit/README.md's last rows. True of the code?
+
+You MAY probe, only like this: a new folder under <scratchpad>\wave6\r38-desktop\, a copy of note_organizer.py and the noteorganizer\ package there, small pure-Python probes (openpyxl to read the plan; methods lifted out by ast; no window), each under a time limit of 20 seconds. Do NOT build the Tk app, do NOT run any qa*.py or test_*.py, nothing heavy (no suite, no build, no emulator, no Sandbox), nothing inside D:\Projects\NoteOrganizer, never edit a repository file, never run git commands that change anything, never open real data (notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious, and a field a newer version wrote, dropped, is a loss. HIGH = a person can lose words, files or fields, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves, the desktop and the phone disagree about what a shared file means, or a document a release relies on (the test plan, USER_GUIDE, PRIVACY, README, DATA_FORMAT, RELEASE_WINDOWS) or a screen says what is not true, on any road a person can meet, however rare (say how rare); LOW = cosmetic, internal, or an orphaned file (no loss). Grade by how a person meets the road.
+
+Report in English, at most 60 lines, exactly these headings:
+1. VERDICT PER FIX -- holds / does not hold, one line each with the reason.
+2. FINDINGS -- each: severity, file:line (or case number), the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. DOCUMENTS -- each sentence found untrue, with the code that contradicts it.
+4. NOT COVERED -- name every road you checked only in part.

@@ -1,12 +1,17 @@
 # Note Organizer
 
-An offline notes app for Windows: rich text, tables, checklists, notes that
+An offline notes app for Windows 11: rich text, tables, checklists, notes that
 repeat, and a calendar that shows them. Python and Tkinter, with one
 dependency (Pillow, for images).
 
 ![A note written, given a table and saved; the month on the calendar; the same note on a light theme](docs/screenshots/demo.gif)
 
 [![Tests](https://github.com/AlexandraMoldovan95/noteOrganizer/actions/workflows/tests.yml/badge.svg)](https://github.com/AlexandraMoldovan95/noteOrganizer/actions/workflows/tests.yml)
+
+**Try it without installing:** a [web demo](https://note-organizer-8f7772.netlify.app/demo/)
+re-creates the app in the browser, in HTML and JavaScript, not the app itself.
+**Written by Alexandra herself:** [In my words](docs/IN_MY_WORDS.md), and
+[Bug reports](docs/BUG_REPORTS.md), what her own manual testing found.
 
 ## In five minutes
 
@@ -26,7 +31,7 @@ cloud, no network calls — it opens a page in your browser only when you
 ask. For people who want their notes, lists and dates in one place
 they control.
 
-- Notes with bold, italic, colours, headings and lists; tables you edit in
+- Notes with bold, italic, colours, sizes and lists; tables you edit in
   place; checklists; spelling checked with Windows' own dictionaries, and
   left alone in a language your computer has none for.
 - Notes that repeat — daily, weekly, monthly, yearly — and a calendar that
@@ -41,7 +46,7 @@ they control.
 
 | | | |
 |---|---|---|
-| ![The main window, with a table in a note](docs/screenshots/main-window.png) | ![A repeating note](docs/screenshots/recurrence-setup.png) | ![The eight themes, in Settings → Appearance](docs/screenshots/theme-picker.png) |
+| ![The main window on a light theme, with a table in a note](docs/screenshots/main-window-light.png) | ![A repeating note](docs/screenshots/recurrence-setup.png) | ![The eight themes, in Settings → Appearance](docs/screenshots/theme-picker.png) |
 
 Every picture is a capture of the app itself, and its icon is drawn from
 code ([where they come from](docs/screenshots/README.md)).
@@ -54,11 +59,14 @@ code ([where they come from](docs/screenshots/README.md)).
   asks first, and on a question about something you cannot take back, Enter
   and Escape both give the safe answer
   ([questions](docs/USER_GUIDE.md#getting-started)).
-- **Readable in every theme, measured.** Every coloured word and button
-  meets WCAG AA in all eight themes, and CI fails on a pair that does not
-  ([contrast, measured](docs/ARCHITECTURE.md#contrast-measured)).
+- **Readable in every theme, measured.** Every coloured word, and every
+  word on a button, meets WCAG AA in all eight themes, and CI fails on a
+  pair that does not. The accent's fill is a design choice, not a measured
+  pair: on the light green and cream themes it is under 3:1 against the
+  sidebar ([contrast, measured](docs/ARCHITECTURE.md#contrast-measured)).
 - **Meaning carried by shape as well as colour.** Save is the one filled
-  button, the open tab stands taller, the current find match is boxed —
+  button in the editor's row of actions, the open tab stands taller, the
+  current find match is boxed —
   checked against colour-blindness simulations, and kept as a test case for
   a real colour-blind reader
   ([what a simulation is, and is not](docs/AI_WORKFLOW.md#ai-reviewers-and-simulations-what-they-are-and-are-not)).
@@ -78,7 +86,8 @@ py note_organizer.py
 
 The notes stay beside the script when it runs from source (or in the
 folder a `notebook_location.txt` beside it names, one path on a line), and
-in `%APPDATA%\NoteOrganizer` when it runs as the packaged `.exe`
+in a `Note Organizer` folder of their own in your profile, beside
+Documents, when it runs as the packaged `.exe`
 ([building it](docs/RELEASE_WINDOWS.md)). On Linux, install Tk first
 (`python3-tk`). The first start opens on a welcome note that shows each
 part of the app.
@@ -88,15 +97,20 @@ part of the app.
 Alexandra Moldovan built Note Organizer with Claude Code, Anthropic's AI
 coding agent. She decided what the app should do and how it should behave,
 chose between the options the agent put forward, went through the
-[test cases](qa/NoteOrganizer_TestPlan.xlsx) by hand on the packaged app
-and approved every change before it was merged. The agent wrote most of
-the code and the documentation, working under the rules in
+[test cases](qa/NoteOrganizer_TestPlan.xlsx) by hand on the packaged app,
+and approved every push and every merge; the final audit reaches `main` as
+one pull request per app. The latest weeks of the history are that audit,
+before the Microsoft Store: rounds of reviewers that read the app, its
+documents and its test plan against the code, each finding fixed and its
+fix read again ([the audit's record](docs/audit/README.md)). The agent wrote most of the code and the
+documentation, working under the rules in
 [CLAUDE.md](CLAUDE.md); what she turned down is kept with its reasons
 ([not planned](docs/ROADMAP.md#explicitly-not-planned-right-now)). Commits
-the agent made carry a `Co-Authored-By` line naming the model — 721 of the
-807 that are not merges, counted at 0.89.371; the first week's predate the
-convention, and a few dozen after it were made without one. How the work
-is divided and checked: [built with an AI agent](docs/AI_WORKFLOW.md).
+the agent made carry a `Co-Authored-By` line naming the model
+([counted](docs/AI_WORKFLOW.md#models)). How the work
+is divided and checked: [built with an AI agent](docs/AI_WORKFLOW.md). The
+few words the history uses in a sense of its own (a wave, a round, the
+walk) are [the house words](CLAUDE.md#house-words).
 
 > Everyone takes notes, whatever they do. I spent years in support — three
 > of them at HP, documenting processes for teams who had to follow them —
@@ -112,10 +126,12 @@ drives the real app — clicking, typing, closing it and opening it again —
 and checks what a person would notice: a note that must survive a restart,
 a share code or a backup; formatting and tables that must come back exactly;
 a question that must not lose what was typed. A fix lands with a check that
-fails when the fix is taken away, and the mutation runner proves it again
-on demand. The suite runs 89% of the app's lines on Windows, and CI holds
+fails when the fix is taken away. To prove the checks catch what they
+guard, a tool breaks the app on purpose, one small change at a time, and a
+check must fail on each ([the last full run](docs/AI_WORKFLOW.md#how-the-agents-work-is-checked)).
+The suite ran 91% of the app's lines on Windows ([measured](qa/README.md)), and CI holds
 a floor of 80% on Linux; a line run is not a line checked, which is what
-the mutants are for
+the breaking on purpose is for
 ([how we test, in one page](qa/README.md#how-we-test-in-one-page)).
 
 ## Speed
@@ -137,6 +153,7 @@ for when you need it:
   through the files.
 - **How it was made:** [in my words](docs/IN_MY_WORDS.md),
   [built with an AI agent](docs/AI_WORKFLOW.md), the
+  [final audit's prompts](docs/audit/README.md), the
   [issues log](docs/ISSUES_LOG.md), the [changelog](CHANGELOG.md) and the
   [roadmap](docs/ROADMAP.md), with the decisions it records.
 - **How it is tested:** the [test map](qa/README.md), the
@@ -159,13 +176,20 @@ feature added so far, the last every fix
 - The entry file is still large: it is the window's shared surface, split
   as far as measurement supports
   ([why](docs/ARCHITECTURE.md#case-study-deciding-the-split-with-a-call-graph)).
-- Built for Windows. It runs on Linux too — the tests do — but its fonts
-  and window behaviour are tuned for Windows.
+- Built for Windows 11, version 24H2 or later: the oldest Windows it was
+  proved on, so the Store offers it nowhere older
+  ([why](docs/RELEASE_WINDOWS.md#which-windows)). It runs on Linux too —
+  the tests do — but its fonts and window behaviour are tuned for Windows.
 - One computer at a time: notes move between computers by backup or share
   code, not by sync.
 - Sharp at one screen scale: the main screen's. On a second screen at
   another scale, Windows resizes the app, a little soft there
   ([why](docs/ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100)).
+- Not for screen readers: Tk 8.6 draws its controls itself and describes
+  almost none of them to Windows' accessibility interface, so a screen
+  reader cannot read most of the window. What it does have: keyboard
+  shortcuts for the common actions, a note list walked with the arrow
+  keys, and words measured readable in every theme.
 
 ## License
 

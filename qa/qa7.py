@@ -40,22 +40,11 @@ def find_widget(w, cls, text_contains=None):
             return r
     return None
 
-def find_all_labels(w, acc=None):
-    if acc is None: acc = []
-    for c in w.winfo_children():
-        if isinstance(c, tk.Label):
-            acc.append(str(c.cget('text')))
-        find_all_labels(c, acc)
-    return acc
+from _qa_support import find_all_labels, list_texts as _qa_list_texts  # noqa: E402
 
 
 def list_texts():
-    """What the note list says, top to bottom: every drawn card's title,
-    then every header's label. The list is a drawing, with no labels to
-    walk."""
-    out = [app._card_view(n)['title'] for n in app._card_order()]
-    out += [app._header_view(c)['label'] for c in app._group_headers]
-    return out
+    return _qa_list_texts(app)
 
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
 
@@ -134,6 +123,18 @@ _cal_posted = []
 _cal_real_popup = NO.tk.Menu.tk_popup
 NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cal_posted.append(_m)
 try:
+    # From a day of a series, the category entry says it moves the series:
+    # read as the day's, it moved every day unasked.
+    app.show_note_context_menu(
+        type('E', (), {'x_root': 0, 'y_root': 0})(),
+        NO.normalize_note(dict(app.notes[0], recurrence={'freq': 'weekly'})), occurrence_date='2026-07-22')
+    _ser_labels = ([str(_cal_posted[-1].entrycget(_i, 'label'))
+                    for _i in range(_cal_posted[-1].index('end') + 1)
+                    if _cal_posted[-1].type(_i) != 'separator'] if _cal_posted else [])
+    check(f'from a day of a series, the category entry says it moves the series '
+          f'({[_l for _l in _ser_labels if "category" in _l]})',
+          any('Move the series to category' in _l for _l in _ser_labels))
+    _cal_posted.clear()
     app.show_note_context_menu(
         type('E', (), {'x_root': 0, 'y_root': 0})(),
         app.notes[0], occurrence_date='2026-07-15')
@@ -272,6 +273,46 @@ app.update()
 check('Confirm on calendar delete removes the note', len(app.notes) == 0)
 check('panel falls back to list after a real delete', app._day_panel_mode == 'list')
 
+# The quick look calls a note empty only when it is: one holding a checklist
+# alone was "(empty note)" under the chip that counted its rows.
+def _ql_text(note):
+    app.notes = [note]
+    app.render_calendar(); app.open_day_popup('2026-07-15'); app.update()
+    app.show_day_note(app.notes[0], '2026-07-15'); app.update()
+    box = find_widget(app.day_panel, tk.Text)
+    return box.get('1.0', 'end-1c') if box is not None else None
+_ql_base = {'id': 3, 'title': 'Shopping', 'body': '', 'category': 'General', 'date': '2026-07-15',
+            'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'attachments': []}
+_ql_said = (_ql_text(dict(_ql_base, checklist=[{'text': 'milk', 'done': False}])),
+            _ql_text(dict(_ql_base, checklist=[])))
+check(f"the calendar's quick look calls a checklist-only note no text, an empty one empty ({_ql_said})",
+      _ql_said == ('(no text)', '(empty note)'))
+app.notes = []
+# A day colour put back from the Calendar is said where it can be read: the
+# status line it went to is the Notes tab's.
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app._hide_toast(); app.update()   # the delete's Undo above, which the words would go beneath
+app.day_colors.pop('2026-07-16', None)
+app._undo_day_clear('2026-07-16', 'color', '#4cc9f0'); app.update()
+_dc_said = str(app.toast_lbl.cget('text'))
+check(f"a day colour put back from the Calendar is said on the banner ({_dc_said!r})",
+      'Day colour put back' in _dc_said and app.day_colors.get('2026-07-16') == '#4cc9f0')
+app.day_colors.pop('2026-07-16', None); app._persist_day_colors()
+# ...and one the settings file refuses is not said put back: the colour, on
+# screen alone, was gone at the next start.
+_dc_view = sys.modules['noteorganizer.ui.calendar_view']
+_dc_save_was = _dc_view.save_setting
+_dc_view.save_setting = lambda *a, **k: False
+app._hide_toast(); app.update()
+try:
+    app._undo_day_clear('2026-07-16', 'color', '#4cc9f0'); app.update()
+    _dc_refused = str(app.toast_lbl.cget('text'))
+finally:
+    _dc_view.save_setting = _dc_save_was
+check(f"a day colour the settings file refuses is not said put back, nor kept on screen "
+      f"({_dc_refused!r}, {app.day_colors.get('2026-07-16')!r})",
+      'Not put back' in _dc_refused and '2026-07-16' not in app.day_colors)
+
 # recurring note asks for scope
 app.notes = [{'id': 3, 'title': 'RecurringCal', 'body': 'x', 'category': 'General', 'date': '2026-07-01',
               'recurrence': {'freq': 'daily'}, 'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
@@ -357,7 +398,36 @@ _card_says = app._card_texts(NO.normalize_note(
 check(f'a card shows the words without the table, a row typed past its last '
       f'cell included ({_card_says["preview"]!r} / {_card_says["tags"]!r})',
       '|' not in _card_says['preview'] and 'Words' in _card_says['preview']
-      and '▦ 1 table' in _card_says['tags'])
+      and '\U000025a6\xa01\xa0table' in _card_says['tags'])
+# A card keeps a note's lines apart, empty ones left out: run together, two
+# lines read as one sentence.
+_card_lines = app._card_texts(NO.normalize_note(
+    {'id': 992, 'title': 'Shopping', 'body': 'milk\n\n  bread  \neggs'}))['preview']
+check(f'a card keeps the lines of a note apart ({_card_lines!r})',
+      _card_lines == 'milk · bread · eggs')
+# A list item shows its words without its marker, and an empty one, as Enter
+# at a marker leaves, is an empty line.
+_card_lines = app._card_texts(NO.normalize_note(
+    {'id': 995, 'title': 'Packing', 'body': 'Pack the coat\n• \n• milk\n2. eggs'}))['preview']
+check(f'...and leaves out a list item with no words, and a marker ({_card_lines!r})',
+      _card_lines == 'Pack the coat · milk · eggs')
+# Cut, a card ends at its last whole word: "...", after the space the cut
+# left, wrapped onto a line of its own, and so did "t…" after "the team's".
+_card_cut = app._card_texts(NO.normalize_note(
+    {'id': 993, 'title': 'Stand-up',
+     'body': 'What we shipped, what is stuck, what is next for the team'}))['preview']
+check(f'a card cut short ends in an ellipsis after its last whole word ({_card_cut!r})',
+      _card_cut == 'What we shipped, what is stuck, what is…')
+_card_cut = app._card_texts(NO.normalize_note(
+    {'id': 996, 'title': 'Quarterly review',
+     'body': "Numbers for the board pack, the team's targets for next year"}))['preview']
+check(f'...and a cut inside a word ends at the word before it ({_card_cut!r})',
+      _card_cut == "Numbers for the board pack, the team's…")
+_card_cut = app._card_texts(NO.normalize_note(
+    {'id': 994, 'title': 'Camping',
+     'body': 'Bring the blue tent and water bottles\nCall Ann about Sunday'}))['preview']
+check(f'...and a cut on the dot between two lines ends at the first ({_card_cut!r})',
+      _card_cut == 'Bring the blue tent and water bottles…')
 check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
@@ -1066,8 +1136,14 @@ check('Close button dismisses the preview', app._mini_popup is None)
 
 app.current_attachments = [{'filename': 'corrupt.png', 'stored_as': 'corrupt.png'}]
 app.refresh_attachments_list(); app.update()
-app.open_attachment(0)
-app.update()
+# It is offered to Windows now (below); answered No here, so nothing opens.
+_cp_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: False
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _cp_real_ask
 check('corrupt image file handled gracefully, no crash', app._mini_popup is None)
 
 # ---- THE PREVIEW APPEARS AT ONCE, AND AGAIN FROM MEMORY ----
@@ -1163,6 +1239,177 @@ except OSError:
 check(f'closing an animation mid-decode lets its file go (was reading: '
       f'{_pv_held}, then movable: {_pv_moved})', _pv_held and _pv_moved)
 
+# An animation's memory is bounded. Every decoded frame was kept while the
+# first loop played, enlarged up to 8x, and kept after the preview closed:
+# a 33 KB GIF ran the app out of memory. Frames stop being kept past
+# PREVIEW_MEMORY_BYTES (here room for three), and closing lets them go.
+_pv_tiny = os.path.join(_pv_dir, 'tiny_anim.gif')
+_pv_small = [_pv_Image.new('RGB', (10, 10), (_i * 20, 0, 0)) for _i in range(12)]
+_pv_small[0].save(_pv_tiny, save_all=True, append_images=_pv_small[1:],
+                  duration=20, loop=0)
+app.PREVIEW_MEMORY_BYTES = 10 * 10 * 4 * 3
+try:
+    app._show_image_preview(_pv_tiny, 'tiny_anim.gif')
+    _pv_end = time.time() + 10
+    while app._preview_source is not None and time.time() < _pv_end:
+        app.update(); time.sleep(0.01)
+    _pv_kept = list(app._image_preview_ref)
+    check(f'a long animation keeps only the frames that fit, at their own size '
+          f'({len(_pv_kept)} of 12 kept, {_pv_kept[0].width()} px wide)',
+          len(_pv_kept) == 4 and _pv_kept[0].width() == 10
+          and app._preview_source is None)
+    app._dismiss_mini_popup(); app.update()
+    check('...and closing the preview lets its frames go',
+          app._image_preview_ref is None)
+finally:
+    del app.PREVIEW_MEMORY_BYTES
+
+# ...and so is the work of decoding it. Pillow composites every frame onto
+# the whole canvas, and a 105 KB GIF of one-pixel frames on a 50-megapixel
+# canvas, shown as a strip a few pixels tall, never filled the memory: the
+# app was busy for minutes. The frames are judged together (here room for
+# five canvases) and counted (here three), each playing the part it has.
+_ab_gif = os.path.join(_pv_dir, 'wide_anim.gif')
+_ab_frames = [_pv_Image.new('RGB', (200, 100), (0, 0, 0)) for _i in range(12)]
+for _i, _f in enumerate(_ab_frames):
+    _f.putpixel((_i * 7, _i), (255, 255, 255))
+_ab_frames[0].save(_ab_gif, save_all=True, append_images=_ab_frames[1:],
+                   duration=20, loop=0)
+_ab_kept = {}
+for _ab_attr, _ab_value in (('ANIMATION_PIXEL_BUDGET', 200 * 100 * 5),
+                            ('PREVIEW_MAX_FRAMES', 3)):
+    getattr(app, '_preview_cache', {}).clear()
+    setattr(app, _ab_attr, _ab_value)
+    try:
+        app._show_image_preview(_ab_gif, 'wide_anim.gif')
+        _pv_end = time.time() + 10
+        while app._preview_source is not None and time.time() < _pv_end:
+            app.update(); time.sleep(0.01)
+        _ab_kept[_ab_attr] = (len(app._image_preview_ref or []),
+                              app._preview_source is None)
+        app._dismiss_mini_popup(); app.update()
+    finally:
+        delattr(app, _ab_attr)
+check(f'an animation stops decoding once its frames together pass the pixel '
+      f'budget, and once it holds as many frames as it may ({_ab_kept})',
+      _ab_kept == {'ANIMATION_PIXEL_BUDGET': (5, True),
+                   'PREVIEW_MAX_FRAMES': (3, True)})
+check(f'...a budget that still lets a 4K animation play two dozen frames '
+      f'({app.ANIMATION_PIXEL_BUDGET // (3840 * 2160)})',
+      app.ANIMATION_PIXEL_BUDGET // (3840 * 2160) >= 24
+      and app.ANIMATION_PIXEL_BUDGET <= 10 * app.PREVIEW_PIXEL_BUDGET)
+
+# An animated PNG plays as a GIF does. Pillow gives its frame times as floats
+# (40.0) and Tk's after() takes only integers: every animated PNG raised
+# halfway through the build, its file held open and its overlay never shown.
+_ap_png = os.path.join(_pv_dir, 'sticker_ap.png')
+_ab_frames[0].save(_ap_png, format='PNG', save_all=True,
+                   append_images=_ab_frames[1:6], duration=40, loop=0)
+getattr(app, '_preview_cache', {}).clear()
+_ap_raised = None
+try:
+    app._show_image_preview(_ap_png, 'sticker_ap.png')
+    _pv_end = time.time() + 10
+    while app._preview_source is not None and time.time() < _pv_end:
+        app.update(); time.sleep(0.01)
+except tk.TclError as _ap_exc:
+    _ap_raised = str(_ap_exc)
+_ap_pop = app._mini_popup
+_ap_placed = _ap_pop is not None and _ap_pop.winfo_manager() == 'place'
+check(f'an animated PNG shows and plays every frame, and lets its file go '
+      f'(raised {_ap_raised!r}, placed {_ap_placed}, '
+      f'{len(app._image_preview_ref or [])} of 6 frames)',
+      _ap_raised is None and _ap_placed
+      and len(app._image_preview_ref or []) == 6 and app._preview_source is None)
+app._dismiss_mini_popup(); app.update()
+# A frame of 0.6 ms ticked every millisecond, half a core while the
+# preview was open. 10 ms and less plays at 100, as browsers play it.
+
+
+def _fd_of(duration):
+    # What it raises is the check's answer, not the end of the suite.
+    try:
+        return app._frame_delay({'duration': duration})
+    except Exception as exc:
+        return repr(exc)
+
+
+_fd_got = {d: _fd_of(d)
+           for d in (0.6, 1.5, 10, 10.4, 11, 20, 40.0, None, 'junk')}
+check(f'a frame of 10 ms or less plays at 100 ms, a longer one as it says '
+      f'({_fd_got})',
+      _fd_got == {0.6: 100, 1.5: 100, 10: 100, 10.4: 100, 11: 11, 20: 20,
+                  40.0: 40, None: 100, 'junk': 100})
+
+# And whatever else fails halfway takes the half-built preview down with it,
+# so its file is let go and no hidden popup is left behind.
+getattr(app, '_preview_cache', {}).clear()
+_ap_real_after = app.after
+_ap_seen = {}
+
+
+def _ap_after(ms, *a, **k):
+    if ms == 20 and not _ap_seen:          # the first frame's tick
+        _ap_seen['source'] = app._preview_source
+        raise tk.TclError('a failure halfway through the build')
+    return _ap_real_after(ms, *a, **k)
+
+
+app.after = _ap_after
+try:
+    try:
+        app._show_image_preview(_ab_gif, 'wide_anim.gif')
+        _ap_failed = False
+    except tk.TclError:
+        _ap_failed = True
+finally:
+    del app.after
+_ap_was = _ap_seen.get('source')
+check(f'a preview that fails halfway lets its file go and leaves no popup '
+      f'(failed {_ap_failed}, file was held {_ap_was is not None}, '
+      f'now {app._preview_source}, popup {app._mini_popup})',
+      _ap_failed and _ap_was is not None and app._preview_source is None
+      and app._mini_popup is None
+      and (getattr(_ap_was, 'fp', None) is None
+           or getattr(_ap_was.fp, 'closed', False)))
+app.update()
+
+# A remove lets go of the file a preview is still reading: on Windows an open
+# file is not deleted, so the record went and the file stayed for good.
+from noteorganizer.core.storage import _attachment_path_within as _ap_within
+import shutil as _ap_shutil
+_ap_name = '20261003120000000000_held.gif'
+_ap_shutil.copy(_ab_gif, os.path.join(NO.ATTACHMENTS_DIR, _ap_name))
+getattr(app, '_preview_cache', {}).clear()
+_ap_kept = list(app.current_attachments)
+app.current_attachments = [{'filename': 'held.gif', 'stored_as': _ap_name}]
+app._show_image_preview(_ap_within(_ap_name), 'held.gif')
+_ap_reading = app._preview_source is not None
+app.remove_attachment(0)
+check(f'removing a file its preview is still reading lets the file go first '
+      f'(was reading {_ap_reading}, now {app._preview_source})',
+      _ap_reading and app._preview_source is None
+      and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ap_name)))
+app._dismiss_mini_popup()
+app._cancel_pending_autosave()
+app.current_attachments = _ap_kept
+app.refresh_attachments_list(); app.update()
+
+# An image too large to decode here is offered to the program Windows opens
+# images with: a 439 KB PNG of 12000x12000 peaked at 1.7 GB in the preview.
+_pv_asked = []
+_pv_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_pv_asked.append(a[0] if a else ''), False)[1]
+app.PREVIEW_PIXEL_BUDGET = 1000
+try:
+    app._show_image_preview(os.path.join(_pv_dir, 'big.png'), 'big.png'); app.update()
+    check(f'an image past the pixel budget is offered elsewhere, not decoded '
+          f'({_pv_asked})',
+          _pv_asked == ['Too large to preview'] and app._mini_popup is None)
+finally:
+    app.ask_yes_no = _pv_real_ask
+    del app.PREVIEW_PIXEL_BUDGET
+
 # A JPEG photo is decoded at the size it is shown, and still fills it.
 _pv_jpg = os.path.join(_pv_dir, 'photo_pv.jpg')
 _pv_Image.new('RGB', (3000, 2000), (40, 90, 160)).save(_pv_jpg, quality=85)
@@ -1177,6 +1424,63 @@ check(f'a large JPEG fits the preview, and fills it ({_pv_pw}x{_pv_ph} in '
       f'{_pv_tw}x{_pv_th})',
       _pv_pw <= _pv_tw and _pv_ph <= _pv_th
       and max(_pv_pw / _pv_tw, _pv_ph / _pv_th) > 0.95)
+
+# ---- Every frame is judged before it is decoded ----
+# The pixel budget asked only the first frame: a TIFF named .png, 16x16 and
+# then 13,000x13,000, showed at once and took 46 s and 2 GB for its second
+# page. A JPEG holding two pictures (MPO) is the same shape through a decoder
+# the preview does use. ISSUES_LOG: "The preview that kept every frame".
+_mf_path = os.path.join(_pv_dir, 'two_pictures.jpg')
+_pv_Image.new('RGB', (16, 16), (200, 30, 30)).save(
+    _mf_path, format='MPO', save_all=True,
+    append_images=[_pv_Image.new('RGB', (300, 200), (30, 30, 200))])
+app.PREVIEW_PIXEL_BUDGET = 1000
+try:
+    app._show_image_preview(_mf_path, 'two_pictures.jpg'); app.update()
+    _mf_shown = app._mini_popup is not None
+    for _ in range(50):
+        app.update()
+        time.sleep(0.02)
+        if app._preview_source is None:
+            break
+    _mf_frames = len(app._image_preview_ref or [])
+    _mf_released = app._preview_source is None
+finally:
+    del app.PREVIEW_PIXEL_BUDGET
+    app._dismiss_mini_popup(); app.update()
+check(f'a later frame past the pixel budget is never decoded: the first shows '
+      f'and the animation stops there ({_mf_frames} frame(s) kept)',
+      _mf_shown and _mf_frames == 1 and _mf_released)
+
+# Pillow knows a file by its contents, so a ".png" could be any of the forty
+# kinds it reads -- a TIFF, an icon set, an EPS it hands to Ghostscript. Only
+# the decoders of the pictures the preview shows may read one.
+_mf_ico = os.path.join(_pv_dir, 'icon_named.png')
+_pv_Image.new('RGBA', (64, 64), (0, 120, 0, 255)).save(
+    _mf_ico, format='ICO', sizes=[(16, 16), (64, 64)])
+# ...and it is not called unreadable with no way to open it: it is offered to
+# the program the computer opens its kind with, as a picture too large is.
+_mf_told, _mf_opened = [], []
+_mf_real_warn, _mf_real_ask = app.show_warning, app.ask_yes_no
+_mf_real_start = getattr(NO.os, 'startfile', None)
+app.show_warning = lambda t, m, **k: _mf_told.append(('told', t))
+app.ask_yes_no = lambda t, m, **k: (_mf_told.append(('asked', t)), True)[1]
+NO.os.startfile = lambda p, *a, **k: _mf_opened.append(os.path.basename(p))
+try:
+    app._show_image_preview(_mf_ico, 'icon_named.png'); app.update()
+    _mf_ico_shown = app._mini_popup is not None
+finally:
+    app.show_warning, app.ask_yes_no = _mf_real_warn, _mf_real_ask
+    if _mf_real_start is None:
+        del NO.os.startfile
+    else:
+        NO.os.startfile = _mf_real_start
+    app._dismiss_mini_popup(); app.update()
+check(f'a picture of another kind under a .png name is not decoded, and is '
+      f'offered to the program the computer opens it with ({_mf_told}, '
+      f'opened {_mf_opened})',
+      _mf_told == [('asked', "Can't preview this file")] and not _mf_ico_shown
+      and _mf_opened == ['icon_named.png'])
 
 # ---- A shortcut file is dangerous too (product review T0-8) ----
 # The warn-before-opening list covered the 1990s executables and missed
@@ -1203,7 +1507,7 @@ _real_startfile = NO.os.startfile if hasattr(NO.os, 'startfile') else None
 NO.os.startfile = lambda p, *a, **k: _opened.append(p)
 _asked = []
 _real_ask_lnk = app.ask_yes_no
-app.ask_yes_no = lambda t, m, **k: (_asked.append((t, k)), False)[1]
+app.ask_yes_no = lambda t, m, **k: (_asked.append((t, k, m)), False)[1]
 try:
     app.open_attachment(0)
     app.update()
@@ -1212,6 +1516,12 @@ finally:
 check('opening a .lnk asks first, with the warning glyph',
       len(_asked) == 1 and _asked[0][1].get('icon') == 'warning'
       and _asked[0][1].get('default') == 'no')
+# The warning names the file by the type that opens: quoting the label, it
+# called a ".pdf" dangerous, which teaches a person to click past it.
+check('the warning names the file by the type that opens, not the label '
+      f'({_asked[0][2][:40] if _asked else None!r})',
+      len(_asked) == 1 and '“invoice.lnk”' in _asked[0][2]
+      and 'invoice.pdf' not in _asked[0][2])
 check('and answering No does not launch it',
       _opened == [])
 app.ask_yes_no = lambda *a, **k: True
@@ -1223,6 +1533,198 @@ finally:
     if _real_startfile is not None:
         NO.os.startfile = _real_startfile
 check('answering Yes is what actually opens it', len(_opened) == 1)
+
+# ---- The row shows the file that opens, not the label ----
+# A backup can label any file as anything: "Holiday photo.jpg" over an
+# .rdp drew a photo's icon and no hint, and the click handed Windows a
+# remote connection. The record goes in raw, past normalize_note, with a
+# right-to-left override in its label, so the row's own reading is what is
+# checked. ISSUES_LOG: "The photo that was a remote connection".
+with open(os.path.join(NO.ATTACHMENTS_DIR, '20261001120000000001_trip.rdp'), 'wb') as f:
+    f.write(b'full address:s:example.invalid')
+app.current_attachments = [{'filename': 'Holiday photo\u202e.jpg',
+                            'stored_as': '20261001120000000001_trip.rdp'}]
+app.refresh_attachments_list(); app.update()
+_row_texts = find_all_labels(app.attachments_frame)
+check(f'a photo label over another kind of file shows that kind: its name, '
+      f'no picture icon, and the outside-app hint ({_row_texts!r})',
+      '📄 Holiday photo.rdp' in _row_texts
+      and not any('🖼' in t or '\u202e' in t for t in _row_texts)
+      and any('Opens in your default app' in t for t in _row_texts))
+# A label too long for the row gives way before its type, never at the edge:
+# padded with blank-looking characters, "Holiday photo.jpg" over an .rdp hid
+# the ".rdp" beyond the row's end.
+app.current_attachments = [{'filename': 'Holiday photo.jpg' + '\u2800' * 120 + '.jpg',
+                            'stored_as': '20261001120000000001_trip.rdp'}]
+app.refresh_attachments_list(); app.update(); app.update()
+_ll_lbl = next((w for w in app.attachments_frame.winfo_children()[0]
+                .winfo_children()[0].winfo_children()
+                if isinstance(w, tk.Label)), None)
+_ll_text = str(_ll_lbl.cget('text')) if _ll_lbl is not None else ''
+check(f'a label too long for its row keeps its type in sight ({_ll_text[:20]!r}...'
+      f'{_ll_text[-6:]!r}, {_ll_lbl.winfo_reqwidth() if _ll_lbl else None} of '
+      f'{_ll_lbl.winfo_width() if _ll_lbl else None} px)',
+      _ll_lbl is not None and _ll_text.endswith('\u2026.rdp')
+      and _ll_text.startswith('📄 Holiday photo.jpg')
+      # Its own border and padding are a few pixels a side: the pieces are
+      # measured one by one, so a pixel or two over still draws every letter.
+      and _ll_lbl.winfo_reqwidth() <= _ll_lbl.winfo_width() + 3)
+# ...and the ✕ stays in the row: packed after the name, the name's length took
+# the whole row and a long-named file could not be removed from it.
+_ll_row = app.attachments_frame.winfo_children()[0].winfo_children()[0]
+_ll_x = next((w for w in _ll_row.winfo_children() if isinstance(w, tk.Button)), None)
+check(f'a long-named attachment keeps its ✕ in the row '
+      f'({_ll_x.winfo_x() if _ll_x else None} + {_ll_x.winfo_width() if _ll_x else None} '
+      f'of {_ll_row.winfo_width()} px)',
+      _ll_x is not None and _ll_x.winfo_ismapped() and _ll_x.winfo_width() > 10
+      and _ll_x.winfo_x() + _ll_x.winfo_width() <= _ll_row.winfo_width())
+# A capital dotted I lower-cases to two characters, and the cut was
+# found in a lower-cased copy, so four of them moved it past the type. And a
+# label with no type, or one of three hundred lines, was drawn whole: at
+# 60,000 letters it ended the app at every start, the note being last open.
+_ll_shown = {}
+for _ll_key, _ll_label, _ll_file in (
+        ('dotted', 'İİİİ Holiday' + '⠀' * 120 + '.jpg',
+         '20261001120000000001_trip.rdp'),
+        ('lines', 'minutes\n' * 300 + '.rdp', '20261001120000000001_trip.rdp'),
+        ('no type', 'W' * 900, '20261001120000000002_plain')):
+    if not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ll_file)):
+        open(os.path.join(NO.ATTACHMENTS_DIR, _ll_file), 'wb').close()
+    app.current_attachments = [{'filename': _ll_label, 'stored_as': _ll_file}]
+    app.refresh_attachments_list(); app.update(); app.update()
+    _ll_l = next((w for w in app.attachments_frame.winfo_children()[0]
+                  .winfo_children()[0].winfo_children()
+                  if isinstance(w, tk.Label)), None)
+    _ll_shown[_ll_key] = (str(_ll_l.cget('text')) if _ll_l else '',
+                          _ll_l.winfo_reqheight() if _ll_l else 0,
+                          _ll_l.winfo_reqwidth() <= _ll_l.winfo_width() + 3
+                          if _ll_l else False)
+_ll_line = _ll_shown['no type'][1]
+check(f'...and with capital dotted Is before it too '
+      f'({_ll_shown["dotted"][0][-8:]!r})',
+      _ll_shown['dotted'][0].endswith('….rdp'))
+check(f'a label of many lines, or long with no type, is drawn on one line that '
+      f'fits its row ({[(t[:12], t[-6:], h, fits) for t, h, fits in _ll_shown.values()]})',
+      '\n' not in _ll_shown['lines'][0] and _ll_shown['lines'][0].endswith('.rdp')
+      and _ll_shown['lines'][1] <= _ll_line and _ll_shown['lines'][2]
+      and _ll_shown['no type'][0].endswith('…') and _ll_shown['no type'][2])
+# The picture's preview is as wide as what it holds, and drew the name whole
+# before its two buttons: 300 letters made it wider than the window, Close
+# past its edge; 60,000 passed X's limit and ended the app.
+from PIL import Image as _ll_Image
+_ll_Image.new('RGB', (60, 40), (40, 90, 200)).save(
+    os.path.join(NO.ATTACHMENTS_DIR, '20261001120000000003_wide.png'))
+app.current_attachments = [{'filename': 'Holiday at the lake ' * 15 + '.png',
+                            'stored_as': '20261001120000000003_wide.png'}]
+app.refresh_attachments_list(); app.update()
+app.open_attachment(0); app.update(); app.update()
+_ll_pop = app._mini_popup
+_ll_close = find_widget(_ll_pop, tk.Button, '✕ Close') if _ll_pop is not None else None
+_ll_head = _ll_close.master if _ll_close is not None else None
+check(f"a picture's preview with a long name stays inside the window, its "
+      f"Close in its header ({_ll_pop.winfo_width() if _ll_pop else None} of "
+      f"{app.winfo_width()} px)",
+      _ll_close is not None and _ll_pop.winfo_width() <= app.winfo_width()
+      and _ll_close.winfo_ismapped()
+      and _ll_close.winfo_x() + _ll_close.winfo_width() <= _ll_head.winfo_width())
+app._dismiss_mini_popup(); app.update()
+
+# ---- A colon never reaches a stored name ----
+# The resolver refuses a stored name holding one: on Windows it names a
+# stream of another file ("x.docx:Zone.Identifier"), and a backup's Trash
+# entry deleted a file's Mark of the Web by it. Only Linux lets a file be
+# called so; attached there, it is stored without the colon and still opens.
+if os.name != 'nt':
+    _co_src = os.path.join(tempfile.mkdtemp(prefix='qa7-colon-'), 'minutes 10:30.txt')
+    with open(_co_src, 'w', encoding='utf-8') as f:
+        f.write('minutes')
+    app.current_attachments = []
+    _co_real_pick = fd.askopenfilenames
+    fd.askopenfilenames = lambda **k: (_co_src,)
+    try:
+        app.add_attachment(); app.update()
+    finally:
+        fd.askopenfilenames = _co_real_pick
+    _co_rec = [dict(a) for a in app.current_attachments]
+    _co_opened, _co_warned = [], []
+    _co_real_start = getattr(NO.os, 'startfile', None)
+    _co_real_warn = app.show_warning
+    NO.os.startfile = lambda p, *a, **k: _co_opened.append(os.path.basename(p))
+    app.show_warning = lambda t, m, **k: _co_warned.append(t)
+    try:
+        app.open_attachment(0); app.update()
+    finally:
+        app.show_warning = _co_real_warn
+        if _co_real_start is None:
+            del NO.os.startfile
+        else:
+            NO.os.startfile = _co_real_start
+    app._cancel_pending_autosave()
+    app.current_attachments = []
+    app.refresh_attachments_list(); app.update()
+    check(f'a file whose name holds a colon is stored without one, and opens '
+          f'({_co_rec}, opened {_co_opened}, warned {_co_warned})',
+          len(_co_rec) == 1 and ':' not in _co_rec[0]['stored_as']
+          and _co_rec[0]['filename'] == 'minutes 10:30.txt'
+          and _co_opened == [_co_rec[0]['stored_as']] and not _co_warned)
+
+# ---- Only kinds that just show their contents open unasked ----
+# The warn-before-opening list was a list of dangerous kinds, and such a
+# list is never complete: .pyw, .rdp, .theme, .xll, macro documents, .msu
+# and more went straight to Windows. Now a short list opens at once, a
+# kind that runs code asks with the warning, and every other kind asks
+# calmly -- while a person's own .docx, .pdf or .mp4 still meets no question.
+_k_opened, _k_asked = [], []
+_k_real_ask, _k_real_dlg = app.ask_yes_no, app._themed_dialog
+_k_real_start = getattr(NO.os, 'startfile', None)
+_k_answer = [False]
+NO.os.startfile = lambda p, *a, **k: _k_opened.append(os.path.basename(p))
+app.ask_yes_no = lambda t, m, **k: (_k_asked.append(('warn', t, m, k)), _k_answer[0])[1]
+app._themed_dialog = lambda t, m, **k: (_k_asked.append(('ask', t, m, k)), _k_answer[0])[1]
+
+
+def _k_click(name):
+    stored = '20261001120000000000_' + name
+    with open(os.path.join(NO.ATTACHMENTS_DIR, stored), 'wb') as f:
+        f.write(b'content')
+    app.current_attachments = [{'filename': name, 'stored_as': stored}]
+    _k_opened.clear(); _k_asked.clear()
+    app.open_attachment(0); app.update()
+    return [a[0] for a in _k_asked], list(_k_opened)
+
+
+try:
+    _k_plain = {n: _k_click(n) for n in ('minutes.docx', 'sheet.xlsx', 'slides.pptx',
+                                         'scan.pdf', 'notes.txt', 'clip.mp4')}
+    check(f'a person\'s own documents, PDFs, text and video open with no question '
+          f'({_k_plain})',
+          all(v == ([], ['20261001120000000000_' + n]) for n, v in _k_plain.items()))
+    _k_code = {n: _k_click(n) for n in ('run.pyw', 'trip.rdp', 'wall.theme', 'report.xll',
+                                        'minutes.docm', 'upd.msu', 'app.msixbundle', 'c.iqy')}
+    check(f'kinds that run code or reach out ask with the warning, and No opens '
+          f'nothing ({_k_code})',
+          all(v == (['warn'], []) for v in _k_code.values()))
+    _k_unknown = {n: _k_click(n) for n in ('archive.zip', 'page.html', 'old.doc', 'odd.xyz')}
+    check(f'any other kind asks first, and Cancel opens nothing ({_k_unknown})',
+          all(v == (['ask'], []) for v in _k_unknown.values()))
+    _k_click('archive.zip')
+    _k_q = _k_asked[0] if _k_asked else ('', '', '', {})
+    check(f'the question for an unknown kind is calm and plain: it names the file, '
+          f'offers Cancel and Open with Cancel first, and claims nothing about '
+          f'running programs ({_k_q[1]!r}: {_k_q[2][:60]!r})',
+          _k_q[1] == 'Open this file?'
+          and '“archive.zip”' in _k_q[2]
+          and "doesn't know this kind of file" in _k_q[2]
+          and 'run programs' not in _k_q[2]
+          and _k_q[3].get('buttons') == [('Cancel', False), ('Open', True)]
+          and _k_q[3].get('default') == 'Cancel')
+    _k_answer[0] = True
+    check('...and Open is what opens it',
+          _k_click('archive.zip') == (['ask'], ['20261001120000000000_archive.zip']))
+finally:
+    app.ask_yes_no, app._themed_dialog = _k_real_ask, _k_real_dlg
+    if _k_real_start is not None:
+        NO.os.startfile = _k_real_start
 
 # ---- A trailing dot cannot smuggle it past the gate ----
 # Windows strips trailing dots/spaces when it OPENS a path, so
@@ -1257,9 +1759,14 @@ finally:
     app.ask_yes_no = _real_ask_lnk
     if _real_startfile2 is not None:
         NO.os.startfile = _real_startfile2
-check('a trailing-dot .lnk still meets the warning, and No still blocks',
-      len(_asked2) == 1 and _asked2[0][1].get('default') == 'no'
-      and _opened2 == [])
+# On Windows the dirty name reaches evil.lnk under another name, so the
+# resolver refuses it outright ("A file with two names"); elsewhere the file
+# has that literal name, and the gate asks.
+check('a trailing-dot .lnk never opens unasked: the warning with No, or '
+      f'refused as another name ({_asked2})',
+      _opened2 == []
+      and ((len(_asked2) == 1 and _asked2[0][1].get('default') == 'no')
+           or (os.name == 'nt' and _asked2 == [])))
 
 # non-previewable file still gets the "opens externally" hint
 app.current_attachments = [{'filename': 'doc.pdf', 'stored_as': 'doc.pdf'}]
@@ -1478,7 +1985,7 @@ check('the banner and the day strip hide on a plain note',
 app.load_note(app.find_note(60)); app.update()
 check('the banner switches to the series text on the series view',
       bool(app.occurrence_banner.winfo_ismapped())
-      and 'edits here apply to every day' in app.occurrence_banner.cget('text'))
+      and 'edits here apply to the whole series' in app.occurrence_banner.cget('text'))
 
 # An explicit Save on an EDIT-origin visit stays in the editor...
 app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
@@ -1531,6 +2038,20 @@ app._return_to_calendar(); app.update()
 check('a clean day returns without asking either',
       scope_ux == []
       and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR)
+# "Go back and fix it" answered to the save's question keeps the note open:
+# Back read no answer, and went to the Calendar over the unsaved repeat.
+app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
+_bc_flush_was = app._flush_autosave
+app._flush_autosave = lambda *a, **k: False
+try:
+    app._return_to_calendar(); app.update()
+finally:
+    app._flush_autosave = _bc_flush_was
+check(f"Back to Calendar stays when Go back and fix it is answered "
+      f"(tab {app.notebook.index(app.notebook.select())}, way back {bool(app._pending_calendar_return)})",
+      app.notebook.index(app.notebook.select()) == app.TAB_NOTES
+      and bool(app._pending_calendar_return))
+app._return_to_calendar(); app.update()
 # Settle any still-deferred edit while the mock is armed — under the
 # no-flush mutant the editor stays dirty here, and a later section's
 # flush would otherwise raise the REAL scope dialog and hang the run.
@@ -2080,9 +2601,9 @@ app.refresh_note_list(); app.render_calendar(); app.update()
 # The series view names the repeat AND the days living on their own.
 app.open_note_in_tab(app.find_note(64)); app.update()
 _btext = app.occurrence_banner.cget('text')
-check('the series banner says edits apply to every day',
+check('the series banner says edits apply to the whole series',
       app.occurrence_banner.winfo_ismapped()
-      and 'edits here apply to every day' in _btext)
+      and 'edits here apply to the whole series' in _btext)
 check('the series banner counts the days with their own edits',
       '1 day keeps its own edits' in _btext)
 
@@ -2316,7 +2837,45 @@ _hl = find_all_labels(app._history_rows)
 check('expanding the group reveals its edited days, newest first',
       any('17.08.2026' in t for t in _hl)
       and any('15.06.2026' in t and 'HistSpecial' in t for t in _hl))
+# Unfolded by its note, not its id: a series deleted frees its id, and the
+# next note given that id opened unfolded.
+_h80 = app.find_note(80)
+app.notes = [n for n in app.notes if n is not _h80]
+app.notes.append(NO.normalize_note(dict(_h80, uid='')))
+app._render_calendar_history(); app.update()
+_hl = find_all_labels(app._history_rows)
+check('a new series given a deleted series\' id starts collapsed',
+      not any('17.08.2026' in t for t in _hl))
+app.notes = [n for n in app.notes if n.get('id') != 80] + [_h80]
+app._render_calendar_history(); app.update()
 app._history_toggle_group(80); app.update()
+
+
+def _exact_button(text):
+    stack = [app]
+    while stack:
+        w = stack.pop()
+        try:
+            if isinstance(w, tk.Button) and str(w.cget('text')) == text:
+                return w
+            stack.extend(w.winfo_children())
+        except tk.TclError:
+            pass
+    return None
+
+
+# A month asked for by a header button is shown: behind the register the
+# arrows moved a hidden month, seen only on the way back.
+_h_month = app.cal_year * 12 + app.cal_month
+_h_next = _exact_button('▶')
+if _h_next is not None:
+    _h_next.invoke(); app.update()
+check('History: ▶ in the header leaves the register for the next month',
+      _h_next is not None and not app._history_visible
+      and app.cal_grid_frame.winfo_ismapped()
+      and app.cal_year * 12 + app.cal_month == _h_month + 1)
+app.shift_calendar(months=-1); app.update()
+app._toggle_calendar_history(); app.update()
 
 # Search reaches into a day's own override content and auto-expands.
 app._history_search_var.set('budget')
@@ -2325,6 +2884,24 @@ _hl = find_all_labels(app._history_rows)
 check('search finds override content and auto-expands its group',
       any('17.08.2026' in t for t in _hl)
       and not any('HistDated' in t for t in _hl))
+# ...and counts what it leaves out, of every kind, "of" all of them, the
+# note under the group saying so: it said "1 edited day" of a series with
+# two, and the days off the schedule and the moved ones went uncounted.
+_hs_was = app.notes
+app.notes = [NO.normalize_note({
+    'id': 84, 'title': 'HistCount', 'body': 'agenda', 'date': '2026-01-05',
+    'recurrence': {'freq': 'weekly'}, 'moved': {'2026-03-02': '2026-03-03'},
+    'overrides': {'2026-08-17': {'title': '', 'body': 'the budget'},
+                  '2026-06-15': {'title': 'Plan', 'body': 'budget plan'},
+                  '2026-07-08': {'title': 'Old Wednesday', 'body': 'old'}}})]
+app._render_calendar_history(); app.update()
+_hj = ' | '.join(find_all_labels(app._history_rows))
+app.notes = _hs_was
+app._render_calendar_history(); app.update()
+check(f'History counts the off-schedule and moved days a search leaves out, every edited one '
+      f'listed, and says so under the group ({_hj[-260:]!r})',
+      '2 edited days' in _hj and '0 of 1 off the schedule' in _hj
+      and '0 of 1 moved' in _hj and 'or is one this search or year leaves out' in _hj)
 app._history_search_var.set('')
 app.update(); _t7.sleep(0.4); app.update()
 
@@ -3610,7 +4187,8 @@ app.render_calendar(); app.update()
 
 _dr_w0, _dr_h0 = app.winfo_width(), app.winfo_height()
 try:
-    for _dr_geom in ('640x700', '1149x850', '1150x850', '1400x850'):
+    # 900 wide: the narrowest the Calendar is laid out, whatever the window.
+    for _dr_geom in ('900x700', '1149x850', '1150x850', '1400x850'):
         app.geometry(_dr_geom)
         for _ in range(6):
             app.update(); _t7.sleep(0.02)
@@ -4788,6 +5366,180 @@ check(f'a save made on the Notes tab does not rebuild the day left open on the '
 check('...and the day shows the change when the Calendar is shown again',
       len(_dp_rebuilt) >= 1
       and any('DayPanelRenamed' in t for t in find_all_labels(app.day_panel)))
+
+# ---- KEYBOARD: a day's list, the History register and the reminder ----
+# Their rows and words were bound to the mouse alone: an open day's notes
+# could not be opened from the keyboard, nor a History row, nor today's
+# reminder answered.
+import time as _kc_time
+
+
+def _kc_settle(n=6):
+    for _ in range(n):
+        app.update()
+        _kc_time.sleep(0.02)
+
+
+from _qa_support import take_focus as _qa_take_focus  # noqa: E402
+
+
+def _kc_take(w, cap_s=2.0):
+    return _qa_take_focus(app, w, cap_s)
+
+
+def _kc_rows(top):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Frame) and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    walk(top)
+    return found
+
+
+app.new_note()
+app.notes = [{'id': 901, 'title': 'KeyDay', 'body': 'x', 'category': 'General',
+              'date': '2026-10-02', 'created': '2026-01-01 00:00',
+              'updated': '2026-01-01 00:00', 'checklist': [], 'attachments': []}]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 10
+app.render_calendar()
+_kc_settle()
+app.open_day_popup('2026-10-02')
+_kc_settle()
+_kc_list = _kc_rows(app.day_panel)
+_kc_menus = []
+app.show_note_context_menu = lambda e, n, occurrence_date=None: _kc_menus.append(
+    (n.get('title'), occurrence_date))
+try:
+    if _kc_list and _kc_take(_kc_list[0]):
+        _kc_list[0].event_generate('<Shift-F10>')
+        _kc_settle()
+finally:
+    del app.show_note_context_menu
+check(f'Shift+F10 on a day\'s note row opens that note\'s menu, as a right-click '
+      f'does ({_kc_menus})', _kc_menus == [('KeyDay', '2026-10-02')])
+_kc_list = _kc_rows(app.day_panel)
+if _kc_list and _kc_take(_kc_list[0]):
+    _kc_list[0].event_generate('<Return>')
+    _kc_settle()
+check(f'Return on a day\'s note row opens the note in the day\'s panel '
+      f'({app._day_panel_mode})', bool(_kc_list) and app._day_panel_mode == 'note')
+app._toggle_calendar_history()
+_kc_settle(10)
+_kc_hist = _kc_rows(app._history_rows)
+if _kc_hist and _kc_take(_kc_hist[0]):
+    _kc_hist[0].event_generate('<Return>')
+    _kc_settle()
+check(f'Return on a History row opens its day on the month '
+      f'({app._history_visible}, {app.selected_day})',
+      bool(_kc_hist) and not app._history_visible
+      and app.selected_day == '2026-10-02')
+app._render_reminder_bar(1, '2026-10-02')
+_kc_settle()
+_kc_close = [w for w in app.reminder_bar.winfo_children()
+             if isinstance(w, tk.Label) and str(w.cget('text')) == '✕']
+if _kc_close and _kc_take(_kc_close[0]):
+    _kc_close[0].event_generate('<space>')
+    _kc_settle()
+check('the reminder\'s ✕ is a Tab stop, and Space closes the reminder',
+      bool(_kc_close) and str(_kc_close[0].cget('takefocus')) == '1'
+      and not app._is_placed(app.reminder_bar))
+
+# The month itself: one canvas bound to the mouse alone, so the keyboard
+# could only change month, never reach a day.
+app.notebook.select(app.TAB_CALENDAR)
+app.close_day_panel()
+app.cal_year, app.cal_month = 2030, 6
+app._cal_key_day = None
+app.render_calendar()
+_kc_settle()
+_kc_cv = app.cal_canvas
+
+
+def _kc_ring_on():
+    """The day the keyboard's ring is drawn round, read from the drawing."""
+    items = _kc_cv.find_withtag('cal_key')
+    if len(items) != 1 or str(_kc_cv.itemcget(items[0], 'outline')).lower() \
+            != app._focus_ring().lower():
+        return None
+    box = tuple(int(round(v)) for v in _kc_cv.coords(items[0]))
+    for date_str, rec in app._cal_cells.items():
+        if box == (rec['x0'] - 2, rec['y0'] - 2, rec['x1'] + 2, rec['y1'] + 2):
+            return date_str
+    return None
+
+
+def _kc_key(key):
+    if _kc_take(_kc_cv):
+        _kc_cv.event_generate(key)
+        _kc_settle()
+
+
+_kc_chain, _kc_at = [], str(app._history_toggle_btn)
+for _ in range(20):
+    _kc_at = str(app.tk.call('tk_focusNext', _kc_at))
+    _kc_chain.append(_kc_at)
+check('the month is a Tab stop, reached from the calendar\'s header',
+      str(_kc_cv) in _kc_chain)
+_kc_take(_kc_cv)
+_kc_settle()
+_kc_first = _kc_ring_on()
+_kc_steps = []
+for _kc_k in ('<Right>', '<Down>', '<Left>', '<Up>'):
+    _kc_key(_kc_k)
+    _kc_steps.append(_kc_ring_on())
+check(f'with the keyboard on the month a ring is drawn round its first day, and '
+      f'the arrows walk it a day and a week ({_kc_first}, {_kc_steps})',
+      _kc_first == '2030-06-01'
+      and _kc_steps == ['2030-06-02', '2030-06-09', '2030-06-08', '2030-06-01'])
+_kc_key('<Left>')
+check(f'an arrow off the month\'s edge turns to the next one '
+      f'({app.cal_year}-{app.cal_month}, {_kc_ring_on()})',
+      (app.cal_year, app.cal_month) == (2030, 5) and _kc_ring_on() == '2030-05-31')
+_kc_key('<Next>')
+check(f'Page Down keeps the ring on the same day of the month, as far as the '
+      f'month goes ({_kc_ring_on()})', _kc_ring_on() == '2030-06-30')
+_kc_key('<Return>')
+check(f'Return opens the day, as a click does ({app.selected_day}, '
+      f'{app._day_panel_mode})',
+      app.selected_day == '2030-06-30' and app._day_panel_mode == 'list')
+_kc_menus = []
+app.show_day_context_menu = lambda e, d: _kc_menus.append((d, e.widget))
+try:
+    _kc_key('<Shift-F10>')
+finally:
+    del app.show_day_context_menu
+check(f'Shift+F10 opens the day\'s right-click menu, at the day ({_kc_menus})',
+      _kc_menus == [('2030-06-30', _kc_cv)])
+# The menu's colour palette, asked for from the keyboard, takes it.
+_kc_asked = []
+_kc_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = lambda self: (_kc_asked.append(self), _kc_real_focus_set(self))[1]
+try:
+    if _kc_take(_kc_cv):
+        # The event the day's menu hands its "Color this day..." entry.
+        app._color_day('2030-06-30', type('E', (), {
+            'widget': _kc_cv, 'x_root': _kc_cv.winfo_rootx() + 10,
+            'y_root': _kc_cv.winfo_rooty() + 10})())
+        _kc_settle()
+finally:
+    tk.Misc.focus_set = _kc_real_focus_set
+_kc_pop = app._mini_popup
+check(f'"Color this day..." from the keyboard opens the palette with the keyboard '
+      f'in it ({_kc_asked[-1:]})',
+      _kc_pop is not None and any(str(w).startswith(str(_kc_pop) + '.')
+                                  for w in _kc_asked))
+app._dismiss_mini_popup()
+app.close_day_panel()
+_kc_settle()
+app.notebook.select(app.TAB_NOTES)
+app.notes = []
+app.save_notes()
+_kc_settle()
 
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 

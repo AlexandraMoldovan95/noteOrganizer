@@ -70,6 +70,12 @@ def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
     if not cond: fails.append(name)
 
+
+def skip(name):
+    """A check this run could not make -- the keyboard never reached the
+    app. Not a PASS: run_tests counts these apart and says how many."""
+    print('SKIP', name)
+
 app = NO.NoteOrganizer(); app._poll_active_dirty = lambda: None
 app.show_info = lambda *a, **k: True
 app.show_warning = lambda *a, **k: True
@@ -260,6 +266,24 @@ try:
     app.update()
     check(f'...but not about formatting, which this box never keeps ({_told9})',
           _took9 == 'break' and _told9 == [])
+    # Plain text keeps the same ceiling here (2026-10-28): it was Tk's own
+    # paste, all of it.
+    _told9.clear()
+    _real_rt9 = NO.clipboard.read_text
+    NO.clipboard.read_html = lambda: None
+    NO.clipboard.read_text = lambda: 'w' * (NO.MAX_PASTE_CHARS + 50)
+    try:
+        _body9.delete('1.0', 'end')
+        _took9 = app._paste_table_aware(_body9)
+        app.update()
+    finally:
+        NO.clipboard.read_text = _real_rt9
+    check(f'plain text past the character cap is cut at it here too, and '
+          f'that is said ({len(_body9.get("1.0", "end-1c"))} chars, '
+          f'{[t for t, _m in _told9]})',
+          _took9 == 'break'
+          and len(_body9.get('1.0', 'end-1c')) == NO.MAX_PASTE_CHARS
+          and [t for t, _m in _told9] == ['Pasted in part'])
 finally:
     app.show_info = _real_info9
 _body9.delete('1.0', 'end')
@@ -285,7 +309,9 @@ while _stack9:
 # winfo_manager, not winfo_ismapped: the packing is synchronous, the OS
 # mapping is not -- twice the real-Windows run saw the drawn canvas
 # still unmapped and called a healthy preview absent.
-_pc9 = [c for c in _canv9 if c.winfo_manager() and c.find_all()]
+# A canvas of drawn items, not the editor's viewport, which holds a window.
+_pc9 = [c for c in _canv9 if c.winfo_manager() and c.find_all()
+        and any(c.type(i) != 'window' for i in c.find_all())]
 check(f'pasting a table shows the drawn preview '
       f'({len(_pc9[0].find_all()) if _pc9 else 0} items)',
       len(_pc9) == 1 and len(_pc9[0].find_all()) >= 8)
@@ -366,13 +392,13 @@ _steppedQ = app._popups_step_back()
 # to honour it: on the CI's Xvfb (X11, no WM) the answer stays stale
 # at 1 even after a successful set-to-False -- measured, not assumed.
 # The app's own work (dropped + recorded for restore) asserts anywhere.
-check('step-back drops topmost and reports the popup '
-      f'(in={_popQ in _steppedQ}, '
-      f'top={_popQ.attributes("-topmost")!r}, '
-      f'n_stepped={len(_steppedQ)})',
-      _popQ in _steppedQ
-      and (sys.platform != 'win32'
-           or not int(_popQ.attributes('-topmost') or 0)))
+check(f'step-back reports the popup (in={_popQ in _steppedQ}, n_stepped={len(_steppedQ)})',
+      _popQ in _steppedQ)
+if sys.platform == 'win32':
+    check(f'...and drops its topmost (top={_popQ.attributes("-topmost")!r})',
+          not int(_popQ.attributes('-topmost') or 0))
+else:
+    skip('...and drops its topmost (no window manager here to answer)')
 app._popups_step_forward(_steppedQ)
 check('step-forward restores it',
       bool(int(_popQ.attributes('-topmost') or 0)))
@@ -898,7 +924,7 @@ check(f'template move: Alt+Down on a box moves its item, and the keyboard is '
       and _tm_held is _tm_part(_tm_rows()[1], klass=tk.Checkbutton)
       and str(_tm_rows()[1].cget('highlightbackground')).lower()
       == str(_tm_rows()[1].cget('highlightcolor')).lower()
-      == app.colors['accent'].lower())
+      == app._focus_ring().lower())
 _fake_ask.answer = True
 del _asks[:]
 app.ask_yes_no_cancel = _fake_ask
@@ -1310,7 +1336,7 @@ if app.focus_get() is app._find_entry:
 else:
     # Focus is the one thing a test process cannot demand. Say so rather
     # than pass on a reading that never happened.
-    check('escape: SKIPPED -- the find entry never took focus', True)
+    skip('escape: the find entry never took focus')
     print('      (find-bar precedence unverified in this run: no focus)')
 app._dismiss_mini_popup(); app.update()
 app._close_find() if getattr(app, '_find_open', False) else None
@@ -1547,9 +1573,12 @@ def _rz_window():
 # every app it builds (_qa_support.pin_the_desktop), because a click held
 # in another program while the tests run would otherwise freeze layouts.
 _rz_real = NO.NoteOrganizer._desktop_pointer_button_held
-check('the mouse button can be asked, and says no when nobody holds it',
-      _rz_real(app) in (False, True)
-      and (sys.platform.startswith('win') or _rz_real(app) is False))
+check('the mouse button can be asked', _rz_real(app) in (False, True))
+if sys.platform.startswith('win'):
+    # The real desktop: a person's own click may be held right now.
+    skip('...and says no when nobody holds it (a real desktop: someone may)')
+else:
+    check('...and says no when nobody holds it', _rz_real(app) is False)
 _rz_held = {'now': True}
 app._pointer_button_held = lambda: _rz_held['now']
 # The pause must not land by accident between two steps of the check.
@@ -1670,10 +1699,12 @@ for _ in range(10):
     app.update(); time.sleep(0.02)
 
 
-# The window's horizontal scrollbar is for a window narrower than the
-# sidebar and the editor side by side. It used to be packed for good, and
-# sat under every window wide enough not to need it -- in every screenshot.
-# Asked of the layout itself, wide and narrow, twice each.
+# The window's horizontal scrollbar is for a window narrower than its page
+# is laid out: the Calendar and Settings keep the width of the sidebar and
+# the editor side by side, while a window that narrow has the sidebar hidden
+# (its floor; the Notes page alone then fits). It used to be packed for
+# good, and sat under every window wide enough not to need it -- in every
+# screenshot. Asked of the layout itself, wide and narrow, twice each.
 def _sb_packed():
     return app._main_hscroll.winfo_manager() == 'pack'
 
@@ -1685,6 +1716,8 @@ def _sb_at(width):
     return _sb_packed()
 
 
+app.toggle_sidebar()
+app.notebook.select(app.TAB_CALENDAR)
 _sb_seen = [(_sb_w, _sb_at(_sb_w)) for _sb_w in (1100, 760, 1100, 760)]
 check("the window's horizontal scrollbar is there only while the window is "
       "narrower than the app needs (%s)" % _sb_seen,
@@ -1692,9 +1725,19 @@ check("the window's horizontal scrollbar is there only while the window is "
 check('...and while it is there it scrolls: the content is wider than the '
       'view (%s)' % (app.main_canvas.xview(),),
       app.main_canvas.xview()[1] < 1.0)
+app.notebook.select(app.TAB_NOTES)
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+check('...while the Notes page, its sidebar hidden, needs none at that width '
+      '(%d px)' % app.winfo_width(), not _sb_packed())
+app.notebook.select(app.TAB_CALENDAR)
+for _ in range(10):
+    app.update(); time.sleep(0.02)
 check('...and a window exactly as wide as the app needs has none (%d px)'
       % app._main_min_width,
       not _sb_at(app._main_min_width))
+app.notebook.select(app.TAB_NOTES)
+app.toggle_sidebar()
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)
@@ -2109,7 +2152,7 @@ try:
     _cp_rec = app._note_cards.get(902)
     _cp_y = (int(_cp_rec['y0'] - app.canvas.canvasy(0) + 12)
              if _cp_rec is not None else None)
-    check('fixture: the note\'s card is drawn beside the Settings page',
+    check('fixture: the note\'s card is drawn on the list the Settings page hides',
           _cp_y is not None)
     for _cp_name, _cp_times, _cp_want in (('a press on a note card', (None,), 1),
                                           ('a double-click on it',
@@ -2240,7 +2283,7 @@ app._maybe_dismiss_mini_popup(_outside)      # a click outside: asks, for real
 app.after_cancel(_es_job)
 app.update()
 if _es_seen.get('keyboard') is False:
-    check('escape on the question: SKIPPED -- the keyboard never reached it', True)
+    skip('escape on the question: the keyboard never reached it')
     print('      (Escape on "Save changes?" unverified in this run: no focus)')
 else:
     check('Escape on "Save changes?" keeps the editor open, with what was typed, '
@@ -2503,10 +2546,77 @@ if _keyboard_on(_cs_body):
     check('Ctrl+S with the keyboard in the template editor saves the template '
           '(%r)' % _cw_disk_body(), 'third line' in _cw_disk_body())
 else:
-    check('ctrl+s in the template editor: SKIPPED -- the keyboard never '
-          'reached it', True)
+    skip('ctrl+s in the template editor: the keyboard never reached it')
     print('      (Ctrl+S in the template editor unverified in this run: no focus)')
+# The editor's own ✕ asks as Escape does: it closed a half-written template
+# without a word.
 app._dismiss_mini_popup(); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_cs_pop = app._mini_popup
+_cs_body = [w for w in _walk9(_cs_pop) if isinstance(w, tk.Text)][0]
+_cs_body.insert('end', '\nfourth line')
+_cx_asked = []
+_cx_button = next(w for w in _walk9(_cs_pop)
+                  if isinstance(w, tk.Button) and w.cget('text') == '✕')
+try:
+    app.ask_yes_no_cancel = lambda *a, **k: (_cx_asked.append(a[0]), None)[1]
+    _cx_button.invoke(); app.update()
+finally:
+    app.__dict__.pop('ask_yes_no_cancel', None)
+check("the template editor's ✕ asks before a half-written template goes, and "
+      "Cancel keeps it (%s)" % _cx_asked,
+      _cx_asked == ['Save changes?'] and app._mini_popup is _cs_pop
+      and 'fourth line' in _cs_body.get('1.0', 'end'))
+# A change made from outside -- a backup's Update -- reloads the open note
+# without asking the template editor: its Cancel kept the stale editor, which
+# saved over the change. The editor stays open.
+app._dismiss_mini_popup(); app.update()
+app.hide_settings_page(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Outside', 'body': 'before'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_xo_pop = app._mini_popup
+[w for w in _walk9(_xo_pop) if isinstance(w, tk.Text)][0].insert('end', '\nunsaved line')
+_xo_asked = []
+try:
+    app.ask_yes_no_cancel = lambda *a, **k: (_xo_asked.append(a[0]), None)[1]
+    app.find_note(1)['body'] = 'after'
+    app._editor_follows_external_change({1}); app.update()
+finally:
+    app.__dict__.pop('ask_yes_no_cancel', None)
+_xo_shown = app.body_text.get('1.0', 'end-1c')
+check("a change made from outside reloads the open note without asking the "
+      "template editor (%s, %r)" % (_xo_asked, _xo_shown),
+      not _xo_asked and _xo_shown == 'after' and app._mini_popup is _xo_pop)
+app._dismiss_mini_popup(); app.update()
+# ...but a popup with nothing to lose closes: an emoji picker or a palette aimed
+# at the old text stayed open over the reload and wrote into the new.
+app.hide_settings_page(); app.update()
+app._show_emoji_picker(app.body_text); app.update()
+_xo_picker = app._mini_popup
+app.find_note(1)['body'] = 'later'
+app._editor_follows_external_change({1}); app.update()
+check("a change made from outside closes a popup with nothing to lose (%r)" % _xo_picker,
+      _xo_picker is not None and app._mini_popup is None
+      and app.body_text.get('1.0', 'end-1c') == 'later')
+app._dismiss_mini_popup(); app.update()
+# The template editor's boxes have no Undo: Tk's own Ctrl+K deleted the rest of
+# the line there for good, Ctrl+O and Ctrl+T split and swapped.
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_ck_box = [w for w in _walk9(app._mini_popup) if isinstance(w, tk.Text)][0]
+_ck_box.delete('1.0', 'end'); _ck_box.insert('1.0', 'keep this whole line')
+_ck_box.focus_force(); _ck_box.mark_set('insert', '1.4'); app.update()
+for _ck_key in ('<Control-k>', '<Control-o>', '<Control-t>'):
+    _ck_box.event_generate(_ck_key); app.update()
+check(f"Ctrl+K, Ctrl+O and Ctrl+T leave a template box's words alone ({_ck_box.get('1.0', 'end-1c')!r})",
+      _ck_box.get('1.0', 'end-1c') == 'keep this whole line')
+app._dismiss_mini_popup(); app.update()
+app.hide_settings_page(); app.update()
 
 # ============================================================
 # ENTER ANSWERS A QUESTION WITH THE BUTTON THAT HOLDS THE KEYBOARD
@@ -2552,8 +2662,7 @@ if not sys.platform.startswith('win'):
          'Q-keypad'))
 for _en_name, _en_want, (_en_got, _en_rescued), _en_title in _en_results:
     if _en_seen.get(_en_title) is False:
-        check('%s: SKIPPED -- the keyboard never reached the question' % _en_name,
-              True)
+        skip('%s: the keyboard never reached the question' % _en_name)
         continue
     check('%s (%r, rescued: %s)' % (_en_name, _en_got, _en_rescued),
           _en_got is _en_want and not _en_rescued)
@@ -2578,7 +2687,7 @@ _nq['outer'] = _while_asking(
     lambda: app.ask_yes_no('Outer question', 'Asked first.', default='yes'),
     _nq_outer_act, 'Yes', 'Outer question', cap_ms=15000)
 if _en_seen.get('Inner question') is False:
-    check('enter on nested questions: SKIPPED -- no keyboard', True)
+    skip('enter on nested questions: no keyboard')
 else:
     check('one Enter answers the question asked last, and leaves the one under '
           'it asking (%s)' % _nq,
@@ -2612,7 +2721,7 @@ _nx['outer'] = _while_asking(
     lambda: app.ask_yes_no('Outer escape', 'Asked first.', default='no'),
     _nx_outer_act, 'No', 'Outer escape', cap_ms=15000)
 if _nx.get('keyboard') is False:
-    check('escape on nested questions: SKIPPED -- no keyboard', True)
+    skip('escape on nested questions: no keyboard')
 else:
     check('one Escape answers the question asked last only: the one under it '
           'is still the person\'s to answer (%s)' % _nx,
@@ -2665,8 +2774,7 @@ _tb['answer'] = _while_asking(
     lambda: app.ask_yes_no_cancel('Q-tab', 'Tab stays among these.'),
     _tb_act, 'Yes', 'Q-tab')
 if _tb.get('keyboard') is False:
-    check('tab inside a question: SKIPPED -- the keyboard never reached it',
-          True)
+    skip('tab inside a question: the keyboard never reached it')
 else:
     check('Tab walks a question\'s own answers and comes back round, and '
           'Shift+Tab walks back -- never out into the note under it (%s)'
@@ -2801,7 +2909,8 @@ def _pn_buttons(panel, labels):
 
 
 _pn_zone = [b for b, _kw in app._sidebar_zone_buttons]
-for _pn_size in ('640x600', '1366x690', '1150x860'):
+# The sidebar's own panels at its smallest window: beside the editor, 900x600.
+for _pn_size in ('900x600', '1366x690', '1150x860'):
     app.geometry(_pn_size); _pn_settle()
     app.toggle_import_panel(); _pn_settle()
     _pn_imp = _pn_buttons(app.import_panel, ('Import', 'Clear', 'Close'))
@@ -2811,7 +2920,7 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
           and _pn_whole(app.import_box))
     app.toggle_import_panel(); _pn_settle()
     app.toggle_share_panel(); _pn_settle()
-    _pn_ids = [n['id'] for n in app.notes][:1]
+    _pn_ids = [app._order_identity(n) for n in app.notes][:1]
     for _pn_id in _pn_ids:
         app._share_vars[_pn_id].set(True)
     find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
@@ -2839,7 +2948,7 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
 # sidebar changing size; the zone is given less, and fits again.
 app.geometry('1366x690'); _pn_settle()
 app.toggle_share_panel(); _pn_settle()
-for _pn_id in [n['id'] for n in app.notes][:1]:
+for _pn_id in [app._order_identity(n) for n in app.notes][:1]:
     app._share_vars[_pn_id].set(True)
 find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
 if not app.selection_mode:
@@ -2945,6 +3054,12 @@ check('...and the tiles too (total %s, added this week %s)'
          _st_pairs['Added this week'].cget('text')),
       int(_st_pairs['Total notes'].cget('text')) == len(app.notes)
       and int(_st_pairs['Added this week'].cget('text')) == _st_oracle(app.notes)[0][0])
+# Every category there is, not only those holding notes: all of these are in
+# General, and the tile said 1 beside a notebook with several categories.
+check('the Categories tile counts every category (%s of %d)'
+      % (_st_pairs['Categories'].cget('text'), len(NO.CATEGORY_COLORS)),
+      len(NO.CATEGORY_COLORS) > 1
+      and int(_st_pairs['Categories'].cget('text')) == len(NO.CATEGORY_COLORS))
 # In place: the next render changes the figures on the SAME widgets.
 _st_before = {k: v for k, v in _st_pairs.items()}
 app.notes.append(NO.normalize_note({'id': 9950, 'title': 'One more', 'body': 'y',
@@ -3170,8 +3285,7 @@ for _rb_key, _rb_name in (('Escape', 'Escape'), ('Return', 'Enter')):
               % (_rb_name, _bg9[_rb_bg:][:1]),
               not _rb_pop.winfo_exists() and len(_bg9) == _rb_bg)
     else:
-        check('%s in a rename box: SKIPPED -- the keyboard never reached it'
-              % _rb_name, True)
+        skip('%s in a rename box: the keyboard never reached it' % _rb_name)
     app._dismiss_mini_popup(); app.update()
 
 # ============================================================
@@ -3216,6 +3330,9 @@ def _fq_inside(w):
             <= app.winfo_rootx() + app.winfo_width())
 
 
+# A question belongs to the whole window, whose narrowest is 640x600 with the
+# sidebar hidden: asked there, the window is that narrow indeed.
+app.toggle_sidebar(); _pn_settle()
 try:
     for _fq_size in ('640x600', '1366x690'):
         app.geometry(_fq_size); _pn_settle()
@@ -3300,12 +3417,234 @@ try:
     check('the window shrunk while the long notice waits: it still fits, OK on '
           'screen (%s)' % _fq_shrunk, _fq_shrunk.get('ok') and _fq_shrunk.get('card'))
 finally:
+    if app._sidebar_hidden:
+        app.toggle_sidebar(); _pn_settle()
     if _fq_info is not None:
         app.show_info = _fq_info
     (NO.VERSION_CHANGE, NO.STORAGE_WARNING, NO.MIGRATION_INFO, NO.PURGED_DIRS,
      app._corrupt_notes_report, app._categories_adopted, app._cleanup_report,
      app._version_backup_path) = _fq_saved
     app.geometry('1100x850'); _pn_settle()
+
+# ---- KEYBOARD: a themed dropdown, from the keyboard alone ----
+# Built from a frame and two labels with only a mouse binding, all thirteen
+# dropdowns -- Text size among them -- were out of Tab's reach, and a list a
+# click had opened could not be walked: the keyboard stayed on the opener.
+_kd_asked = []
+_kd_real_focus_set = tk.Misc.focus_set
+
+
+def _kd_record(self):
+    _kd_asked.append(self)
+    return _kd_real_focus_set(self)
+
+
+def _kd_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+from _qa_support import take_focus as _qa_take_focus  # noqa: E402
+
+
+def _kd_take(w, cap_s=2.0):
+    return _qa_take_focus(app, w, cap_s)
+
+
+def _kd_rows(pop):
+    """A list popup's rows, top to bottom: the frames Space and Return press."""
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Frame) and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    try:
+        if pop is not None and pop.winfo_exists():
+            walk(pop)
+    except tk.TclError:
+        pass
+    return found
+
+
+def _kd_says(row):
+    return [str(c.cget('text')) for c in row.winfo_children()
+            if isinstance(c, tk.Label)][-1:]
+
+
+def _kd_open_pop():
+    pop = getattr(app, '_mini_popup', None)
+    return pop if pop is not None and pop.winfo_exists() else None
+
+
+def _kd_key(w, key):
+    """*key* pressed on *w*, the keyboard forced there first (a precondition:
+    where the app put it is asked of the focus_set record)."""
+    if w is not None and _kd_take(w):
+        w.event_generate(key)
+        _kd_settle()
+        return True
+    return False
+
+
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+app.filter_var.set('All')
+app.refresh_note_list()
+_kd_settle()
+_kd_dd = app.filter_menu
+tk.Misc.focus_set = _kd_record
+try:
+    check('the filter dropdown is a Tab stop, with the keyboard\'s ring as its '
+          'focus colour',
+          str(_kd_dd.cget('takefocus')) == '1'
+          and str(_kd_dd.cget('highlightcolor')).lower() == app._focus_ring().lower())
+    del _kd_asked[:]
+    _kd_pressed = _kd_key(_kd_dd, '<space>')
+    _kd_list = _kd_rows(_kd_open_pop())
+    _kd_cur = [r for r in _kd_list if r._key_current]
+    check(f'Space on the filter dropdown opens its list, and the keyboard goes '
+          f'to the row it shows now, All ({[_kd_says(r) for r in _kd_cur]})',
+          _kd_pressed and len(_kd_list) >= 3 and len(_kd_cur) == 1
+          and _kd_says(_kd_cur[0]) == ['All'] and _kd_cur[0] in _kd_asked)
+    del _kd_asked[:]
+    _kd_key(_kd_list[0] if _kd_list else None, '<Down>')
+    check('Down walks to the next row', len(_kd_list) > 1 and _kd_list[1] in _kd_asked)
+    del _kd_asked[:]
+    _kd_key(_kd_list[1] if len(_kd_list) > 1 else None, '<End>')
+    check('End goes to the last row, Home to the first',
+          _kd_list and _kd_list[-1] in _kd_asked
+          and _kd_key(_kd_list[-1], '<Home>') and _kd_list[0] in _kd_asked)
+    del _kd_asked[:]
+    _kd_up = _kd_key(_kd_list[0] if _kd_list else None, '<Up>')
+    check('Up on the first row goes nowhere', _kd_up and not _kd_asked)
+    _kd_second = _kd_says(_kd_list[1])[0] if len(_kd_list) > 1 else None
+    del _kd_asked[:]
+    _kd_key(_kd_list[1] if len(_kd_list) > 1 else None, '<Return>')
+    check(f'Return chooses the row, closes the list, and the keyboard goes back '
+          f'to the dropdown ({app.filter_var.get()!r}, asked {_kd_asked[-2:]})',
+          _kd_second is not None and app.filter_var.get() == _kd_second
+          and _kd_open_pop() is None and _kd_dd in _kd_asked)
+    # Down opens it too; Escape closes it choosing nothing.
+    _kd_before = app.filter_var.get()
+    _kd_key(_kd_dd, '<Down>')
+    _kd_list = _kd_rows(_kd_open_pop())
+    del _kd_asked[:]
+    _kd_key(_kd_list[0] if _kd_list else None, '<Escape>')
+    check(f'Down opens it too, and Escape closes it choosing nothing, the '
+          f'keyboard back on the dropdown ({app.filter_var.get()!r}, asked '
+          f'{_kd_asked[-1:]})',
+          len(_kd_list) >= 3 and _kd_open_pop() is None
+          and app.filter_var.get() == _kd_before and _kd_dd in _kd_asked)
+    # The mouse's list leaves the keyboard where it was.
+    _kd_take(app.search_entry)
+    del _kd_asked[:]
+    _qa_click(_kd_dd)
+    _kd_settle()
+    _kd_pop = _kd_open_pop()
+    check(f'a click opens the list as before and sends the keyboard nowhere '
+          f'({_kd_asked})', _kd_pop is not None and not any(
+              str(w).startswith(str(_kd_pop)) for w in _kd_asked))
+    app._dismiss_mini_popup()
+    _kd_settle()
+    # Inside the template editor: Escape closes the list alone, and the
+    # keyboard is back on the opener there.
+    app._edit_template(None, redraw=lambda: None)
+    _kd_settle()
+    _kd_ed = app._mini_popup
+    _kd_cat = find_dropdown_by_label(_kd_ed, 'General') if _kd_ed else None
+    _kd_key(_kd_cat, '<space>')
+    _kd_nested = getattr(app, '_nested_dropdown', None)
+    _kd_nrows = _kd_rows(_kd_nested)
+    del _kd_asked[:]
+    _kd_key(_kd_nrows[0] if _kd_nrows else None, '<Escape>')
+    # Asked of the record, or of the focus itself: on Windows the editor is
+    # activated again as the list goes, and Tk hands its opener the keyboard.
+    _kd_held = None
+    try:
+        _kd_held = app.focus_get()
+    except KeyError:
+        pass
+    check(f'in the template editor, Escape on the category list closes the list '
+          f'alone, and the keyboard goes back to its opener ({_kd_asked[-1:]}, '
+          f'{_kd_held})',
+          _kd_nrows and not _kd_nested.winfo_exists() and _kd_ed.winfo_exists()
+          and (_kd_cat in _kd_asked or _kd_held is _kd_cat))
+    app._dismiss_mini_popup()
+    _kd_settle()
+finally:
+    tk.Misc.focus_set = _kd_real_focus_set
+app.filter_var.set('All')
+app.refresh_note_list()
+_kd_settle()
+
+# ---- KEYBOARD: a popup opened from the keyboard lands where one types ----
+# The template editor and the month jump put the
+# keyboard on the ✕ of their header, the first control built. A space typed
+# into a new template's name closed the editor, and the year typed into the
+# jump went nowhere (its own request for the year box is held by Tk until the
+# popup is drawn, where the landing cannot see it).
+
+
+def _kp_inside(pop):
+    return [w for w in _kd_asked
+            if pop is not None and str(w).startswith(str(pop) + '.')]
+
+
+tk.Misc.focus_set = _kd_record
+try:
+    app.notebook.select(app.TAB_CALENDAR)
+    _kd_settle()
+    del _kd_asked[:]
+    _kp_pressed = _kd_key(app.cal_month_lbl, '<space>')
+    _kp_pop = _kd_open_pop()
+    _kp_mine = _kp_inside(_kp_pop)
+    check(f'Space on the calendar\'s month opens the jump with the keyboard in '
+          f'its year box, the year selected to type over, never on its ✕ '
+          f'({[w.winfo_class() for w in _kp_mine]})',
+          _kp_pressed and _kp_pop is not None and _kp_mine
+          and _kp_mine[-1].winfo_class() == 'Entry'
+          and _kp_mine[-1].selection_present()
+          and not any(w.winfo_class() == 'Button' for w in _kp_mine))
+    app._dismiss_mini_popup()
+    _kd_settle()
+    app.notebook.select(app.TAB_NOTES)
+    app.show_settings_page()
+    app.toggle_settings_panel('templates')
+    _kd_settle()
+    _kp_new = find_widget(app.settings_page, tk.Button, '+ New template')
+    del _kd_asked[:]
+    _kd_key(_kp_new, '<space>')
+    _kp_ed = _kd_open_pop()
+    _kp_mine = _kp_inside(_kp_ed)
+    _kp_name = find_widget(_kp_ed, tk.Entry) if _kp_ed is not None else None
+    check(f'Space on "+ New template" opens the editor with the keyboard in its '
+          f'Template name box, "Untitled template" selected, never on its ✕ '
+          f'({[w.winfo_class() for w in _kp_mine]})',
+          _kp_ed is not None and _kp_name is not None and _kp_mine
+          and _kp_mine[-1] is _kp_name and _kp_name.selection_present()
+          and not any(w.winfo_class() == 'Button' for w in _kp_mine))
+    # Typed where the app put the keyboard: the space is a letter of the name.
+    _kp_typed = None
+    if _kp_mine and _kd_take(_kp_mine[-1]):
+        for _kp_k in ('W', 'e', 'e', 'k', 'space', 'p', 'l', 'a', 'n'):
+            _kp_mine[-1].event_generate(f'<KeyPress-{_kp_k}>')
+        _kd_settle()
+        _kp_typed = _kp_name.get() if _kp_ed.winfo_exists() else None
+    check(f'...and "Week plan" typed there is the template\'s name, the editor '
+          f'still open ({_kp_typed!r})', _kp_typed == 'Week plan')
+    app._dismiss_mini_popup()
+    _kd_settle()
+finally:
+    tk.Misc.focus_set = _kd_real_focus_set
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+_kd_settle()
 
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)

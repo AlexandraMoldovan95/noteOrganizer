@@ -1,0 +1,39 @@
+# changelog-classify, each fix read against the shipped code, for the changelogs and the version numbers, on Sonnet
+# started 2026-11-23 00:51 UTC
+
+You are helping prepare the CHANGELOG entries and version numbers for two notes apps. Read-only: change no file anywhere. Use only Grep, Read and git (show, log, diff, blame, grep). Never run any test, qa script, note_organizer.py, gradle, adb or anything that starts an app. Never open any notes_data.json, settings.json, trash.json, templates.json, attachments folder or notebook_location.txt anywhere on the machine. No heredocs.
+
+## The two repositories
+- Desktop: D:\Projects\NoteOrganizer (Python + Tkinter), branch audit/d-val6. The last version is 0.101.542 (commit 08563351). It was built only for a Windows Sandbox test and never shipped.
+  - The last version actually shipped to users is 0.97.405, whose code is commit 509ecc4d.
+  - The counting rule is in docs/ROADMAP.md's "Versioning" section and "Version ledger". Read both, and read commit 08563351's message for how the last bump applied the rule.
+  - In short: a defect counts as a "Fixed" bullet only if it was already in the shipped code (509ecc4d). A defect introduced and repaired during the unshipped work is not counted (it is folded into its entry or left out).
+  - New behaviour counts as "Added". "Changed" counts for nothing.
+- Phone: D:\Projects\androidVersion (Kotlin + Compose), branch audit/a-val6. Its last version is 0.15.1 (versionCode 21, commit 799b612).
+  - Find its versioning rule yourself: try CHANGELOG.md's head, docs/, README.md, and grep for "versionCode" and "Versioning".
+  - Find which version was last shipped to a user. The owner had 0.15.0 installed on her own phone on 21 November, and neither app is in a store yet. Say how the phone's rule treats an unshipped version, with the evidence.
+
+## The commits to classify
+Desktop, every commit in `git -C D:/Projects/NoteOrganizer log 08563351..HEAD`.
+Phone, every commit in `git -C D:/Projects/androidVersion log 2c2f7be..HEAD`.
+
+Some commits fix test code, walk code or the fix of an earlier commit in the same list. Group those with the defect they belong to: one entry per defect, however many commits its fix took.
+
+## For each defect, report
+1. The commits, short hashes.
+2. What a person saw before, in one plain sentence.
+3. Whether it was in the shipped code, with evidence:
+   - desktop: `git show 509ecc4d:<file>`, grep there for the old code, or `git log -S` to find when the faulty code came in, compared with 509ecc4d's date;
+   - phone: the same against the shipped version's commit.
+   Answer "in shipped code", "introduced after (commit X, date)" or "unclear (why)".
+4. The category it would take: Added, Fixed (counted), Fixed (not counted: introduced after shipping), or Changed. Give a reason.
+5. A draft CHANGELOG bullet in the style of the existing ones. Read CHANGELOG.md's 0.101.542 section (desktop) and 0.15.x sections (phone) first. Write plain words a user understands, one sentence or two, and name no audit round, wave or panel.
+
+## Then
+- Compute the proposed new version number for each app under its rule.
+  - Desktop: start from the cumulative totals 0.101.542 encodes and add only the counted entries.
+  - Phone: apply its own rule, and give the versionCode.
+  - Show the arithmetic.
+- Say whether each app's last CHANGELOG section would be renamed (as 0.101.540 was renamed to 0.101.542, being unshipped) or a new section started, and why, citing the rule.
+
+End with "Not covered": anything you could not determine or did not read.

@@ -73,10 +73,11 @@ that have moved, so existing callers — including the over 1,100 `note_organize
 references across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~22,000 lines of genuinely shared surface. It grew again through
-the rich-text and tables work even as the pure logic behind those features went into `core/`,
-and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
-[case study](#the-list-measured-again)).
+What remains in the file is genuinely shared surface: about 22,000 lines on 7 November 2026. It
+grew through the rich-text and tables work even as the pure logic behind those features went
+into `core/`, dropped from ~22,400 to ~19,700 when the note list moved to `ui/note_list.py` (see
+the [case study](#the-list-measured-again)), grew again to ~24,400 by 2 November, and lost
+~2,400 lines of comments when they were condensed to say why in a few lines.
 
 ### How it got here
 
@@ -106,14 +107,22 @@ must now call `initialise()` deliberately, which is what `test_data_safety.py` d
 
 ### Storage
 
-Everything is local JSON — next to the script when run from source, per-user under
-`%APPDATA%\NoteOrganizer` when running as the built `.exe` (`core/paths.py` decides). A source run
+Everything is local JSON — next to the script when run from source, per-user in the profile's
+`Note Organizer` folder (`C:\Users\<name>\Note Organizer`) when running as the built `.exe` or
+the Store's package (`core/paths.py` decides; see
+[The notebook outside AppData](#the-notebook-outside-appdata)). A source run
 can keep its notebook elsewhere: a git-ignored `notebook_location.txt` beside the script names the
 folder. It exists because every notebook this project lost was lost in the working tree; a file
 rather than an environment variable, because the tests run copies of the code that must keep
 their data in their own folders, and a copy carries no such file while every child process
-inherits a variable. The folder it names is never migrated into — an empty one would otherwise
-copy in the `.exe`'s notebook from `%APPDATA%`:
+inherits a variable. A suite run in the checkout itself, or in a copy of the whole folder, does
+carry it, so no test trusts the folder it stands in: each asks the app's own resolver which
+folder the app will open, refuses beside a `notebook_location.txt`, and seeds only that folder
+when it is its own (`qa/_qa_support.py`; the final audit's tenth round,
+[the story](ISSUES_LOG.md#the-test-that-took-the-computer-down)). `initialise(app_dir=...)`
+resolves from the folder it is given as from the entry file's, the file included: a test plays
+the real start in a folder of its own. The folder it names is never migrated into — an empty one
+would otherwise copy in the `.exe`'s notebook from `%APPDATA%`:
 
 | File | Contents |
 |---|---|
@@ -130,13 +139,34 @@ Two promises sit on top of the files themselves. Every write is **atomic** — s
 mended, dumped to a sibling `.tmp`, then `os.replace`d — so a crash mid-write leaves the old
 file whole, and an unreadable file is preserved aside and announced rather than silently
 emptied (0.66.104). And a **failed write is never silent** (0.71.125): every saver returns
-`(ok, exception)`, every failure lands in `crash_log.txt`, and core reaches the screen through
+`(ok, exception)` (`save_setting` and `persist_categories`, which write one key or the
+categories, say only whether it worked), every failure lands in `crash_log.txt`, and core reaches the screen through
 the one channel it has without importing tkinter — the `storage.on_write_failure` callback the
 app registers at startup, which shows an error toast naming the file.
 
 Restoring from the Trash writes the notes first and the trash second, once each for any number of
 notes (`restore_many_from_trash` writes nothing itself): a failed notes write then leaves the note
 still in the trash file, where the old order could leave it in neither.
+
+### The notebook outside AppData
+
+Decided 2026-10-27, for the Microsoft Store. The Store installs the app as an MSIX package, and a
+package's writes to AppData are virtualized: every file it *creates* there goes to the package's
+private copy, which uninstalling deletes — and the atomic save above creates a new file on every
+write. So the built app keeps its notebook in the profile instead, `C:\Users\<name>\Note
+Organizer` (`get_user_notebook_dir`): writes there are the person's own, outside the package,
+and an update, an uninstall or the Store leaves them alone. Not Documents: Windows 11 sets it to
+back up to OneDrive without asking, and the notes would leave the device unasked. The other way
+— keeping `%APPDATA%` and declaring it unvirtualized — needs the restricted capability
+`unvirtualizedResources`, which the Store reviews; the profile needs nothing.
+
+Three rules go with it. The first start of a built app with an empty folder **copies** an older
+`.exe`'s notebook in from `%APPDATA%\NoteOrganizer` — its notes, settings, attached files, Trash
+and templates (`NOTEBOOK_COMPANIONS`, never over a file the notebook has) — and says so; copied,
+never moved, the old folder left as it was. A built app **never replaces** a notebook it already has with AppData's
+(`run_migrations` takes over from `%APPDATA%` only for a run from source). And both folders are
+**durable stores** (`_durable_stores`): no cleanup removes anything from either, whatever runs
+it — the rule a lost notebook taught ([the story](ISSUES_LOG.md#the-cleanup-that-deleted-the-real-notebook)).
 
 ### Defensive normalization
 
@@ -146,6 +176,17 @@ malformed fields (a `None` title, a checklist that isn't a list, a category that
 exists) into safe defaults rather than letting a bad record propagate into the UI and crash
 something. This is what lets the app survive hand-edited or corrupted data files without
 special-casing every call site.
+
+What it does not know at a note's top level it keeps. Once the apps are in the stores they update
+apart, and a newer version may add a field to a note; rebuilt field by field, every load here
+erased it. Since 13 November 2026 any other top-level field rides along as it came, bounded (32
+fields, 65,536 units, 20 levels deep) and chosen by the same rule as on the phone
+(`unknown_fields`), except a name starting "_", the Trash's `deleted_at` and the removed `tags`.
+A field a newer version adds INSIDE a checklist item, an attachment, the repeat rule or a day's
+edit is still shaped away. A template's own fields follow the same rule since 14 November (the
+owner's decision): `normalize_template` keeps any it does not know, bounded alike, on load, on
+import and through the templates editor's save. The contract is in the phone's repository,
+DATA_FORMAT, "Fields a version does not know".
 
 ### Ceilings live at the data door, not at the render
 
@@ -184,10 +225,45 @@ changed — and `_offset_indices` laying them back the same way, in one walk:
 each span end used to be a walk from the top of the note, and Enter in a
 numbered list, which lays every span again, took 3.4 s at 8,000 styled words.
 
+### An attachment opens by what it is, not by what it says
+
+An attachment record is two names: `stored_as`, the file in `attachments/`, and `filename`, the
+label the row shows. Only the first is evidence — a backup can write any label over any file — so
+everything a person sees or is asked about an attachment comes from it. `normalize_note()` makes
+the label end in the stored file's type and takes out the characters that reorder or hide text
+(`attachment_display_name`); the row's icon and hint, and the click, ask `how_to_open` of the
+stored file.
+
+`how_to_open` is an allow list on purpose. The kinds whose usual app only shows what is in them —
+pictures, PDF, plain text and CSV, Word, Excel and PowerPoint files that cannot hold macros, sound
+and video — open at once, so a person's own files meet no question. Every other kind asks before
+Windows gets it. A list of dangerous kinds was the design before, and it was never complete:
+Windows has hundreds of associations, and every installed program adds more.
+`DANGEROUS_EXTENSIONS` survives only to choose the stronger of the two questions, so a kind
+missing from it is asked about more calmly, never not asked. A format that *can* carry macros
+(`.doc`, `.xls`, `.ppt`, OpenDocument) or that a browser runs (`.html`, `.svg`) stays off the
+short list, however ordinary
+([the story](ISSUES_LOG.md#the-photo-that-was-a-remote-connection)).
+
+Windows' own defences are kept as well. A browser marks what it downloads — the `Zone.Identifier`
+stream, the "Mark of the Web" — and SmartScreen and Office's Protected View go by that mark. A zip
+keeps it on the zip alone, so the import writes the backup's mark onto each attachment it copies
+out (`zone_mark_of`, `put_zone_mark` in `core/sharing.py`), as Explorer's own unzip does. A file
+attached by hand keeps its own, because `shutil.copy2` copies the stream on Windows. A disk that
+keeps no streams goes without, and the import carries on.
+
+What a backup cannot carry is each file's own mark. A zip holds no streams, and the export writes
+the attachments as plain files, so a restore marks every file with the zip's mark and nothing
+else. A backup the app wrote on this computer, or one kept on a USB stick or a network share,
+carries no mark, and the files it restores come back without theirs — including a download that
+was marked when it was attached. A `.docx` among them, which opens without a question, then
+opens outside Office's Protected View, and a program opened past the app's warning meets no
+SmartScreen check; the kinds that ask still ask.
+
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,
-interval, specific weekdays/month-days, an end condition) plus two small maps:
+interval, specific weekdays/month-days, an end condition) plus a list and two small maps:
 
 - `exceptions`: dates removed from the series entirely
 - `overrides`: date → partial note, for edits that apply to one occurrence only
@@ -279,8 +355,9 @@ which accepts six digits only.
 
 ### Hand-built popups, and the system's own dialog in two places
 
-Every dropdown, color picker, confirmation prompt, and date picker in this app is a hand-built
-`Toplevel` popup — never `tkinter.messagebox`, `ttk.Combobox`, or `colorchooser`. The trade-off
+Every dropdown, color picker and date picker in this app is a hand-built `Toplevel` popup, and
+every confirmation prompt a hand-built overlay inside the window (below) — never
+`tkinter.messagebox`, `ttk.Combobox`, or `colorchooser`. The trade-off
 is more code to maintain; what it buys is a UI that's fully themed (dark/light variants apply
 everywhere, including every dialog) and behaves consistently across the app.
 
@@ -288,7 +365,8 @@ The system's own dialogs appear in exactly two situations, both deliberate. Choo
 folder — saving an export, opening a backup, picking a folder, attaching files — uses
 `filedialog`, because the system's chooser knows the person's drives and recent places and a
 hand-built one would be worse. And when the app cannot start — the last-resort startup-crash
-dialog, and the "Missing dependency" one shown when Pillow is not installed — it uses the plain
+dialog, the "Missing dependency" one shown when Pillow is not installed, and "Note Organizer is
+already open" when a second launch finds its notebook in use — it uses the plain
 standard-library messagebox, precisely because that must not depend on the app's own UI having
 come up (see [ISSUES_LOG.md](ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself)). This
 heading used to read "No native dialogs, anywhere", which was wrong about the first while the
@@ -352,6 +430,70 @@ dismissed, but on Linux it returns at once with the menu still open (measured in
 so destroying it there would make it vanish. Only one right-click menu is ever open, so the
 previous one is done with when the next is asked for.
 
+### The keyboard: every control both hands can press
+
+Tk's own buttons take Tab and Space; what the app draws — a canvas, a label, a frame of labels —
+takes neither unless told. So a drawn control is made with `_pressable` (in `ui/dialogs.py`): a
+Tab stop, pressed by Space and Return as a click presses it, its right-click menu on Shift+F10.
+Two bind tags carry this, bound once for the whole app, so a rebuilt list adds no Tcl commands.
+Enter held down presses once (`_enter_repeats`), there, on the picture preview's buttons and on a
+question's answers: a key held repeats, as presses alone on Windows and as a release and a press
+at one time stamp on X11, and the control a press gave the keyboard to took each repeat as a
+press of its own — held on an attachment, the preview opened and shut over and over.
+
+A popup is a window of its own, and Tab never leaves the window it is in. So a popup opened from
+the keyboard takes it (`_keyboard_into_popup`, from `_place_dropdown_popup`, the one door every
+popup goes through) on its current choice — or, with no choices, in its first box to type in, its
+text selected as Tab arrives in a box: never on the ✕ its header builds first, where a space typed
+into a name closed the editor. A popup cannot pick its own landing by asking for a box before it
+is placed: Tk holds that request until the window is drawn, out of `focus -lastfor`'s sight. The
+arrows walk its choices by where they stand, one rule for a list, a grid of swatches and the emoji
+picker; and when it closes, by any road, the keyboard goes back to the opener — or to what stands
+in its place, when the choice drew the page again. A popup a click opens leaves the keyboard
+alone: the mouse's behaviour does not change.
+
+Tab moves the keyboard and never the view, and the editor, Settings and the long lists are frames
+drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`). A section
+with nothing to Tab to — Keyboard shortcuts is labels alone — is read with Page Up and Down, the
+arrows, Home and End, which scroll the Settings page from anywhere on it but a box being typed in
+(`_settings_page_key`) — and a box out of sight is none. A click on a button takes no keyboard, so
+a page that hides what holds it moves it itself (`_keyboard_inside`, `_keyboard_to`): Settings
+takes it from the note onto the section's entry and gives it back on the way out, and the note
+list put away by its arrow hands it to the arrow. A window not yet mapped only gets a request
+from Tk, so the main window holds the keyboard until it is, and nothing is typed meanwhile.
+Every other part is covered by one watcher rather than a list (`_watch_parts_put_away`): an
+`<Unmap>` of a widget its geometry manager has forgotten (pack, grid or place forget — not one
+scrolled out of a canvas, nor a tab left) with the keyboard inside is looked at again two idle
+rounds later. A part laid out again by then is left alone even while it is still unmapped: the
+test is that it and every parent have a manager again, because mapping lags layout (pack maps a
+re-dealt toolbar's buttons only once their row's new size settles). Otherwise the keyboard goes
+to the control just clicked, or to the next one on. A page's own move, made at once, comes
+first. A tab left takes the keyboard off anything out of sight, not only a box.
+
+A press that draws its list again takes the control with it, and Tk leaves the keyboard on the
+window — or on the popup's own window, which counts as nowhere too. It goes to what stands in the
+control's place now (`_keyboard_stays`). A drawn control's press reaches that through the bind
+tag; Tk's own buttons take Space through their class binding, which the app wraps once at start
+(`_tk_press_starts` / `_tk_press_ends`). The look afterwards waits for the command, which Tk runs
+100 ms after the key (a tick box runs its own at once, and is looked at at once), and for a
+question the press asked; it leaves the keyboard alone after a
+click, or when a question or popup went with the button. That click is counted per mouse button:
+Tk runs only a tag's most specific binding, and a bare `<ButtonPress>` on "all" never heard a
+left click, which the app's `<ButtonPress-1>` there outranks. A button its own press hid with its
+panel — Share or Import's Close, the day's ✕, the Trash's bulk delete — counts as gone too, and
+hands the keyboard on the same way; one whose whole window was put away is left alone. A control
+hidden rather than destroyed moves the keyboard itself before it goes: the toast's Undo, taken,
+timed out or replaced by a banner with nothing to offer, hands it to where the Undo's own key
+sends it (`_keyboard_off_toast`): the note list, or its arrow while the list is put away — never a
+window out of sight, for which Tk only notes a request and moves nothing.
+
+The ring is the theme's text colour (`focus_ring`), measured by the contrast gate, and it is both
+border colours while the keyboard is on a control: Windows draws no focus colour round a label,
+only its resting one ([the story](ISSUES_LOG.md#the-app-the-keyboard-could-reach-only-half-of)).
+The two colours a control remembers for its ring follow a theme switch in the straggler pass
+(`_recolor_ring`), as its own colours do. qa6 asks every page whether a click can press anything
+Tab cannot reach.
+
 ### Theme tracking — two different patterns, on purpose
 
 `track_theme(widget, **option_map)` registers a widget so a later theme switch re-applies the
@@ -359,17 +501,20 @@ right colors to it. This is for **persistent** widgets — ones built once at st
 destroyed (the sidebar, the main buttons, the tab bar).
 
 For content that gets **destroyed and rebuilt** on every refresh — the attachments list, the
-History register's rows, anything inside a Settings section panel — widgets are colored with
-plain `.configure(bg=self.colors[...])` calls instead. (The note list and the calendar's month
+History register's rows, the plain labels and frames inside a Settings section panel — widgets
+are colored with plain `.configure(bg=self.colors[...])` calls instead. The shared controls a
+rebuilt Settings panel builds (its themed dropdowns, its buttons) still register through
+`track_theme` on every visit, which is what the pruning below is for. (The note list and the calendar's month
 are not widgets any more but drawings, whose items take their colours when drawn: the list is
 recoloured in place, below, and the month is drawn again.) Since this content is always rebuilt fresh, it
 never needs live tracking; using `track_theme` here just means every rebuilt widget's tracking
 registration outlives the widget itself. That was an actual bug this codebase had for a while
 (see [CHANGELOG.md](../CHANGELOG.md) 0.4.0) — a growing, unbounded list of registrations for
 windows that no longer existed, which measurably slowed the app down. Since 0.71.134
-`apply_theme` prunes dead entries at every switch, so a stray registration now costs one switch
-rather than living forever — a safety net, not a licence: re-registering per rebuild is still
-churn the pattern never needs.
+`apply_theme` prunes dead entries at every switch, and since 2026-10-01 `track_theme` prunes
+whenever the registry has doubled since the last prune (339 entries grew to 809 over 175
+Settings visits without a switch) — a safety net, not a licence: re-registering per rebuild is
+still churn the pattern never needs.
 
 **Rule of thumb: `track_theme` for widgets built once — and when you do, track EVERY colour
 option the widget sets (`insertbackground`, `selectcolor`, `highlightbackground`, the
@@ -688,6 +833,14 @@ filled button.
 | words on a confirming button, held down | 7.5 | 6.8 | 7.5 | 7.6 | 4.9 | 4.9 | 5.4 | 5.6 |
 | text of the other find matches | 6.5 | 6.7 | 5.8 | 6.9 | 9.1 | 8.2 | 9.4 | 9.3 |
 | text in the find box when nothing is found | 10.7 | 10.3 | 10.3 | 10.4 | 12.1 | 10.6 | 10.6 | 10.5 |
+| the keyboard's ring on the window (a mark, owes 3:1) | 14.7 | 15.3 | 15.1 | 15.2 | 14.2 | 12.4 | 12.7 | 12.5 |
+| the keyboard's ring on a card or panel | 11.8 | 11.3 | 10.8 | 12.2 | 15.5 | 13.5 | 13.6 | 13.5 |
+| the keyboard's ring in the sidebar or a list | 13.1 | 13.3 | 12.7 | 13.4 | 12.8 | 11.1 | 11.3 | 11.0 |
+
+The last three rows are the ring round whatever holds the keyboard: a drawn control reached by
+Tab, a row of a dropdown's list, the Trash's and a checklist's tick boxes. It is the theme's text
+colour (`focus_ring` in `core/themes.py`), not the accent the checklist's ring first wore: the
+accent is a fill, and on the light green and cream themes it is under 3:1 on the sidebar.
 
 A note's own colour, or its category's, is the person's choice and so is not in this table, but
 it is shown as words: the tags line on its card. Picked for its look, it often did not read —
@@ -699,7 +852,7 @@ mixed toward the theme's text, which is bluish, and the yellow came out khaki. O
 is mixed toward the theme's light text. test_data_safety holds every swatch the app offers to
 4.6:1 on every theme's card, and the warm ones to their hue and saturation.
 
-The last row is the find box's ground while its words are found nowhere: a tint of the warning
+The row above the ring's is the find box's ground while its words are found nowhere: a tint of the warning
 red over white on a light theme (a truer red there, its pink taken out) and over near-black on a
 dark one (`miss_surface` in `core/themes.py`). It used to be one fixed dark red on every theme,
 which put dark words on a dark ground on the light ones (1.2:1); mixed into each theme's own
@@ -769,7 +922,8 @@ person signs in. On a second screen at another scale, Windows resizes the app as
 a little soft there, though less so than an enlarged picture: shrinking costs less than
 stretching. The setting exists for someone who keeps the app on such a screen. It is read once,
 before the first window opens, because that is the only moment Windows listens. It stays on this
-computer; a backup carries only categories and the calendar's decorations.
+computer: a backup carries the whole `settings.json`, but restoring one takes only its
+categories, the calendar's decorations and the Trash window.
 
 Three ways to get sharp text were measured on a 150% laptop, by how crisp the letters' edges are:
 
@@ -803,8 +957,10 @@ The scale is Tk's reading of the screen, snapped to Windows' quarter steps, and 
 CI's virtual display reports 100 dots per inch rather than 96, and unsnapped that moved every
 pixel the suite measures by 4%. At 100% the scale is exactly 1, so every check written before
 stands as proof that nothing moved there. Padding is left in pixels: a gap a little tighter on a
-scaled screen reads fine, a word cut in half does not. The window's 900×600 and its 640×600 floor
-grow too, but never past what the screen can show.
+scaled screen reads fine, a word cut in half does not. The window's 900×600 and its floor grow too,
+but never past what the screen can show. The floor is the sidebar and the editor side by side, or
+640×600 with the sidebar hidden, when the Notes page alone is laid out narrower; the Calendar and
+Settings keep their 900 and scroll sideways below it (`_fit_window_floor`).
 
 qa6 builds the app as a 150% and a 200% screen build it, by setting Tk's scaling before anything
 is built (which is what Windows does for a program that declares itself aware), and asks every
@@ -858,8 +1014,8 @@ The underline is a Tk tag of its own. The save, the copy, the export and the und
 character formatting from a closed list of tags (`is_format_tag`), and this tag is not on it. So
 a note never reads as unsaved because of a red line, and no red line reaches the clipboard. A
 suggestion taken goes through `_undo_atom`, so the word keeps its formatting and one Ctrl+Z
-takes the whole replacement back. The ignored words live in `settings.json`: on this computer,
-not in a backup.
+takes the whole replacement back. The ignored words live in `settings.json`, on this computer:
+a backup carries the file, but restoring one does not bring them back.
 
 #### When it looks, and how long it takes
 
@@ -1099,8 +1255,9 @@ Rules that keep it honest:
   which row it is over. A click on a card also puts the keyboard on the list, with the ring on
   that card, and the ring's walk scrolls the list to keep it in view.
 
-A rebuild keeps the depth that was drawn when the list was scrolled (a new search excepted: it
-starts from the top, below), so the position restored
+A rebuild draws as deep as a screen below the view the list was scrolled to
+(`_list_depth_for`; a new search excepted: it starts from the top, below), not every row drawn
+before, which cost 90–360 ms after one trip to the end of 1,000 notes, so the position restored
 in pixels (below) has content to land on, and draws the card the keyboard was on. This is not
 virtualization: a card once drawn stays drawn until the next rebuild — which costs the drawing
 little, since a drawn card is a handful of canvas items rather than six windows. Windowed
@@ -1209,6 +1366,83 @@ on both apps; `refresh_note_list` compares the search with the one it last drew 
 scrollable canvas whose content gets rebuilt should either reuse this family
 or consciously argue why it can't suffer the same two failures.
 
+### A long list is built in chunks it places itself
+
+A list that can grow past a screen — a note's checklist, the template picker and editor,
+Settings → Templates, Recently deleted, Duplicates, Share, a day's notes, the calendar's History
+and the calculator's history — is a `RowStack` (`ui/dialogs.py`) on its canvas, not one frame.
+Tk works out where a canvas window item stands relative to the view in a 16-bit short
+(`Tk_CanvasWindowCoords`, the same on every system), and X keeps a window's place the same
+way, so one frame holding a list could not be scrolled further than about 32,767 px: the rest
+was never drawn, while the scrollbar reached its end. See
+[The list that ended in the middle](ISSUES_LOG.md#the-list-that-ended-in-the-middle).
+
+A stack builds the rows into chunk frames of a few rows each — `group.add()` hands out the
+frame the next row is made in — and places every chunk itself: in the view at its true place,
+however far above its top that is, and every other one parked beside the view, 20,000 px to
+its left and above it. The canvas keeps the scroll: its scrollregion is the stack's total and
+its `yscrollcommand` tells the stack to place again, so the scrollbar, the wheel and every
+`yview` reader work as before. A scroll step places only the chunks in the view, coming into it
+or leaving it, and lays out no row: every chunk placed is a window moved, and on Windows a step
+of a 1,000-item checklist cost 18 ms while chunks stood placed a view above and two below it,
+12 ms with only those in sight, and 7 ms once short items went 32 to a chunk.
+
+- **Parked, never unmapped.** A canvas window item out of view is unmapped, and Tab's own test
+  (`tk::FocusOK`) passes over what cannot be viewed: with chunks as window items, Tab from the
+  last row in view went back to the first. A placed chunk out of sight is still mapped, so Tab,
+  the arrows and `_found_at` reach every row as they did.
+- **Parked beside, whatever its height, inside 16 bits twice over.** Parked only above, a chunk
+  taller than its parking place hung down over the rows in sight (a delete and its Undo grew
+  one, four long items at 300% made one), and its own rows were drawn where others' should be.
+  Beside the view, no height reaches it. X keeps a window's place in its parent in 16 bits;
+  Windows keeps a window's place on the screen in 16 bits. Parked 32,000 px below a canvas
+  that stood 1,143 px down the screen, a chunk's rows passed 32,767 and Windows pinned them
+  there: back in view, the last row stood 376 px above its chunk's top instead of 318 below it.
+  20,000 px to the left and above keeps every row of every chunk inside both.
+- **Where a row stands is asked of the stack.** A parked chunk's `winfo_x` and `winfo_y` are its
+  parking place. `_bring_into_sight`, `_offset_within` and the arrows (`_root_x`, `_root_y`,
+  for their order and for the nearest choice each way) read a chunk's place from the stack
+  (`_drawn_box`, `box`), as they read a window item's box from the canvas: read as it was, a
+  parked choice's x put it 20,000 px to the left, and Left in the picker's one column went to a
+  template 30 further down.
+  And where a row stands among its block (`place_of_row`, counted across its chunks) is the
+  place the keyboard goes back to after a press draws the list again (`_place_of`): a place in
+  its chunk named a frame the redraw may not make again, and the keyboard went to another
+  chunk's first row.
+- **A row cannot leave its chunk.** Tk gives no widget a new parent. A checklist item moved
+  over a chunk's edge is made again in the other's place (`_trade_checklist_chunks`), and one
+  put back by Undo at an edge goes into the side with room — the chunk it left, else the next,
+  else a chunk of its own between them (`room`, `chunk_before`) — so no chunk grows. A block in
+  the middle of a stack — the template editor's checklist, between its fields and its Add box —
+  stacks the chunks it makes again before the block below, because Tab follows the stacking
+  order, not the place.
+
+A chunk holds at most a count of rows — 32 short checklist items or one-line rows, 16 Trash
+rows, 8 by default — and takes no row more once it is `RowStack.TALLEST` (4,000 px) tall, by
+its rows' heights as they stand (`_RowGroup.height`). Each row is measured as it is made
+(`_natural_height`, before an idle round has laid it out) and again once its words are wrapped
+again (`rewrapped`); a row made later is wrapped as its block's rows last were
+(`_wrap_as_its_rows`), so it is measured as it will stand; and a chunk's laid-out height counts
+when it is more. A chunk in the view stands at its true place, which X and Windows draw only
+inside 16 bits, and four checklist items of 100 lines or 2,000 wide letters stood 42,656 px at
+300%. Measured once, as made at its labels' first wrap, a chunk of long items narrowed to the
+window's minimum stood 41,684 px where it was taken for 13,740.
+
+Rows that grow after they were chunked — a narrower window wraps them again — or long items
+moved together one by one over a chunk's edge can still make a chunk too tall: past four times
+`TALLEST`, with more than twice it beside its tallest row (`too_tall`). A move asks at once; a
+restack asks for every chunk standing past four times `TALLEST`, and has its block chunked again
+by its owner (`rebuild`, `_rechunk_too_tall`), once for each width, so a block no chunking can
+help is never drawn over and over. The note's checklist does it keeping its view and the
+keyboard on its item (`_chunk_checklist_again`). A chunk built from rows as they stand holds less
+than `TALLEST` beside its last, so one chunked again is never asked of again. And whatever its
+rows do, no chunk is placed past 32,767 px (`RowStack.REACH`): placed there, X drew it nowhere.
+Left as one frame, each sized by its own cap and measured at 300%:
+Settings → Categories (200 rows, 17,599 px) and the editor page (a note's 200 attachments,
+25,325 px), against about 33,400 px one frame can be scrolled through; the emoji picker and a
+dialog's message are smaller still. A table is drawn whole only up to 400 rows, 3,000 cells and
+`MAX_DRAWN_TABLE_PX` (30,000 px) tall; the note list is one drawing.
+
 ### Showing and hiding asks the layout, not the screen
 
 Every "show this if it is not showing" and "hide this if it is" — Restore previous, the title
@@ -1217,9 +1451,16 @@ does the widget have its place in the layout (`winfo_manager()`)? Never `winfo_i
 asks whether it is on the screen and says no for a placed widget until Tk first draws it, and for
 as long as its page is hidden. A hide that asked the screen skipped a sleeping widget, which woke
 up with its page; a show that asked it packed a placed widget again, moving it to the end of its
-container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the three places
-that mean the screen (a tooltip, a click on the Settings page, the calendar's keys). See
+container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the four places
+that mean the screen (a tooltip, a click on the Settings page, the calendar's keys, and a table's
+keyboard waiting for its right-click menu to close). See
 [The button that woke up with its page](ISSUES_LOG.md#the-button-that-woke-up-with-its-page).
+
+Whether the person can see a widget is a third question, and neither answers it: mapped, and
+wholly inside the view of every canvas it is scrolled on (`_in_sight`). The note page's status
+line stands at the foot of the scrolled editor, mapped and far below the view at the window's own
+sizes; a limited box that said a shortened paste there (`_say_by_the_box`) now says it in a
+banner while the line is out of sight.
 
 ### A drag of the window's edge waits for the hand
 
@@ -1320,9 +1561,10 @@ backup leaves the temp folder, and the files the worker copied in (it records th
 attachments folder unless a note uses them. Merging at close would mean asking the import's
 questions in a window that is closing.
 
-So an import is not waited for at all: the close asks it to stop at once, since its work would
-be thrown away. An export is waited for, up to the cap, and asked to stop only if it is still
-writing then. Asking means setting `"stop"` in the worker's state dict. The worker hands zipfile
+So an import is asked to stop at once, since its work would be thrown away, and waited for only
+until it answers (within the same cap, for a read that stalls on a network share or a stick). An
+export is waited for, up to the cap, and asked to stop only if it is still writing then, with up
+to 5 seconds more to answer. Asking means setting `"stop"` in the worker's state dict. The worker hands zipfile
 its file wrapped in `StoppableFile` (core/sharing.py), whose next read or write raises
 `BackupStopped`, and copies attachments with `copy_file_until_stopped`. A stop is therefore
 answered between two chunks, even inside one huge file, and the worker's own error path takes its
@@ -1331,10 +1573,15 @@ cap and the process then died mid-file, with the unpacked backup in the temp fol
 half-copied `.part` in attachments; an export cut off at the cap left its `.tmp` beside the backup.
 
 A window that is closing cannot tell anyone what it dropped, so the close writes it down:
-`_settle_background_work_at_close` leaves `backup_cut_short` in settings (which kind, which
-file) for an import dropped or an export not finished. The next start reads it out once, with
-the other startup news in `announce_startup_changes`, and clears it. An export that finished in
-time leaves nothing.
+`backup_cut_short` in settings, written before the wait (by `_wait_for_io_workers`, so a window
+ended inside the wait still leaves it) and replaced after it by
+`_settle_background_work_at_close` with what really happened. It names the kind (an import,
+an export cut short, failed or finished only in part), the file, and for an import what it
+copied and unpacked, for the next start to take out; an export's word keeps its file's time
+too, so an export that landed after all is said finished. The end of a Windows session writes
+the same word (`_settle_backups_at_session_end`). The next start reads it out once, with the
+other startup news in `announce_startup_changes`, and clears it. An export that finished whole
+in time leaves nothing.
 
 ## Feedback and the crash log: what the app says about itself
 
@@ -1455,8 +1702,8 @@ imported — earlier than it must, since the data migrations run in `initialise(
 constructing the app calls ([Startup](#startup)) — and writes an empty `notes_data.json` and the
 migration marker, so a test's empty folder cannot invite the first-run migration to adopt the
 developer's real notebook from `%APPDATA%`. And it fails closed: it refuses to run unless a scratch run was
-declared (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py`, `tools/run_coverage.py` and the
-CI workflow), and beside
+declared (`NOTEORG_SCRATCH=1`, set by the runners — `tools/run_tests.py`, `tools/run_coverage.py`,
+`tools/check_guest.py` — by the CI workflow, or by hand in a scratch copy), and beside
 any `notes_data.json` it cannot prove empty — one that holds notes, or one it cannot read. The
 copies it replaced read an unreadable notebook as empty and overwrote it.
 

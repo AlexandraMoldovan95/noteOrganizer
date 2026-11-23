@@ -1,0 +1,22 @@
+# fix-r6-both, three low findings fixed after the loops closed, attacked once, on Sonnet
+# started 2026-11-23 00:43 UTC
+
+You are an adversarial reviewer. Two notes apps were fixed after a review: a desktop app (Python + Tkinter, repository D:\Projects\NoteOrganizer, branch audit/d-val6) and its Android companion (Kotlin + Jetpack Compose, repository D:\Projects\androidVersion, branch audit/a-val6). Attack the three newest commits, which fix low findings left by the last review rounds. Read each with `git -C <repo> show <hash>`, then read the code around every change.
+
+- androidVersion 8b72ac5 repeat: the Repeat sheet's two red lines (the reason Save does nothing, "A repeating note needs a start date.", and a refused save's problem) moved out of the scrolling column to stand between it and the pinned Cancel/Save row (RepeatSheet.kt). The walk's large_letters_table part (tools/emulator/walk.py) checks the reason's box shows above Save at 200% letters. Walk mutant AS897 in tools/mutants.json puts the line back at the scroll's end.
+- androidVersion 9056931 import: a backup's notes older than the copies here, one of several, said "One of them is OLDER" rather than "1 of them are" (ImportFlow.kt olderSaid; strings q_older_it / q_older_one / q_older_many; ImportingTest). Unit mutant AS898.
+- NoteOrganizer b940deb8 import: the same sentence on the desktop (note_organizer.py, the known-notes import question, around "OLDER than the copy"); qa/qa3.py check "one of two backup notes older than here is said as one"; mutant PW54 in tools/mutants.json.
+
+Look for:
+- on the phone, every state of the Repeat sheet that shows those red lines (no date, a refused save, Does not repeat chosen again, a date picked, the keyboard up, small and large letters, a 320 dp screen): whether either line can still be out of sight, can stay shown after its cause is gone, or now crowds the buttons;
+- whether anything else in the sheet relied on the lines being inside the scroll;
+- whether the walk check would really fail with the fix reverted (bounds() returns on-screen boxes; read it);
+- for the older-notes sentence, every count case in both apps (one known note; several known with zero, one, some or all older; a share code, which carries no saved time) and whether the neighbouring sentences (the lead line, the rescue line) still agree with it;
+- whether the three sentences' resource names changed meaning anywhere else (grep both repositories, the site under D:\Projects\NoteOrganizer\site included);
+- whether qa3's new check sits where its setup cannot be disturbed by the checks around it, and whether PW54 and AS898 guard what they claim.
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py, gradle, adb, the emulator or anything that starts either app. Never read or write any notes_data.json, settings.json, trash.json, templates.json, attachments folder or notebook_location.txt, in either repository or anywhere on the machine. No heredocs.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict per commit (holds / does not hold); then "Not covered": what you did not read or could not judge.

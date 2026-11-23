@@ -34,21 +34,28 @@ reason — so the exceptions are readable, finite, and reviewed, instead of
 being whatever happened to be written.
 
 This gate is deliberately narrow. It does not try to find every possible
-duplicate judgement; it pins the three that have actually cost this
-project data, and gains a rule the next time one costs it another.
+duplicate judgement; it holds the questions that have cost this project
+something, each RULE below, and gains one the next time another does:
 
-One rule is not about a note. "Does this widget have its place in the
-layout?" was answered at fourteen show/hide sites with winfo_ismapped(),
-which answers a different question -- is it on the screen right now -- and
-says no for a widget whose page is merely hidden. A button that should
-have gone stayed, woken up with its page (0.82.233). The same shape as
-the rest: one question, answered by hand, the wrong way, everywhere.
+1-2. Does the editor hold anything worth keeping? -- asked of an editor
+   state, and again of bare local variables (the first of the three above).
+3. Are these two notes the same note?
+4. Has the body changed?
+5. Does this widget have its place in the layout? -- answered at fourteen
+   show/hide sites with winfo_ismapped(), which says no for a widget whose
+   page is merely hidden (0.82.233).
+6. Could this file or code be read as JSON? -- fourteen readers caught one
+   of the three ways a text turns out unreadable (0.83.338); its owner is
+   a constant, paths.JSON_UNREADABLE.
+7. Is this a figure from 0 to 9?
+8. What has the person typed in the date field?
+9. Is this field showing its grey hint?
+10. Is this count's noun in the form its number takes? -- forty "note(s)"
+   wrote both forms where the number was known; a fix to one sentence left
+   its neighbours (0.101.542). Owner: storage.count_noun.
 
-Nor is the last. "Could this be read as JSON?" was answered at fourteen
-readers by catching JSONDecodeError -- one of the three ways a text turns
-out unreadable -- and the app would not start beside a data file damaged
-in either of the other two (0.83.338). The owner there is a constant,
-paths.JSON_UNREADABLE, not a function.
+An allowance that matches nothing fails the gate too: an exception nobody
+can see is not a reviewed exception, it is a comment.
 """
 
 import ast
@@ -114,13 +121,13 @@ RULES = [
         # The same question written with local variables instead of an
         # editor-state dict. The gate's first rule requires the
         # st["field"] spelling and so was blind to this one entirely --
-        # which meant save_current_note's guard, a deliberate second
+        # which meant the save's own guard, a deliberate second
         # answer, had an allowlist entry that had never matched
         # anything. An exception nobody can see is not a reviewed
         # exception; it is a comment.
         pattern=re.compile(r"(?s)not\s+title\b.{0,200}?\bnot\s+body\b"),
         allowed={
-            "save_current_note":
+            "_editor_fields_to_save":
                 "explicit Save additionally counts the date and the repeat "
                 "rule: pressing Save is what makes a bare dated reminder "
                 "deliberate, and the automatic routes agree with "
@@ -145,13 +152,19 @@ RULES = [
             # Constructors, not judgements: these BUILD a note or a
             # template dict out of editor state. Naming the fields is
             # what they are for.
-            "save_current_note": "builds the note being saved",
+            "_write_fields_to_note": "builds the note being saved",
+            "_keep_text_aside":
+                "builds the note a big delete's words become beside an "
+                "Update's copy; it compares nothing",
+            "_day_as_shown":
+                "builds the copy of one day a file is made of; its "
+                "one comparison asks whether the day's text is the series' own, "
+                "as _settle_off_schedule_day's does",
             "do_save": "builds the template being saved",
             "collect": "builds the template the settings editor is editing",
-            "_settle_off_schedule_day":
-                "builds the note a day off its series' schedule becomes; its "
-                "one comparison asks whether the day shows the series' own "
-                "text, the rule load_note applies the formatting by",
+            "notes_set_aside":
+                "builds the notes a series' copy's days set aside become; "
+                "it compares nothing",
             "editor_state_matches_saved":
                 "the OCCURRENCE branch compares only OVERRIDABLE_FIELDS, "
                 "because an override carries exactly those -- comparing "
@@ -192,6 +205,9 @@ RULES = [
                 "asked by a key press and by the grid's own resize, both of "
                 "which arrive after the page is drawn; a caller that runs "
                 "before Tk goes idle asks _calendar_is_showing instead",
+            "_grid_keyboard_back":
+                "asks whether a right-click menu is still posted: a menu has "
+                "no place in any layout, only on the screen or not",
         },
         window=1,
     ),
@@ -204,7 +220,8 @@ RULES = [
         # follows raises RecursionError -- and every reader that named it
         # alone let the other two escape: the app would not start while its
         # notes, settings, Trash or templates file held one (0.83.338).
-        # noteorganizer.core.paths.JSON_UNREADABLE names all three.
+        # noteorganizer.core.paths.JSON_UNREADABLE names them all, and a
+        # ValueError (a number of over 4,300 digits) since.
         pattern=re.compile(r"\bexcept\b[^:\n]*\bJSONDecodeError\b"),
         allowed={},
         window=1,
@@ -237,7 +254,86 @@ RULES = [
         allowed={"_typed_date": "the single answer"},
         window=1,
     ),
+    Rule(
+        question="is this field showing its grey hint?",
+        owner="_hint_shown",
+        # The hint was told by its words, in ten places: a title typed as
+        # "Note title..." was saved empty and wiped at the next click, and a
+        # search for "Search notes..." searched for nothing. The field keeps
+        # whether its hint shows; comparing its text with a hint is the old
+        # way back, by ==, is, membership either way round, or its start or
+        # end. A hint held under another name is past any pattern. Code
+        # only, before any "#".
+        pattern=re.compile(
+            (r'(?m)^[^#\n]*(?:(?:==|!=|\bnot in\b|\bin\s*[(\[{]|\.(?:startswith|endswith)\s*\()'
+             r'[^#\n]*{h}|{h}[^#\n]*(?:==|!=)|\bis\s+(?:not\s+)?{h}'
+             r'|{c}\s*{h}\s+(?:(?:not\s+)?in|is)\b)').replace(
+                "{c}", r'(?:\b(?:el)?if|\bwhile|\band|\bor|\bnot|\breturn|\bassert|\blambda\b[^:\n]*:|=|\()'
+            ).replace(
+                "{h}", r'''(?:(?:self\.|NO\.)?SEARCH_PLACEHOLDER|["']Note title\.\.\.["']'''
+                       r'''|["']Search all calendar entries\.\.\.["']|["']Search notes\.\.\.["']'''
+                       r'''|["']DD\.MM\.YYYY["']'''
+                       r'|(?:self\.|NO\.)?\bDATE_FORM\b|\bplaceholder\b|\bhint_text\b)')),
+        allowed={"_hint_shown": "the single answer"},
+        window=1,
+    ),
 ]
+
+# The ninth rule's shapes, proved on every run: comparisons it must see, and
+# lines it must leave alone (a loop over the hints, a docstring's prose).
+HINT_SHAPES = [
+    "    if t == 'Note title...':", "    if typed in {'', self.SEARCH_PLACEHOLDER}:",
+    "    if x in [DATE_FORM, '']:", "    if t.startswith('Note title...'):", "    ok = entry.get() != hint_text",
+    "    if SEARCH_PLACEHOLDER in text:", "    elif placeholder in text:", "    if q is self.SEARCH_PLACEHOLDER:",
+    "    if q is DATE_FORM:", "    assert SEARCH_PLACEHOLDER not in t", "    keep = lambda t: SEARCH_PLACEHOLDER in t",
+    '    if q == "Search notes...":', "    if d == 'DD.MM.YYYY':", '    if s in ("", "Search notes..."):',
+]
+HINT_PROSE = [
+    "    for entry, placeholder in self._placeholders:", "    entry.hint_text = placeholder",
+    '        """\'Note title...\' is the person\'s, whatever its words."""',
+    '    self.add_placeholder(search, "Search all calendar entries...")',
+    '    SEARCH_PLACEHOLDER = "Search notes..."', 'DATE_FORM = "DD.MM.YYYY"',
+    "    # x == placeholder",
+]
+
+
+# The tenth question: is this count's noun in the form its number takes? Its
+# owner is storage.count_noun. Asked of the app's string literals only (an
+# f-string's pieces included), never of code, comments or docstrings: a
+# "note(s)" wrote both forms where the number was known.
+COUNT_FORMS = re.compile(r"[a-z]\(s\)")
+COUNT_OWNER = "count_noun"
+COUNT_ALLOWED = {
+    "build_recurrence_section":
+        "labels beside the interval and the month's days, where the number "
+        "is being typed: no one form is true while it is written",
+    "on_recurrence_changed": "the same interval label, worded for each frequency",
+    "update_recurrence_summary": "quotes the days as typed, before any number is read",
+    "_date_and_repeat_to_store": "quotes the repeat's days as typed",
+    "add_attachment": "the system file chooser's title, shown before any file is picked",
+}
+COUNT_SHAPES = ['def f(n):\n    return f"{n} note(s) moved"',
+                'def f():\n    x = "Skip the 3 duplicate(s)"']
+COUNT_PROSE = ['def f(s):\n    """The cell(s) a docstring names."""\n    return [dict(s) for s in s]',
+               'def f():\n    pass  # "0 note(s)" in a comment',
+               'def f(s):\n    return str(s) + repr(s)']
+
+
+def count_form_hits(tree, owner):
+    """(line, function) of each string literal writing "(s)" after a word."""
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = getattr(node, "body", None) or []
+            if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                docstrings.add(id(body[0].value))
+    hits = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in docstrings and COUNT_FORMS.search(node.value)):
+            hits.append((node.lineno, owner.get(node.lineno, "<module>")))
+    return hits
 
 
 def enclosing_functions(tree):
@@ -265,15 +361,24 @@ def enclosing_functions(tree):
 
 def main():
     problems = []
+    used = set()            # (rule's question, allowed name) that matched somewhere
+    count_problems = []
+    count_used = set()
     for path in FILES:
         src = io.open(path, encoding="utf-8").read()
         lines = src.split("\n")
         try:
-            owner = enclosing_functions(ast.parse(src))
+            tree = ast.parse(src)
+            owner = enclosing_functions(tree)
         except SyntaxError as exc:
             print("cannot parse %s: %s" % (path, exc))
             return 1
         rel = os.path.relpath(path, ROOT)
+        for lineno, func in count_form_hits(tree, owner):
+            if func in COUNT_ALLOWED:
+                count_used.add(func)
+            else:
+                count_problems.append((rel, lineno, func))
         for rule in RULES:
             seen_funcs = set()
             for i in range(len(lines)):
@@ -291,13 +396,58 @@ def main():
                 # MEANS.
                 if func == "<module>":
                     continue
-                if func in rule.allowed or func in seen_funcs:
+                if func in rule.allowed:
+                    used.add((rule.question, func))
+                    continue
+                if func in seen_funcs:
                     continue
                 seen_funcs.add(func)
                 problems.append((rel, i + 1, func, rule))
 
+    # The ninth rule proved on its own shapes first: a rewrite that drops one
+    # is said here, not found by the next review.
+    hint_rule = RULES[-1].pattern
+    unseen = [s for s in HINT_SHAPES if not hint_rule.search(s)]
+    taken = [s for s in HINT_PROSE if hint_rule.search(s)]
+    if unseen or taken:
+        print("one-definition gate: the ninth rule misses %r and takes %r" % (unseen, taken))
+        return 1
+
+    # The tenth question proved on its own shapes, as the ninth is.
+    def counted(code):
+        tree = ast.parse(code)
+        return count_form_hits(tree, enclosing_functions(tree))
+    unseen = [s for s in COUNT_SHAPES if not counted(s)]
+    taken = [s for s in COUNT_PROSE if counted(s)]
+    if unseen or taken:
+        print("one-definition gate: the count rule misses %r and takes %r" % (unseen, taken))
+        return 1
+    if count_problems:
+        print("one-definition gate: %d count(s) written in both forms\n" % len(count_problems))
+        for rel, lineno, func in count_problems:
+            print("  %s:%d  in %s()" % (rel, lineno, func))
+        print("\n      question : is this count's noun in the form its number takes?")
+        print("      owned by : %s() -- \"1 note\", \"2 notes\"; or, for a label where" % COUNT_OWNER)
+        print("      no number is known yet, an entry in COUNT_ALLOWED WITH the reason.")
+        return 1
+    stale = sorted(set(COUNT_ALLOWED) - count_used)
+    if stale:
+        print("one-definition gate: count allowance(s) that match nothing: %s" % ", ".join(stale))
+        return 1
+
+    # An allowance that matches nothing is a comment, not a reviewed
+    # exception: it once hid that its function had changed shape.
+    unused = [(rule, name) for rule in RULES for name in rule.allowed
+              if (rule.question, name) not in used]
+    if unused:
+        print("one-definition gate: %d allowance(s) that match nothing\n" % len(unused))
+        for rule, name in unused:
+            print("  %s -- in the rule %r" % (name, rule.question))
+        print("\n      Remove each, or aim it at the function as it is now.")
+        return 1
+
     if not problems:
-        print("one-definition gate: clean (%d file(s), %d rule(s))"
+        print("one-definition gate: clean (%d file(s), %d rule(s) and the count question)"
               % (len(FILES), len(RULES)))
         return 0
 

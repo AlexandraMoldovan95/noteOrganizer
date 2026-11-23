@@ -1,0 +1,12 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **every file in D:\Projects\NoteOrganizer\noteorganizer\ui\** (seven mixins, ~12,300 lines: settings_page, note_list, dialogs, calendar_view, attachments, calculator_panel, spelling). Read ALL of them in full with the Read tool, keeping short running notes as you go.
+
+Context: Note Organizer is an offline Windows notes app (Python + Tkinter). The mixins are methods of one class (NoteOrganizer in note_organizer.py), moved out by cut-and-paste. docs\ARCHITECTURE.md (UI layer) and docs\USER_GUIDE.md describe what these screens do — check user-facing claims against the code (read the USER_GUIDE sections for the screens you cover). Current state: APP_VERSION 0.100.513, branch audit/d-val5, the final audit is closed; we are looking for what is TRUE now, not for style. On 10–11 Nov "Title Z–A" was fixed to keep untitled notes at the bottom — verify, do not re-report the old bug.
+
+Hard rules: read only. Never edit, write, or run anything (no python, no tests, no git that changes state). Never open the real data: notebook_location.txt, any notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments/, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer. Grep is fine.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what each mixin owns.
+2. MISMATCHES — a comment, docstring, USER_GUIDE or ARCHITECTURE claim the code does not do; a screen text that says something untrue. Each: file:line — what it says — what the code does (file:line). Concrete only.
+3. SUSPECTED BUGS — only real behaviour a person could reach (lost words, wrong screen, crash, freeze), with the mechanism and the road. Mark each "suspected, not run". No refactors, no taste.
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

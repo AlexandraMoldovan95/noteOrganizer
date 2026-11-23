@@ -1,41 +1,12 @@
-"""The user's categories: the live map, and loading/saving it.
+"""The user's categories: the live name -> colour map, and loading/saving it.
 
-WHAT THIS MODULE IS FOR
------------------------
-Categories are name -> colour pairs the user can add, rename, recolour
-and delete. The immutable starting set lives in :mod:`.themes`; what is
-here is the *live* map plus the two functions that move it to and from
-``settings.json``.
-
-WHY CATEGORY_COLORS IS A MODULE-LEVEL DICT
-------------------------------------------
-:data:`CATEGORY_COLORS` is shared mutable state - the UI adds, renames
-and removes entries directly, and the note model reads it to decide
-whether a note's category still exists.
-
-It is safe to share this way only because of one rule: **the name is
-bound exactly once, and every change after that mutates the dict in
-place** (``.clear()``, ``.update()``, ``[name] = colour``, ``.pop()``).
-``from ... import CATEGORY_COLORS`` copies a *reference*, so every module
-ends up pointing at the same dict and sees every change.
-
-Rebinding it - writing ``CATEGORY_COLORS = something`` anywhere - would
-silently break that: the module doing the rebinding would get a fresh
-dict while everyone else kept the old one, and the two would drift apart
-with no error. If this ever needs replacing wholesale, clear it and
-update it instead::
-
-    CATEGORY_COLORS.clear()
-    CATEGORY_COLORS.update(load_categories())
-
-which is exactly what the app does at startup.
-
-GENERAL IS SPECIAL
-------------------
-:data:`~noteorganizer.core.themes.PROTECTED_CATEGORY` ("General") always
-exists and always sorts first. It is the fallback home for notes whose
-category is deleted, so it can never itself be removed - guaranteed here
-in :func:`load_categories` rather than trusted to the UI.
+The starting set is in :mod:`.themes`; here are the live
+:data:`CATEGORY_COLORS`, its trips to and from ``settings.json``, the
+ceilings, the one rule for a name from any door, and ``adopt_categories_of``.
+The map is shared by reference, so it is bound once and only changed in
+place (``.clear()`` then ``.update()``; ``CATEGORY_COLORS = ...`` would
+leave every other module on the old dict, with no error). General always
+exists and sorts first: it is where a deleted category's notes go.
 """
 
 from .storage import load_settings, save_settings
@@ -46,12 +17,9 @@ from .themes import DEFAULT_CATEGORY_COLORS, PROTECTED_CATEGORY
 # CATEGORY_COLORS constant was, so the whole app reads from one place.
 CATEGORY_COLORS = dict(DEFAULT_CATEGORY_COLORS)
 
-# Ceilings, same class as the checklist and attachment ones: the category
-# map arrives from settings.json and from any imported backup, and the
-# sidebar builds a widget per entry with the name drawn in full. A
-# thousand categories, or one named with 100,000 characters, is a way to
-# make the app unopenable through a door that had no limit at all. Far
-# above any real notebook -- the point is a ceiling, not a budget.
+# Ceilings, as the checklist's and the attachments': the map arrives from
+# settings.json and any backup, and the sidebar draws every name in full.
+# Far above any real notebook -- a ceiling, not a budget.
 MAX_CATEGORIES = 200
 MAX_CATEGORY_NAME = 80
 
@@ -66,28 +34,16 @@ def load_categories():
     saved = load_settings().get("categories")
     result = {}
     if isinstance(saved, dict) and saved:
-        # Keep only well-formed name -> #hex entries. startswith('#') was
-        # the old test, and it waved through "#not-a-colour", which then
-        # raised TclError inside whatever render touched that category —
-        # settings.json is hand-editable and travels inside backups, so
-        # this is an untrusted door like any other.
+        # Only well-formed name -> #hex entries: settings.json is hand-editable
+        # and travels in backups, and "#not-a-colour" raised TclError in a render.
         for name, color in list(saved.items())[:MAX_CATEGORIES]:
             color = sanitize_color(color)
             if not (isinstance(name, str) and name.strip() and color):
                 continue
             name = name.strip()
-            # A COUNT can be capped by truncating the list; a NAME cannot
-            # be capped by truncating the name. The first version did
-            # exactly that, and a category whose name was over the limit
-            # came back shortened on the next launch -- so every note
-            # filed under the full name no longer matched a category that
-            # existed, and normalize_note re-filed them all to General.
-            # A pathological name is dropped instead. That is NOT loud --
-            # an earlier comment here said it was, and the notes under it
-            # still went to General in silence -- which is why the doors
-            # a name comes in by now refuse it up front
-            # (category_name_refusal), so only a hand-edited file can
-            # reach this line at all.
+            # Dropped, not shortened: shortened, it no longer matched the
+            # notes filed under the full name, which went to General. The doors
+            # refuse it first (category_name_refusal): only a hand-edited file gets here.
             if len(name) > MAX_CATEGORY_NAME:
                 continue
             result[name] = color
@@ -104,28 +60,20 @@ def load_categories():
 
 
 def persist_categories():
-    """Write the current category map back to settings."""
+    """Write the current category map back to settings; True when the file
+    took it (a refusal reaches the write-failure banner either way)."""
     settings = load_settings()
     settings["categories"] = dict(CATEGORY_COLORS)
-    save_settings(settings)
+    return save_settings(settings)[0]
 
 
 def category_name_refusal(name, adding=True):
-    """Why *name* cannot join the category map, or None when it can.
-
-    The one rule for every door a category name comes in by -- Add,
-    Rename and a restored backup -- and it is the rule load_categories
-    applies on the next launch. The doors used to take anything, and the
-    loader then dropped what it would not keep: a category with a long,
-    descriptive name worked all day, and the next morning it was gone and
-    every note filed under it was in General, for good after the first
-    save. The 201st category went the same way.
-
-    *adding* is False for a rename, which does not change the count.
-    Duplicate names are not this function's business: each door answers
-    those its own way (Add and Rename refuse, a backup keeps the local
-    colour).
-    """
+    """Why *name* cannot join the category map, or None when it can: the one
+    rule for every door a name comes in by -- Add, Rename, a restored backup
+    -- and the rule load_categories applies at the next launch, so nothing
+    taken today is dropped tomorrow with its notes sent to General.
+    *adding* is False for a rename, which does not change the count;
+    duplicate names are each door's own business."""
     if len(name) > MAX_CATEGORY_NAME:
         return (f"A category name can be at most {MAX_CATEGORY_NAME} "
                 f"characters long, and this one has {len(name)}.")
@@ -135,26 +83,30 @@ def category_name_refusal(name, adding=True):
     return None
 
 
-def adopt_categories_of(raw_notes):
-    """Give every category a note is filed under a place in the live map.
-
-    A note stores only its category's NAME; which names exist, and their
-    colours, live in settings.json. When the two files disagree,
-    normalize_note re-files the note to General and the next save makes
-    that permanent -- and they disagree more easily than it looks:
-    deleting settings.json to reset the preferences, copying only
-    notes_data.json to a new PC, a crash between a rename's two writes.
-    Each of those used to empty all of the user's filing into General
-    without a word.
-
-    So the notes are believed. A name a note -- or one day of a repeating
-    note -- is filed under comes back with a colour from the default
-    palette, under the same ceilings every door has. Called on the raw
-    notes, before normalize_note sees them. Returns the names it added;
-    saving them is the caller's call.
-    """
+def adopt_categories_of(raw_notes, refused=None):
+    """Give every category a note (or one day of a series) is filed under a
+    place in the live map: the notes are believed over settings.json, which
+    a reset, a notes file copied alone or a crash mid-rename leaves without
+    them. Back with a palette colour, under every door's ceilings (one refused
+    goes into the list *refused*, if given). Called on the raw notes, before
+    normalize_note; returns the names added, unsaved."""
     palette = list(DEFAULT_CATEGORY_COLORS.values())
     added = []
+    for name in _unknown_names(raw_notes):
+        if category_name_refusal(name) is not None:
+            if refused is not None and name not in refused:
+                refused.append(name)
+            continue
+        CATEGORY_COLORS[name] = palette[len(CATEGORY_COLORS) % len(palette)]
+        added.append(name)
+    return added
+
+
+def _unknown_names(raw_notes):
+    """The names *raw_notes* (or one day of a series) are filed under that the live map
+    lacks, in order, as adopt_categories_of meets them -- only a name normalize_note
+    would match exactly: it compares the stored string as it is, so a padded name
+    adopted in stripped form would still miss."""
     for note in raw_notes:
         if not isinstance(note, dict):
             continue
@@ -164,14 +116,12 @@ def adopt_categories_of(raw_notes):
             names.extend(patch.get("category") for patch in overrides.values()
                          if isinstance(patch, dict))
         for name in names:
-            # Only a name normalize_note would match exactly: it compares
-            # the stored string as it is, so a padded name adopted here in
-            # stripped form would still miss.
-            if (not isinstance(name, str) or not name
-                    or name != name.strip() or name in CATEGORY_COLORS):
-                continue
-            if category_name_refusal(name) is not None:
-                continue
-            CATEGORY_COLORS[name] = palette[len(CATEGORY_COLORS) % len(palette)]
-            added.append(name)
-    return added
+            if isinstance(name, str) and name and name == name.strip() and name not in CATEGORY_COLORS:
+                yield name
+
+
+def would_adopt(raw_notes):
+    """Whether adopt_categories_of would add a name for *raw_notes*, the map left as it
+    is: the import's question whether a backup brings more asks it of the Trash it
+    would take, whose names the merge adopts before it signs."""
+    return any(category_name_refusal(name) is None for name in _unknown_names(raw_notes))

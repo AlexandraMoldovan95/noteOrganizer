@@ -20,19 +20,21 @@ Put the updated file(s) in place, check what changed, then stage, commit, and se
 ```powershell
 git status
 git add .
-git commit -m "docs: short description of what changed"
+git commit -m "user guide: say what the Statistics tiles count"
 git push
 ```
 
-**Commit message prefixes I use:**
-| Prefix | When |
+**How a commit subject reads** (my rule since 2026-11-07, the same in
+[CLAUDE.md](../CLAUDE.md#commits)): the part of the app first, then what changed, in plain
+words, so `git log --oneline` reads to someone who never saw the work.
+
+| Subject | What it says |
 |---|---|
-| `fix:` | Bug fix |
-| `feat:` | New feature |
-| `perf:` | Performance improvement |
-| `docs:` | Documentation only |
-| `refactor:` | Code restructuring, no behavior change |
-| `chore:` | Housekeeping (deps, config, cleanup) |
+| `tables: a table inserted right above another leaves one empty line` | a fix, in the tables |
+| `find: a table is searched row by row, as it is read` | a fix, in Find |
+| `release guide: WACK on 0.100.513` | documentation only |
+
+Earlier history used `fix:`, `feat:`, `docs:` and the like; it stays as it is.
 
 If work resolves a GitHub Issue, put `Fixes #N` in the **PR description** (the 2026-09-05
 convention — one place, closed on merge); `(Fixes #N)` in a commit message also works but is
@@ -58,13 +60,12 @@ Put the new file(s) in place, rebuild, and **test it locally** — a rebuild nev
 just for me to look at.
 
 Happy with it? Commit, run the static gates, then push. `py tools/pre_push_check.py` runs the
-cheap checks CI runs first — names resolve, class surface unchanged, one definition per question,
-links, English, deny rules, comments, contrast, every `.py` compiles; its docstring lists them —
-and two PRs went red learning that the hard way. The full suite is `tools/run_tests.py`.
+cheap checks CI runs first — its docstring lists them — and two PRs went red learning that the
+hard way. The full suite is `tools/run_tests.py`.
 
 ```powershell
 git add .
-git commit -m "feat: short description"
+git commit -m "area: what changed"
 py tools/pre_push_check.py
 git push
 ```
@@ -89,8 +90,8 @@ git branch -d feat/short-name
 (`git fetch --prune` drops the stale remote-tracking reference for the branch GitHub just
 deleted — without it, `git branch -a` keeps listing ghosts.)
 
-Before pushing a branch, the local Linux CI mirror can save a red remote run — one Docker
-command reproduces the Ubuntu leg; see [`qa/README.md`](../qa/README.md) for it.
+Before pushing a branch, the local Linux CI mirror can save a red remote run — `py
+tools/linux_ci.py` reproduces the Ubuntu leg in Docker; see [`qa/README.md`](../qa/README.md) for it.
 
 **Not happy with the result before committing?** Don't commit. Ask for an adjusted file, replace
 it again, rebuild again, repeat until it looks right — nothing is "saved" in Git until I actually
@@ -112,7 +113,7 @@ If I'm updating a `.md` file to match a code change, and I forgot to include it 
 
 ```powershell
 git add .
-git commit -m "docs: catch-up description"
+git commit -m "user guide: catch-up description"
 git push
 ```
 

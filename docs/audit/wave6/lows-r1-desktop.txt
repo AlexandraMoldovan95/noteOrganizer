@@ -1,0 +1,32 @@
+# lows-r1-desktop, on Sonnet: the lows wave's first round
+# started 2026-11-21 22:59 UTC
+
+You are an adversarial reviewer. Attack the fixes of a "lows wave" on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6. Your job is to find what is wrong in them, not to praise them. You change nothing: read only.
+
+## What to attack (read each with `git -C D:/Projects/NoteOrganizer show <commit>`)
+- 661ce136 import: "Import complete" says each count in the form its number takes ("Also restored 2 categories and 1 trashed note.").
+- 187cb7af status line: a note opened with a table too big to draw keeps the words "A table this large is shown as its text…" instead of its dates; qa6 checks; mutant RV14.
+- 9157f542 editor: Ctrl+T swaps two letters, each keeping its own character formatting (_transpose_keeping_styles, called from _caret_out_of_hidden); qa1 check; mutant TX01.
+- 3b10fafe test plan: 213 corrections in 171 rows of qa/NoteOrganizer_TestPlan.xlsx, meant to make untrue rows true.
+- f6ee5f05 issues log count and a qa9 check's name.
+- abc1a7e8 site: site/build.py's Markdown renderer no longer starts a numbered list mid-paragraph unless the number is 1 (RENDER_CASES checked at every build).
+
+For the plan commit, list its changed cells with:
+`py -I <scratchpad>\lows\plan_diff.py D:/Projects/NoteOrganizer qa/NoteOrganizer_TestPlan.xlsx 3b10fafe`
+(prints each changed cell before and after). A row can be read whole with `py -I <scratchpad>\build524\dump_cases.py 421,587`.
+
+## What to look for
+- The three app fixes: does each hold on every road a person takes (the same message or key reached another way; a repeating note's day; a new unsaved note; Undo/Redo after Ctrl+T; Ctrl+T at a line's end, at the start of a line, across a line break, at the very start of the note, inside a table's text, with a selection; AltGr)? Does any break something that worked (paragraph alignment and indents, the formatting journal behind Ctrl+Z, the status line's other words, "Not saved", "Only this day")? Is each check strong enough that the fix taken out fails it, and does it read what the case promises?
+- The plan rows: is each new sentence true of the app? Verify the words in quotes against the code (note_organizer.py, noteorganizer/), the controls named (does "← Back to Notes" exist where a step uses it? does every import really ask "Import notes" first? "Update it", "Skip it"?), mutant ids against tools/mutants.json, steps that still cannot be done as written. Read at least every changed STEPS and EXPECTED cell, and a sample of the rest.
+- The site renderer: a Markdown construct the documents use that it now draws wrongly (lists after a paragraph, nested lists, numbered lists that continue, "1." under a paragraph).
+
+## Severity (the project's rule)
+- HIGH: notes or files lost or damaged.
+- MEDIUM: a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims, a plan step that cannot be done as written or an expected result the app does not give, a quoted word the app does not say, a mutant id that does not guard what the row says.
+- LOW: wording, an omission in an "Automated in part" note, a long by-hand recipe a row calls not practical (the owner ruled those LOW).
+
+## Rules
+Read only: Grep, Read, git show/log/diff, and the two scripts above with `py -I`. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py or anything that starts the app; never touch notes_data.json, settings.json, trash.json, templates.json, attachments/, notebook_location.txt, %APPDATA%\NoteOrganizer or C:\Users\<name>\Note Organizer.
+
+## Report
+Numbered findings, most severe first, each: severity, where (commit, file:line or case), what is wrong, the evidence, what would fix it. Then a "Verdict per fix" line for each commit (holds / does not hold). Then a "Not covered" section: what you did not read or could not settle.

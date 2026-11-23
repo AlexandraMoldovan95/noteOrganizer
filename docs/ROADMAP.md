@@ -10,8 +10,8 @@ list for a project developed in spare time by a small team of two.
 - [Versioning](#versioning)
 - [Known limitations](#known-limitations)
 
-The outside view of the app — what a hostile product review found and what is
-being done about it — lives in its own register, now archived:
+The outside view of the app — what a hostile product review found and what was
+done about it — lives in its own register, now archived:
 [`docs/archive/PRODUCT_FINDINGS.md`](archive/PRODUCT_FINDINGS.md).
 
 ## Under consideration
@@ -22,23 +22,30 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   app, a web demo that re-creates its interface in a browser, and the key documents as pages —
   lives in this repository under [`site/`](../site/README.md) since 2026-10-14. It is built from
   this repository and published on Netlify by hand, with changes gathered into one upload because
-  every deploy counts against the account's credits. What is planned for it, nearest first:
-  - **The demo closer to the app.** Its formatting bar has the app's font and size lists and its
-    indent buttons since 2026-10-14, taken from the app's own source and carried in share codes
-    both ways. It stays as it is now (the owner's call, 2026-10-14): the calculator under a note,
-    and opening or moving one day of a repeating series, remain among the things the demo names
-    as the desktop app's alone.
-  - **One site for both apps** — done on 2026-10-24, the owner's call: the overview presents the
-    Android app beside the desktop one, an Android page is built from that repository's README
-    and screenshots, and an Android demo draws the phone's screens over the desktop demo's rules,
-    so a share code crosses between the two demos as between the apps. Its code stays in its own
-    repository, which the site's build reads the way it reads this one — no third repository for
-    the site. Each repository is named as a link once it is public (`site/site.json`).
+  every deploy counts against the account's credits. Settled already: the demo stays as it is
+  (the owner's call, 2026-10-14 — its formatting bar has the app's font and size lists and indent
+  buttons, and the calculator under a note and moving one day of a series remain the desktop
+  app's alone), and one site presents both apps (done on 2026-10-24: an Android page and an
+  Android demo beside the desktop's, each app's code in its own repository, which the build reads;
+  each repository is named as a link once it is public, `site/site.json`). Still planned:
   - **At the public launch, links to the stores** — the Microsoft Store for the desktop app,
     Google Play for Android — rather than the built `dist/` folder to download. A store signs the
     app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up
     to date, and is where people look for it. The Windows options are in
     [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
+
+- **After the stores: what the review panel raised for later** (the owner's call, 2026-11-08).
+  The final audit's panel of reviewers asked for these; each changes much of what a person sees,
+  or code across files, so none goes in on the eve of a release:
+  - **One set of icons.** The marks in the format bar, the sidebar and the calendar are font
+    glyphs and emoji of mixed weights, 12 to 14 pixels; one set, drawn in the theme's colour at
+    one weight, or none where the label says enough.
+  - **An editor that says no note is open.** With nothing chosen (a search that matches nothing,
+    say), the editor still shows empty fields, the format bar, Save and Delete, as if in use; a
+    short page saying what to do, with New Note, would read better.
+  - **Two moves in the code.** The note list's state, read through `getattr(self, ..., default)`,
+    declared in `__init__` instead; and the card's tags line worked out by a pure function in
+    `core/`, tested on its own.
 
 - **Feedback from real readers at the public launch, colour-blind readers among them.** The
   colour-blind check so far is an AI simulation: photographs of the app simulated for
@@ -320,7 +327,8 @@ General / Content / Data / More. The questions the redesign settled:
 The four follow-up quick wins all shipped on 2026-08-30: a "last exported" line in Backup (showing
 the last successful export's date and time; failed exports don't move it), trash retention as a
 real setting (a 7–90 day selector in the Trash panel; the purge, the days-left column and every
-message quote it, and unusable hand-edited values read as the 30-day default), a keyboard-shortcut
+message quote it, and unusable hand-edited values read as the 30-day default — reversed in
+0.95.391: an unreadable window now purges nothing until one is chosen), a keyboard-shortcut
 reference (Settings → Keyboard shortcuts, every bound combo grouped and verified against the
 bindings), and template deletion saying plainly that it skips the Trash and can't be undone
 (actually routing templates through the Trash was later
@@ -329,7 +337,7 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas were moved
+fifteen modules under `noteorganizer/core/` (eighteen now), none importing tkinter — and six UI areas were moved
 into `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
 the calendar, attachments, and — re-measured once it became one drawing — the note list. Spelling
 (2026-10-14) was written into both layers from the start: two `core/` modules and a seventh mixin. All the
@@ -370,7 +378,8 @@ both would double-count the same work.
 
 Bump the version, and cut `CHANGELOG.md`'s `[Unreleased]` section into that new version number
 (with today's date), every time `note_organizer.py` changes and the app gets rebuilt for real
-use — the same moment a `.exe` rebuild is already called for. Docs-only changes don't move the
+use — the same moment a `.exe` rebuild is already called for. The same cut gives the stories
+marked `next` in the [issues log's index](ISSUES_LOG.md#the-stories-at-a-glance) the new number. Docs-only changes don't move the
 version, same as they don't call for a rebuild. If several small PRs land back-to-back before the
 next rebuild, they share one bump — the trigger is "about to rebuild," not "one bump per PR."
 
@@ -383,6 +392,21 @@ backup-before-upgrade safety net in `load_notes()`, and the "Updated to version 
 One row per recorded bump. `Added`/`Fixed` are the cumulative totals the number encodes; the
 counting notes record what counted, what didn't, and why. The features themselves are described in
 [CHANGELOG.md](../CHANGELOG.md).
+
+**Counting CHANGELOG's bullets gives more than the number.** Recounted on 2026-10-27, for the
+final audit: up to `0.97.405`, CHANGELOG lists 98 `Added` and 418 `Fixed` where the version says
+97 and 405. Both gaps are in the rows below, and neither grows after `0.80.198`:
+
+- **13 `Fixed`** — three in `0.55.81` and ten in `0.64.95` — are fixes introduced and repaired
+  inside the same unreleased branch. CHANGELOG lists them; the rule leaves them uncounted.
+- **1 `Added`** — `0.80.198` lists five `Added`, and its row says five, but the number moved by
+  four (76 → 80). A slip at the time, kept: a shipped version is never renumbered.
+
+A recount checks a release by its own section's step from the version before, not by the
+grand total. Recounted at `0.100.524`: 101 and 537 against 100 and 524, the same two gaps; at
+`0.101.540`, 102 and 553 against 101 and 540, the same two again; at `0.101.542`, 102 and 555
+against 101 and 542, the same two still; at `0.102.556`, 103 and 569 against 102 and 556, the
+same two.
 
 | Version | Date | Added | Fixed | Counting notes |
 |---|---|---|---|---|
@@ -478,6 +502,12 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.96.396` | 2026-10-24 | 96 | 396 | **One** `Fixed`, no `Added`, one PR (#304) — found in a photograph of the Android app taken for its documentation, and the same on the desktop. The `Fixed`: a table pasted as markdown text came in with its columns cut short, every separator cell longer than three characters read as a width set by hand — as old as the hand-set widths, so it counts; the routes it reached (Ctrl+V, Ctrl+Shift+V, a page's HTML, a template's text) are one mechanism, the paste reading another world's spelling, so one entry. Not counted: the desktop Share button weighed and put aside in this file (docs), the website's design pass and its Android pages (PR #305, the site, not the app), and the tests — `test_tables`' `forget_widths`, qa1's paste routes, FW01–FW10. |
 | `0.96.401` | 2026-10-26 | 96 | 401 | **Five** `Fixed`, no `Added`, one PR (#311, issues #307–#310) — four from the owner's test plan on the 0.96.396 `.exe`, one seen testing the Android app. The `Fixed`: "↩ Restore previous" missing when a short note's text was replaced before the autosave (the copy measured how much shorter the text got, not how much of it was gone); copied table cells pasted by Ctrl+Shift+V as tab-separated text; a row copied from Excel pasted as loose text (Excel marks the copy inside its table, and the fragment was read alone); a single cell or column pasted framed in pipes — a different mechanism from the row (a row of one cell is no table here), found while testing it, so its own entry; and a web page's non-breaking spaces kept, so search missed the words beside a bold one. Not counted: the binary search for a long column of lone cells, found by the automated security review before release (`Testing`, never shipped), the docs, and the tests — RD01–RD03, PP01–PP02, XL01–XL07, NB01. |
 | `0.97.405` | 2026-10-27 | 97 | 405 | **One** `Added` and **four** `Fixed`, one PR (#318, issues #313–#316) — what checking the Trash against its promise and a mass delete turned up, and the owner's ask. The `Added`: Select all / Unselect all in the Trash with Delete N selected permanently — one capability, one commit, so one entry. The `Fixed`, one per mechanism: (1) the rows' days left not redrawn after a new window; (2) an entry's age measured on the wall clock, an hour off across a change to summer time (a stamp before 1970 read as UTC is part of this entry); (3) the toolbar moving with the words readout's line count; (4) "↩ Restore N selected" left over an emptied Trash. All four shipped in `0.96.401` or earlier, so all count. Not counted: the measurements of deleting 500–2,000 notes (nothing to fix), the docs, and the tests — TW14–TW17, WC01, SA01–SA06. |
+| `0.100.512` | 2026-11-08 | 100 | 512 | **Three** `Added` and **107** `Fixed`, on the final audit's branches (waves 0 to 4, 27 October to 8 November; one pull request at the end). Read from the 210 commits that touch the app's code. The `Added`: Settings → About → Open-source licenses; the list's search in a note's checklist (the owner's choice); an empty search pointing to the Calendar's History. Counted as for `0.83.335`: only defects that shipped in `0.97.405` or earlier, one entry per mechanism however many rounds its fix took — the keyboard's mouse-only controls are three (dropdowns and pickers, drawn buttons with the calendar's month and an attachment's name, a table's menu), every route a paste took past its ceiling one. NOT counted: whatever the audit introduced and repaired inside its branches, each folded into the entry of the defect it belongs to — above all the series days' rescue copy, reworked over rounds 3 to 25 and its lows; the session-end save, the midnight watch and the paste ceiling's own follow-ups; the limited boxes, the long lists' row stacks, the banners held behind an Undo. `Changed`, uncounted: the notebook in the profile's own folder (with the first start's copy-in, its notices and its interrupted copy folded in), the "(earlier text)" notes, Font/Size, the card's " · ". Whether a defect was in `0.97.405` was read from each commit's own account, not measured again on `0.97.405`; the working classification is kept outside the repository. |
+| `0.100.513` | 2026-11-09 | 100 | 513 | **One** `Fixed`, no `Added`, from the release wave's Windows Sandbox photographs of `0.100.512`, which was cut but never shipped, so the two share one CHANGELOG section. The `Fixed`: a window as tall as the screen allows could open with its foot under the taskbar — the app sized its window to the work area and left its place to Windows — as old as that sizing, so it counts. Not counted: the Store package asking for Windows 11 24H2 (`Changed`, the owner's choice), the Sandbox proofs and the certification kit in `tools/msix`, the docs, and the tests — WA01–WA05. |
+| `0.100.524` | 2026-11-12 | 100 | 524 | **Eleven** `Fixed`, no `Added`; `0.100.513` was cut but never shipped, so all share one CHANGELOG section. Five read from what the phone's issues log still held open about the desktop, each found in October while porting to the phone and never brought here: a pasted page's second table put its styles beside their words; Title Z–A put the untitled notes first; Find went down a table's columns; the Insert table grid lit one column fewer than it made; a table inserted above another left two empty lines. Six from a full reading of both apps on 11 November: a new note took a deleted one's tick in Share and its open group in History (one mechanism, an id a delete frees); the calendar's ◀, ▶, Today and month title moved the month behind an open History; Paste as plain text closed runs of empty lines and cut line ends; a file was deleted before the save that stops naming it (Remove, the Trash for good, the clean-up at start: one mechanism); a bulk export that failed left half a file and cleared the selection; Statistics' Categories tile counted only the categories in use (a `Fixed` by the owner's choice). Each was in `0.97.405`. Not counted: `renumber()` counting its shifts as `align()` did (no reader of them, nothing showed), a note card's signs on two fixed lines (`Changed`, the owner's choice), the docs, story_look's scenes, and the tests — PF01–PF06, RF01–RF12. |
+| `0.101.540` | 2026-11-19 | 101 | 540 | **One** `Added` and **sixteen** `Fixed`, from the final audit's wave 6 (its findings of low severity, 12 to 15 November), read from the 60 commits that touch the app's code since `0.100.524`, which was cut but never shipped, so all share one CHANGELOG section. The `Added`: a note or a template keeps the fields a newer version wrote, within bounds (the owner's decision D2, 13 and 14 November). The `Fixed`, one per mechanism, each in `0.97.405`: a grey hint told by its words; a copy carrying the original's rescue copy (Duplicate and a backup's copies, one mechanism); two safety copies made in one second; a refused write said as written (the name, Sharp text, Spelling, a template, an import's other parts, "Saved at"); a category's rename or delete moving the notes before its list was written; the one-time cleanup marked done over a failed write; a pin or a tick read with `bool()`; an export failing at the close told as cut short; an export error without words read as none; the close's word written after its wait; an import cut short at the close naming only its file; an import's refusals sorted wrongly (no room, a damaged stream); an imported file matched by its stored name alone (a note's Update and a trashed note, one mechanism); a day off the schedule put in the Trash twice; History's counts made of the rows it listed; the light/dark switch remembering only while the app was open. NOT counted, each folded into the entry it belongs to: whatever the audit introduced and repaired, above all the held files' follow-ups (the Trash's window, a file's removal, a backup's Trash), the share code found among words, the look-alikes' question and their files, the big table's words, the hidden notes' word, the session end's word, the follow-ups of the cleanup's copy, and the status line's hold that outlived its words (found by the release's Linux run, after the cut, in the 61st commit); and one whose age the commits do not say, Back to Calendar after "Go back and fix it". Two small words of `0.97.405` (the quick look's "(empty note)", "1 times") join "What the app says matches what it does", and a list in `theme` joins "No value a data file can hold". Whether a defect was in `0.97.405` was read from each commit's own account and checked in `0.97.405`'s code where the account did not say. Not counted: the docs, the tools' lows, and the tests — SN01–SN09 among the catalogue's 1,179 → 1,391. |
+| `0.101.542` | 2026-11-22 | 101 | 542 | **Two** `Fixed`, no `Added`, from the final audit's lows wave (21 and 22 November): of the deferred lows, the owner chose the app's own and the test plans' untrue rows. `0.101.540` was cut but never shipped, so all share one CHANGELOG section. The `Fixed`, each in `0.97.405`'s code: Import complete saying "2 category/categories"; Ctrl+T giving a bold letter swapped with a plain one back plain, and a line's first two letters its indent away. NOT counted, folded into the entry it belongs to: the big table's words written over by its note's dates when the note opens (the audit's own words). Not counted: the plans, the docs, the site's renderer and the checks — the catalogue's 1,391 → 1,403. |
+| `0.102.556` | 2026-11-23 | 102 | 556 | **One** `Added` and **fourteen** `Fixed`, from the review panel's fifth meeting (22 November), whose readers also used the app, and the rounds on its fixes; read from the 21 commits that touch the app's code since `0.101.542`, which was cut but never shipped, so all share one CHANGELOG section. The `Added`: the first Tab typed into a note says how to move on (a hint; Tab did what it always did). The `Fixed`, one per mechanism, each in `0.97.405`'s code: a count's noun and verb not following its number (about forty messages, Import complete's own first line among them); Generate code's code drawn below the window's edge; a note's own Delete read as gone for good; a "Note moved to Trash" Undo left up after its note left the Trash elsewhere; the find bar over the top of the note; the unreadable file's notice sending a person to ask for help; the same file attached twice, an empty one without a word; a window narrower than its editor; the Trash's Undo taking the editor from the note being written; a cell's "\|" kept as "/" without a word; a file that is no backup said in the library's words; an export onto a full disk said as "[Errno 28]" (the backup's and a note's, one mechanism); a note brought back by an import while in the Trash too, unsaid (a backup and a share code, one mechanism); a file copy cut short by a full disk left behind (Add file and a duplicated note, one mechanism). NOT counted, folded into the entry it belongs to: "1 of them are OLDER" (the counts' mechanism, missed by its sweep), the pipe's word said again at each autosave and an encrypted zip losing its own words (both introduced by their fixes and repaired). Not counted: the docs, the plans, the walk, and the tests — PW01–PW54, the catalogue's 1,403 → 1,457. |
 
 ### At the real launch: 1.0.0 and after
 
@@ -599,13 +629,12 @@ bug being chased.
   harmless: the host's leaked click-outside handler closed every later dropdown on the click that
   opened it, until a restart. Each popup now keeps its own window-level lines, removed by any
   route out. See [the story](ISSUES_LOG.md#the-click-that-deleted-its-own-next-command).
-- *Theme-registry pruning cadence* — dead tracked widgets are pruned at each theme switch; a
-  session that never switches themes still accumulates them (Python-side memory only).
+- *Theme-registry pruning cadence* — **settled 2026-10-01.** Dead tracked widgets were pruned
+  only at a theme switch; the registry is now pruned whenever it has doubled since the last prune.
 - *`visual_scenes` burst errors* — a failed burst propagates loudly (nonzero exit) but is not
   counted in the tool's own scene-error tally; cosmetic asymmetry in a manual tool.
-- *Dialogs ignore `parent=`* — the confirm wrappers accept and discard a `parent=` kwarg; the
-  overlay always centres on the app window, so it never mattered, but a future caller could be
-  misled.
+- *Dialogs ignore `parent=`* — **settled 2026-09-28.** The confirm wrappers took and discarded a
+  `parent=` keyword; their parameters are now named and keyword-only, so Python refuses one.
 - *Commit-then-capture in `_grid_delete_table`* — deleting a table while one of its cell
   editors is still open commits that editor first, and the commit's re-render can run before the
   delete takes its view snapshot, so the restored scroll position is the one from before the
@@ -639,7 +668,10 @@ new search — which since `0.96.394` starts from the top), Tab
   operation that edits a table's text still turns Tk's grouping off and on, and pays one full
   layout for it.
 - *The smallest window* — at 640×600 with the selection bar AND a share code open, "Copy code" is
-  cut off by 41 px; the code itself can still be selected and copied.
+  cut off by 41 px; the code itself can still be selected and copied. **Gone 2026-11-22:** with the
+  sidebar shown the window is no narrower than the sidebar and the editor side by side (900×600 at
+  100%), where the bar and the code leave "Copy code" whole (seen on a photograph); 640 wide is
+  reached only with the sidebar, and so the selection bar, hidden.
 - *X11 only* — Meta+D, Meta+BackSpace and Meta+Delete (Tk's word deletes, which Windows does not
   have) are not held at a table's edge.
 - *A day's own text on a day the series no longer has* — **settled 2026-10-12, the owner's call:

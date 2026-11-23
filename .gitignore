@@ -57,10 +57,17 @@ Thumbs.db
 .claude/settings.json
 
 # --- Runtime artifacts the app writes beside itself when run from source ---
-# crash_log.txt is the app's own last-resort logger; the .tmp is a save
-# that failed partway and is overwritten by the next successful save.
+# crash_log.txt is the app's own last-resort logger. Every data file has
+# siblings, by family rather than by name, since the Trash's and the
+# templates' are as much the person's as the notebook's: a .tmp is a save
+# that failed partway (overwritten by the next one), a .part a copy that
+# did, and <name>_corrupt_<stamp>.json an unreadable file kept aside
+# (core/storage.py, core/paths.py). Only the notebook's were named until
+# the final audit's ninth round.
 crash_log.txt
-notes_data.json.tmp
+*.json.tmp
+*.json.part
+*_corrupt_*.json
 
 # The single-instance lock: created beside the notebook on every launch
 # (the repo root, when run from source) and kept while the app is open.

@@ -1,0 +1,13 @@
+You are reviewing test tooling in an Android app's repository at D:\Projects\androidVersion (branch audit/a-val5). Read-only: do NOT edit files, do NOT run the emulator, adb, gradle or any walk script. Use only Read/Grep/Glob and `git show` / `git diff` (read-only git).
+
+Scope (only these):
+- `git show a5b547f` (the latest commit) and the commits just before it that created/changed tools/emulator/walk_groups.py (see `git log --oneline -6 -- tools/emulator/walk_groups.py tools/emulator/walk.py tools/emulator/take_screenshots.py`).
+- tools/emulator/walk_groups.py (whole file, new this week)
+- in tools/emulator/walk.py: the `_settled` wrapper, `settle_device`, `write_summary`, `check`, `check_settled`, `settle`, `main()`, and the parts `second_code_while_open` and `blank_note_menu`.
+- in tools/emulator/take_screenshots.py: the `found = {...}` rotation read and the `finally:` block that restores it.
+
+What these are for: walk.py drives the built app on an Android emulator and prints one `PASS ...`/`FAIL ...` line per check; each part writes a summary.json. walk_groups.py walks main()'s parts in groups of 10, each on a freshly cold-booted emulator (`-no-window`), stops it after, retries a group once if the emulator (not the app) got stuck, and writes a combined summary.json. It must never stop an emulator it did not start. take_screenshots.py must leave the emulator's rotation settings as it found them.
+
+Try to break them, concretely: a part raising mid-way (Exception, KeyboardInterrupt, SystemExit), a group timing out, the emulator failing to boot on both tries, a stale summary.json from an earlier run, the walk printing the stuck phrase in a different case or inside a check's own text, Ctrl-C during a group, adb hanging, a rotation key that reads "null" or an error string, a part list read wrongly from main(). For each problem: file:line, a concrete failure scenario (inputs/state → wrong result), and a severity: HIGH (a run reports success while checks failed or did not run, or it stops/harms something it did not start), MEDIUM (a wrong count or a misleading result a person would act on), LOW (cosmetic, unlikely). Verify each claim against the code before reporting it; do not report style preferences.
+
+End your report with what you did NOT cover. Keep the report under 600 words.

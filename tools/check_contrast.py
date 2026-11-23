@@ -34,6 +34,9 @@ import importlib.util
 import os
 import sys
 
+import guest  # the ceiling and empty homes, before the app's code (tools/guest.py)
+
+guest.settle(heavy=False)
 sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -82,6 +85,12 @@ PAIRS = [
     ("on_success", "success_pressed", "words on a confirming button, held down"),
     ("text", "find_all", "text of the other find matches"),
     ("text", "find_miss", "text in the find box when nothing is found"),
+    ("focus_ring", "bg", "the keyboard's ring on the window (a mark, owes "
+                         "3:1)", AA_NON_TEXT),
+    ("focus_ring", "card", "the keyboard's ring on a card or panel",
+     AA_NON_TEXT),
+    ("focus_ring", "sidebar", "the keyboard's ring in the sidebar or a list",
+     AA_NON_TEXT),
 ]
 
 # Surfaces the app mixes from a palette rather than reading off it, each
@@ -114,20 +123,9 @@ def owed():
             for pair in PAIRS}
 
 
-def luminance(colour):
-    """Relative luminance, as WCAG 2.1 defines it."""
-    value = colour.lstrip("#")
-    if len(value) == 3:
-        value = "".join(ch * 2 for ch in value)
-    channels = [int(value[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
-    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-              for c in channels]
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-
-
-def ratio(one, other):
-    light, dark = sorted((luminance(one), luminance(other)), reverse=True)
-    return (light + 0.05) / (dark + 0.05)
+# The app's own measure, the one letters_on answers by: a copy of the formula
+# here agreed with it only because nobody had changed either.
+ratio = themes.contrast_ratio
 
 
 def colour_of(theme, key):

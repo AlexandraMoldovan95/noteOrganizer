@@ -15,9 +15,15 @@ it configures the app's paths at and restores afterwards. Run it from a
 scratch copy, never the project root — see CLAUDE.md, "QA testing
 safety".
 """
+import os
 import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
 
-from noteorganizer.core.duplicates import _dup_key
+from noteorganizer.core.duplicates import _dup_key  # noqa: E402
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
     apply_shared_update,
@@ -27,6 +33,7 @@ from noteorganizer.core.model import (
     rescue_copy_spent,
     split_by_identity,
     text_lost,
+    words_lost,
     new_note_uid,
     normalize_note,
 )
@@ -302,6 +309,21 @@ check('split_by_identity on an empty batch finds nothing',
       split_by_identity(_mine_all, []) == ([], []))
 check('split_by_identity against an empty notebook calls everything new',
       len(split_by_identity([], _batch)[1]) == 3)
+# A batch holding one identity twice: the first arrival claims it. Both were
+# paired with one note, which the Update then replaced twice -- its rescue
+# copy the first arrival, the person's own words in no copy -- or, both new,
+# added two notes wearing one identity (the phone's Importing.plan already
+# had it).
+_twice = [{"uid": _have2["uid"], "title": "first"},
+          {"uid": _have2["uid"], "title": "second"}]
+_known, _fresh = split_by_identity(_mine_all, _twice)
+check('a batch with one identity twice pairs the note here once, the second '
+      'arrival new and without the identity',
+      [t["title"] for _m, t in _known] == ["first"]
+      and [(n["title"], "uid" in n) for n in _fresh] == [("second", False)])
+_known, _fresh = split_by_identity(_mine_all, [dict(t, uid="both-new") for t in _twice])
+check('...and both new, the second comes in as a note of its own',
+      _known == [] and [n.get("uid") for n in _fresh] == ["both-new", None])
 
 # ---- the rescue copy, spent and swapped (2026-10-22, both apps) ----
 #
@@ -340,6 +362,11 @@ _para = "x" * 200 + "\n" + "an old paragraph of three hundred characters " * 6 +
 check('text_lost counts what neither end keeps',
       text_lost("abcdef", "abXYef") == 2 and text_lost("abc", "abc") == 0
       and text_lost("abc", "") == 3 and text_lost("", "new") == 0)
+check('words_lost counts the words gone, each with its space, as often as they '
+      'were there',
+      words_lost("milk eggs milk", "eggs milk") == 5
+      and words_lost("one two", "two  one") == 0
+      and words_lost("a b", "a B") == 2 and words_lost("", "new") == 0)
 check('a short note replaced by a new line keeps a copy (test case 692)',
       rescue_copy_due("", _short, "", "A new line"))
 check('a paragraph replaced by another as long keeps a copy',

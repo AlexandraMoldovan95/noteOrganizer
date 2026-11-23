@@ -1,0 +1,22 @@
+# lows-r7-desktop, on Sonnet: the lows wave's seventh round
+# started 2026-11-22 00:22 UTC
+
+You are an adversarial reviewer. Attack one commit on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6: a8cfa1ae. Read with `git -C D:/Projects/NoteOrganizer show a8cfa1ae`, and the whole of `_transpose_keeping_styles` (note_organizer.py near line 566) and the cell's `swap_keeping_styles` (search it). Read only; change nothing.
+
+The commit:
+- In the Ctrl+T swap, after reckoning `first`/`second` by "-2c"/"-1c" from `end`, it reads `one, two = text.get(first), text.get(second)` and returns "break" (no swap) when either is not one character or is a UTF-16 surrogate (0xD800–0xDFFF). The reason, measured on Tk 8.6.15: with the insert mark parked inside an emoji's two index places, the mark splits it and -1c lands on its second half, so the old swap reversed the halves into lone surrogates. An emoji beside the caret (not split) reads as one astral character (len 1, ord > 0xFFFF) and still swaps whole.
+- The cell editor's swap calls `self._editor_retag_emoji(t)` after the swap.
+- qa1 adds "...and Ctrl+T with the caret inside an emoji leaves the emoji whole"; mutant TX07 removes the guard.
+- TX04's "about" text changed.
+
+You may read `C:\Programs\Python313\tcl\tk8.6\text.tcl`. Look for:
+- Does the guard refuse any character a person types or pastes that should swap (a newline at a line's start or end, a tab, accented and combining letters, CJK, a BMP emoji like ✔ or ❤, an astral emoji whole, the last two characters before the final newline)? Could `text.get` on a valid index return more than one Python character, or an empty string, on an ordinary road, so that the guard refuses an ordinary swap?
+- Does it still let a split through anywhere (the caret parked inside an emoji at a line's end, where `pos` is "insert"; two emoji with the caret between their halves; a flag)?
+- `_editor_retag_emoji` after the swap: anything it disturbs (the cell's other tags, its undo, the caret, a selection), or a road where it raises outside the TclError guard?
+- Is the qa1 check on a road the app reaches, and would it fail with the guard removed? Is every claim of the commit message true?
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims, a claim that misleads; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict line; then "Not covered".

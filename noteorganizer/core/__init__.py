@@ -1,30 +1,9 @@
 """The data and rules layer — everything that is *not* the user interface.
 
 The one rule that matters in here: **no module in `core` may import
-tkinter.** That is what lets these modules be tested without opening a
-window (see `test_calculator.py`, `test_recurrence.py`,
-`test_data_safety.py`, which all run headless), and what would let a
-different front end reuse them unchanged.
+tkinter.** It is what lets the unit suites (`test_recurrence.py`,
+`test_data_safety.py` and the rest) test these modules without opening a
+window, and what would let a different front end reuse them unchanged.
 
-Modules, as they get moved across from `note_organizer.py`:
-
-* ``calculator`` — evaluates the in-note calculator's expressions.
-* ``recurrence`` — the repeat rules, and which dates a note lands on.
-* ``themes`` — colour palettes and the fixed layout numbers. Pure data.
-* ``formatting`` — how rich-text spans are stored on a note.
-* ``sharing`` — share codes, and the guards that make importing them safe.
-* ``duplicates`` — deciding when two notes are really the same note.
-* ``paths`` — where data lives, migrations, and the cleanup that must
-  never delete the wrong thing. Importing it does nothing on its own;
-  ``paths.configure(app_dir)`` fills in the individual file locations.
-* ``storage`` — reading and writing settings, templates and trash, plus
-  the pre-flight backup of the notes file.
-* ``categories`` — the live category map, and moving it to and from
-  settings.
-* ``model`` — what a note *is*, and ``normalize_note``, the single gate
-  every note passes through before the app trusts it.
-
-The core layer is now complete. What remains is the change that makes
-migrations run on an explicit call rather than as a side effect of
-importing ``note_organizer``, and then splitting the UI itself.
+Each module and its job are listed in `docs/ARCHITECTURE.md`.
 """

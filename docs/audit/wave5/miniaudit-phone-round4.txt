@@ -1,0 +1,14 @@
+You are reviewing test tooling in an Android app's repository at D:\Projects\androidVersion (branch audit/a-val5). Read-only: do NOT edit files, do NOT run the emulator, adb, gradle or any walk script. You may use Read/Grep/Glob and read-only git (`git show`, `git diff`, `git log`).
+
+Scope (only these):
+- `git show 928bbf5` and `git show a5b547f` (the two latest commits).
+- tools/emulator/walk_groups.py (whole file).
+- in tools/emulator/walk.py: `check`, `fail`, `settle`, `check_settled`, `settle_device`, `write_summary`, `_settled` and the loop after it that wraps main()'s parts, `main()`, and the parts `second_code_while_open` and `blank_note_menu`.
+- in tools/emulator/take_screenshots.py: the `found = {...}` rotation read and the `finally:` block that restores it.
+- tools/emulator/emulator_only.py only as far as `run`, `AdbTimeout` and `adb` are used above.
+
+What these are for: walk.py drives the built app on an Android emulator and prints one `PASS ...`/`FAIL ...` line per check; after every part it writes summary.json. walk_groups.py walks main()'s parts in groups of 10, each on a freshly cold-booted emulator (`-no-window`), stops it after, walks a group once more if the emulator (not the app) got stuck, and writes a combined summary.json and an exit code. Its promises: it never reports a pass when a check failed or a part was not walked; it never uses or stops an emulator it did not start; whatever way a group ends (timeout, Ctrl-C, crash), the emulator it started is stopped. take_screenshots.py must leave the emulator's rotation settings as it found them.
+
+Try to break those promises with concrete cases. For each problem give file:line, a concrete failure scenario (inputs/state → wrong result), and severity: HIGH (a pass reported while checks failed or did not run, or an emulator it did not start used/stopped), MEDIUM (a wrong count or misleading result a person would act on), LOW (cosmetic or very unlikely). Verify each claim by reading the code paths end to end before reporting it; do not report style preferences or things that are already handled — if you suspect something, trace it and say "checked, fine" when it is.
+
+End your report with what you did NOT cover. Keep the report under 600 words.

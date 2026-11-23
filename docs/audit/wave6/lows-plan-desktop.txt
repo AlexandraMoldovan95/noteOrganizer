@@ -1,0 +1,52 @@
+# lows-plan-desktop, on Sonnet: corrections of the plan's untrue rows
+# started 2026-11-21 22:29 UTC
+
+You write corrections, as a script, for rows of a manual test plan that say something untrue. Desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer (branch audit/d-val6). The plan is qa\NoteOrganizer_TestPlan.xlsx, sheet "Test Cases". You never modify anything in the repository: you write a script and a report in the scratchpad, and you validate the script on a COPY of the plan.
+
+## Scope: only what is false
+An inventory of low findings is at <scratchpad>\lows_desktop.md. The owner chose: fix the rows that say something untrue, and nothing else. In scope:
+- section B1 (rows #4–#18) and section B3 (rows #26 to the end of B3), every row marked STANDS or UNCLEAR, when on checking it is false: a step that cannot be done as written (a control named that is not on that screen, a missing step the expected result depends on, a precondition that does not make what the steps need), an expected result that is not what the app does or says (quote the app's real words from the code), a cell that names a check, a test, a mutant id or a file that does not exist or does not do what the cell says.
+- #14: steps that start something in Settings and then name a Notes-tab control with no step back. Find in the code how a person leaves the Settings page for the notes (the real control and its words) and add that step, in the plan's style.
+- #15 and #16 (mutants described or counted that are not in tools/mutants.json): say so in the cell, the way other cells already do: "The mutants named here (X, Y) were not kept in tools/mutants.json." or, without ids, "The mutant was not kept in tools/mutants.json." Check tools/mutants.json at HEAD for each id first.
+- #17, #18 (mutant ids cited for the wrong check or case): correct them from tools/mutants.json (each entry's "must_fail" names its checks; "suites" its suite).
+- #30 (photographs or probe results cited in folders that no longer exist): remove the citation, or say plainly that the photographs were not kept.
+Out of scope, leave untouched: section B2 (the owner ruled a long by-hand recipe LOW) and section B4 (omissions in "Automated in part" notes, also LOW), and any row whose only defect is an omission ("Left to the hand" not naming everything). Also out of scope: rows already changed today, 258, 480, 766 and 1079.
+
+## How to read the plan and the code
+- `py -I <scratchpad>\build524\dump_cases.py 421,587` prints rows (title, precondition [6], steps [7], expected [8], automation [15]). Batch many ids per call.
+- Verify every claim in the code with Grep/Read before you change a word: note_organizer.py, noteorganizer/, qa/*.py, test_*.py, tools/mutants.json. Never trust the inventory's word alone; the inventory was written by another agent.
+
+## The script
+Write <scratchpad>\lows\plan_fix_d_false.py, in exactly this pattern (copy it):
+
+```python
+import sys
+import openpyxl
+sys.stdout.reconfigure(encoding="utf-8")
+PLAN = sys.argv[1] if len(sys.argv) > 1 else r"D:\Projects\NoteOrganizer\qa\NoteOrganizer_TestPlan.xlsx"
+TITLE, PRE, STEPS, EXPECTED, AUTO = 4, 6, 7, 8, 15
+FRAGMENTS = [
+    ("203", EXPECTED, "old text, exactly as in the cell", "new text"),
+]
+def main():
+    wb = openpyxl.load_workbook(PLAN)
+    ws = wb["Test Cases"]
+    rows = {str(r[0].value): r for r in ws.iter_rows(min_row=2)}
+    for case, col, old, new in FRAGMENTS:
+        cell = rows[case][col - 1]
+        text = str(cell.value)
+        if text.count(old) != 1:
+            raise SystemExit("case %s col %d: %r found %d times" % (case, col, old[:60], text.count(old)))
+        cell.value = text.replace(old, new)
+    wb.save(PLAN)
+    print("fragments", len(FRAGMENTS))
+main()
+```
+Rules for fragments: change only the false words, the smallest piece that makes the cell true; `old` must occur exactly once in the cell; several fragments may touch one cell, applied in order. Only columns PRE, STEPS, EXPECTED, AUTO (and TITLE if the title itself is false). NEVER the owner's columns 9 to 14 and 16 (Actual Result, Status, Build, Tested By, Test Date, Bug ID, Your notes). Write as the plan writes: plain English, short sentences, the app's real button words in quotes, "Automated in part:" cells keep their shape.
+
+Validate: copy the plan to the scratchpad (`cp` it to ...\scratchpad\lows\plan_copy_d.xlsx) and run `py -I plan_fix_d_false.py <that copy>`; it must print the fragment count with no error. Then dump the changed rows from the copy (adapt dump_cases.py's path by reading it, in a copy of that script) and read them whole: each must read true and well. Do not run anything else; never run qa*.py, test_*.py or note_organizer.py.
+
+## Report
+Write ...\scratchpad\lows\plan_fix_d_false.md: one line per changed case: case, what was false, the evidence (file:line or the mutant entry), the change in a few words; then the in-scope rows you checked and found true after all (with why), then the rows you could not settle. Also list which changed rows carry Status "Pass" (read column 10 with openpyxl from the copy) — the owner walked those on an older build.
+
+Your final reply, short: how many fragments and cases, the rows found true after all, the ones not settled, the Pass rows touched, and a "Not covered" section confessing what you skipped or verified only in part.

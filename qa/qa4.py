@@ -8,6 +8,7 @@ from _qa_support import hermetic_seed as _qa_seed
 _qa_seed()
 
 import sys
+import types
 import note_organizer as NO, tkinter as tk, time
 # A generated click is DISCARDED in silence when its widget is not
 # viewable, and the app hides popups whenever another program holds the
@@ -178,6 +179,29 @@ check('duplicate_note: the copy is given its OWN identity',
 check('duplicate_note: the two identities differ',
       _ident_clone.get('uid') != _ident_src.get('uid'))
 
+# The same seam once more: the rescue copy of a big deletion ("↩ Restore
+# previous") was copied too, so the duplicate offered to put the
+# original's older words over a note made now. It stays with the original.
+_prev_src = _model4.normalize_note(
+    {'id': 1, 'title': 'Cut down', 'body': 'short now',
+     '_prev': {'title': 'Cut down', 'body': 'the long text it had before'}})
+app.notes = [_prev_src]
+app.save_notes()
+_prev_clone = app.duplicate_note(app.notes[0])
+app.update()
+check(f'duplicate_note: the copy carries no rescue copy of the original '
+      f'({sorted(_prev_clone)!r})', '_prev' not in _prev_clone)
+check('duplicate_note: the original keeps its own',
+      (app.find_note(1).get('_prev') or {}).get('body') == 'the long text it had before')
+# ...and a backup's "Add a copy anyway" or "Add them as new notes", the
+# other roads that copy a note here: the copies came with the original's
+# rescue copy, the seam duplicate_note had.
+_prev_copies = app._without_identity([(app.notes[0], dict(app.notes[0]))])
+check(f'an import\'s copies carry no rescue copy, nor the uid '
+      f'({[sorted(c) for c in _prev_copies]!r})',
+      len(_prev_copies) == 1 and '_prev' not in _prev_copies[0] and 'uid' not in _prev_copies[0]
+      and _prev_copies[0].get('body') == 'short now')
+
 # -- Settings "clean up duplicates" merge (GAP found by the Fix-1 reviewer) --
 _merge_src = "20260101000000000002_merge.txt"
 _merge_src_path = _mk_att4(_merge_src)
@@ -198,7 +222,7 @@ app.ask_yes_no = lambda *a, **k: True
 try:
     app._cleanup_selected_duplicates(
         [(_V4(False), _kept4, _group4), (_V4(True), _removed4, _group4)],
-        None, refresh=lambda: None, announce=False)
+        refresh=lambda: None, announce=False)
 finally:
     app.ask_yes_no = _orig_ask4
 app.update()
@@ -212,6 +236,61 @@ _storage4._delete_attachment_files([_removed4])
 check('cleanup-duplicates: purging the trashed twin leaves the survivor file intact',
       len(_merged4) == 1
       and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
+# The merge stops where a note's files do, as the backup import's: past
+# NO.MAX_ATTACHMENTS the next load cut the list, and the purge took the files
+# no note named any more.
+_cap_kept = dict(_kept4, id=12, attachments=[
+    {'filename': f'k{i}.txt', 'stored_as': f'2026010100000000{i:04d}_k.txt'}
+    for i in range(NO.MAX_ATTACHMENTS - 1)])
+_cap_extra = [f"2026010100000001{i:04d}_x.txt" for i in range(3)]
+for _name in _cap_extra:
+    _mk_att4(_name)
+_cap_removed = dict(_removed4, id=13, attachments=[
+    {'filename': f'x{i}.txt', 'stored_as': n} for i, n in enumerate(_cap_extra)])
+app.notes = [_cap_kept, _cap_removed]
+app.trash = []
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._cleanup_selected_duplicates(
+        [(_V4(False), _cap_kept, [_cap_kept, _cap_removed]),
+         (_V4(True), _cap_removed, [_cap_kept, _cap_removed])],
+        refresh=lambda: None, announce=False)
+finally:
+    app.ask_yes_no = _orig_ask4
+app.update()
+check(f"cleanup-duplicates: the kept copy takes files up to the {NO.MAX_ATTACHMENTS} "
+      f"a note holds, the rest left with the copy in the Trash "
+      f"({len(_cap_kept['attachments'])}, {[len(e.get('attachments') or []) for e in app.trash]})",
+      len(_cap_kept['attachments']) == NO.MAX_ATTACHMENTS
+      and [len(e.get('attachments') or []) for e in app.trash] == [3])
+# Duplicate gives the copy each file again under a new name: cleaning the
+# copy up gave the kept note every file twice.
+_mk_att4("2026010100000002_a_photo.jpg", "PHOTO")
+_mk_att4("2026010100000002_b_photo.jpg", "PHOTO")
+_mk_att4("2026010100000002_c_other.txt", "OTHER")
+_mk_att4("2026010100000002_d_photo.jpg", "PHOTX")      # as long, other bytes
+_tw_kept = dict(_kept4, id=14, attachments=[
+    {'filename': 'photo.jpg', 'stored_as': '2026010100000002_a_photo.jpg'}])
+_tw_copy = dict(_removed4, id=15, title='Dup (copy)', attachments=[
+    {'filename': 'photo.jpg', 'stored_as': '2026010100000002_b_photo.jpg'},
+    {'filename': 'photo.jpg', 'stored_as': '2026010100000002_d_photo.jpg'},
+    {'filename': 'other.txt', 'stored_as': '2026010100000002_c_other.txt'}])
+app.notes = [_tw_kept, _tw_copy]
+app.trash = []
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._cleanup_selected_duplicates(
+        [(_V4(False), _tw_kept, [_tw_kept, _tw_copy]),
+         (_V4(True), _tw_copy, [_tw_kept, _tw_copy])],
+        refresh=lambda: None, announce=False)
+finally:
+    app.ask_yes_no = _orig_ask4
+app.update()
+check(f"cleanup-duplicates: a file the kept note already holds is not merged "
+      f"again, a different one is "
+      f"({[a.get('filename') for a in _tw_kept['attachments']]})",
+      [a.get('filename') for a in _tw_kept['attachments']]
+      == ['photo.jpg', 'photo.jpg', 'other.txt'])
 
 # ---- THEME: long-lived borders and hover follow a switch (Z07-F03/F04) ----
 # The 0.66.97 lesson, reaching the instances it missed: a long-lived
@@ -230,8 +309,11 @@ _probe_dd.pack(); app.update()
 # palette, so a widget frozen at build time still matches ONE theme by
 # coincidence — it cannot match both.
 def _borders_ok():
-    return (str(app.category_menu.cget('highlightbackground')) == app.colors['card'],
-            str(_probe_dd.cget('highlightbackground')) == app.colors['card'],
+    # The keyboard's ring too: it is the border's other colour (focus_ring).
+    return (str(app.category_menu.cget('highlightbackground')) == app.colors['card']
+            and str(app.category_menu.cget('highlightcolor')) == app._focus_ring(),
+            str(_probe_dd.cget('highlightbackground')) == app.colors['card']
+            and str(_probe_dd.cget('highlightcolor')) == app._focus_ring(),
             str(app.export_progress_frame.cget('highlightbackground')) == app.colors['accent']
             and str(app.export_progress_frame.cget('bg')) == app.colors['card'])
 _dark_ok = _borders_ok()
@@ -273,7 +355,56 @@ check('and its ring is tracked, not frozen at build',
               for w, m in app.themed_widgets))
 _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
 
-# ---- THEME sweep round 2: caret, checkbox wells, press colours ----
+# ---- THEME: the keyboard's ring keeps its colours across a switch ----
+# The reminder bar's message and ✕ are Tab stops
+# ringed in the bar's own words' colour, remembered when the bar is drawn. A
+# switch kept the old accent round them, and dark_slate's near-black ring on
+# light's violet read at 3:1 where light's own white reads at 5.7:1.
+import datetime as _rb_dt
+_rb_theme = app.theme_name
+# The bar stands above the notebook, which Settings takes off the window.
+_rb_settings = getattr(app, '_settings_open', False)
+if _rb_settings:
+    app.hide_settings_page()
+app.set_theme('dark_slate'); app.update()
+app._render_reminder_bar(2, _rb_dt.date.today().strftime('%Y-%m-%d'))
+app.update()
+_rb_stops = [w for w in app.reminder_bar.winfo_children()
+             if getattr(w, '_key_press', None) is not None]
+app.set_theme('light'); app.update()
+
+
+def _rb_resting(w):
+    return (str(w.cget('highlightbackground')).lower(), str(w._ring_on).lower())
+
+
+check(f'after a switch the reminder bar\'s two Tab stops rest in the new accent '
+      f'and are ringed in its words ({[_rb_resting(w) for w in _rb_stops]})',
+      len(_rb_stops) == 2 and all(
+          _rb_resting(w) == (app.colors['accent'].lower(),
+                             app._on_fill('accent').lower()) for w in _rb_stops))
+_rb_seen = None
+if _rb_stops:
+    _rb_stops[-1].focus_force()
+    for _ in range(40):
+        app.update()
+        try:
+            if app.focus_get() is _rb_stops[-1]:
+                break
+        except KeyError:
+            pass
+        time.sleep(0.02)
+    app.update()
+    _rb_seen = (str(_rb_stops[-1].cget('highlightbackground')).lower(),
+                str(_rb_stops[-1].cget('highlightcolor')).lower())
+check(f'...and with the keyboard on its ✕ the ring is the new theme\'s words '
+      f'({_rb_seen})', _rb_seen == (app._on_fill('accent').lower(),) * 2)
+app.dismiss_reminder()
+app.set_theme(_rb_theme); app.update()
+if _rb_settings:
+    app.show_settings_page(); app.update()
+
+# ---- THEME sweep, widened: caret, checkbox wells, press colours ----
 # The adversarial review widened the class: every long-lived text field's
 # caret (insertbackground) was frozen at build — invisible after a
 # dark<->light switch, the main editor included; the recurrence radios'
@@ -309,7 +440,7 @@ def _wells_ok():
                 hits.append(well == app.colors['check_well']
                             and well != str(c.cget('bg')))
             walk(c)
-    walk(app.checklist_items_frame)
+    walk(app._checklist_rows)
     return bool(hits) and all(hits)
 def _find_btn_text(root, txt):
     for c in root.winfo_children():
@@ -348,6 +479,45 @@ app.toggle_theme(); app.update()
 check('a theme switch prunes destroyed widgets from the registry',
       not any(w is _dead_probe for w, _m in app.themed_widgets))
 app.toggle_theme(); app.update()
+
+# ---- The light/dark switch remembers each kind from one start to the next ----
+# Forgotten at each start, it promised the last theme used and gave the
+# default after a restart.
+from noteorganizer.core.themes import last_of_each as _lt_last
+_lt_was = app.theme_name
+app.set_theme('dark_ocean'); app.update()
+app.set_theme('light_sky'); app.update()
+_lt_kept = (NO.load_settings().get('last_dark_theme'), NO.load_settings().get('last_light_theme'))
+check(f"the switch's last dark and light themes are written for the next start ({_lt_kept})",
+      _lt_kept == ('dark_ocean', 'light_sky'))
+check("...and read back at a start, the theme worn first, a name no theme has passed over",
+      _lt_last('light_sky', *_lt_kept) == ('dark_ocean', 'light_sky')
+      and _lt_last('dark', 'no_such', 'light_mint') == ('dark', 'light_mint')
+      and _lt_last('light_warm', ['x'], None) == ('dark', 'light_warm'))
+# ...the start's own reading, from the file (no window opened twice):
+app._last_dark_theme = app._last_light_theme = None
+app._load_last_themes()
+check(f"...and a start reads them from settings.json ({app._last_dark_theme}, {app._last_light_theme})",
+      (app._last_dark_theme, app._last_light_theme) == ('dark_ocean', 'light_sky'))
+# A dark theme a newer version named, which this one passes over, is kept
+# while a light one is chosen: the switch wrote "dark" over it.
+NO.save_setting('last_dark_theme', 'dark_rose')
+app._load_last_themes()
+app.set_theme('light_mint'); app.update()
+check(f"...and a newer version's dark theme stays while a light one is chosen "
+      f"({NO.load_settings().get('last_dark_theme')!r})",
+      NO.load_settings().get('last_dark_theme') == 'dark_rose')
+app.set_theme(_lt_was); app.update()
+# A list or an object in "theme" is read as no theme: `in THEMES` raised on
+# it, and every start stopped.
+NO.save_setting('theme', ['dark'])
+try:
+    _lt_loaded = app.load_theme_setting()
+except TypeError as _lt_e:   # this check's FAIL, not the suite's end
+    _lt_loaded = 'raised %s' % _lt_e
+app.save_theme_setting()
+check(f"a list in the theme setting is read as the default, not a start that stops ({_lt_loaded!r})",
+      _lt_loaded == 'dark')
 
 # ---- PERFORMANCE: note list with larger count ----
 # This check used to assert a literal True: it measured the time, printed
@@ -2598,6 +2768,43 @@ app.collapsed_groups.clear()
 app.refresh_note_list(); _ls_settle()
 if _bl_work_colour is None:
     NO.CATEGORY_COLORS.pop('Work', None)
+
+# The open note's own card, pressed or Enter on it, leaves the note as it is:
+# loaded again, it jumped to its top and Ctrl+Z lost all it held.
+_co_fresh(_bl_notes)
+_oc_id = (app._card_order() or [None])[0]
+app.open_note_in_tab(app.find_note(_oc_id)); _ls_settle()
+
+
+def _oc_can_undo():
+    return bool(app.body_text.tk.call(app.body_text._w, 'edit', 'canundo'))
+
+
+app.body_text.insert('end', ' and a line typed since')
+app.body_text.edit_separator()
+_oc_typed = _oc_can_undo()
+app._put_keyboard_on_card(_oc_id); _ls_settle()
+app._list_activate(); _ls_settle()
+_oc_enter = _oc_can_undo()
+app._list_press_row(app._note_cards[_oc_id], types.SimpleNamespace(x=5, y=5)); _ls_settle()
+check(f"the open note's own card, Enter or a press on it, leaves its Undo in place "
+      f"({_oc_typed}, {_oc_enter}, {_oc_can_undo()})",
+      _oc_typed and _oc_enter and _oc_can_undo())
+# ...and so do the Calendar's Open in editor and the menu's Open / Edit, for a
+# one-off note on its own date: they asked of the date, not of the note the
+# editor opens for it, and loaded it again.
+_oc_note = app.find_note(_oc_id)
+_oc_note['date'] = '2026-11-05'
+app.save_notes()
+app.open_note_in_tab(_oc_note); _ls_settle()
+app.body_text.insert('end', ' and a line more')
+app.body_text.edit_separator()
+app._open_note_from_calendar(_oc_note, '2026-11-05'); _ls_settle()
+_oc_panel = _oc_can_undo()
+app._ctx_open(_oc_note, '2026-11-05'); _ls_settle()
+check(f"...and the Calendar's Open in editor and the menu's Open / Edit too "
+      f"({_oc_panel}, {_oc_can_undo()})",
+      _oc_panel and _oc_can_undo())
 
 # 5i. The ring stays where the person can see it. It could sit on a card
 # 900px above the view: Tab brought the keyboard back to a list the wheel

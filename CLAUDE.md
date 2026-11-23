@@ -34,7 +34,7 @@ nothing — `core/diagnostics.py`.)
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
   layer of mixin classes — eighteen `core/` modules and seven `ui/` mixins —
-  with `note_organizer.py` (~22,000 lines) remaining the entry point and
+  with `note_organizer.py` (about 22,000 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
   where it did, and why the note list moved later, once re-measured). The
@@ -50,16 +50,20 @@ nothing — `core/diagnostics.py`.)
   when run from source — or in the folder a git-ignored
   `notebook_location.txt` beside it names, which keeps the owner's own
   source-run notebook out of the working tree (since 2026-10-08) —
-  `%APPDATA%\NoteOrganizer` when running as the built `.exe`. Every note passes through `normalize_note()` as a single choke
+  the profile's `Note Organizer` folder (`C:\Users\<name>\Note Organizer`,
+  beside Documents) when running as the built `.exe` or the Store's MSIX
+  package — `%APPDATA%\NoteOrganizer` until 2026-10-27, still read once
+  to bring an older notebook in (copied, never moved). Every note passes through `normalize_note()` as a single choke
   point that coerces malformed/missing fields to safe defaults.
 - **UI:** every dropdown, popup, and dialog the app draws is a hand-built
   `Toplevel`. The system's own dialogs appear in exactly two situations,
   both deliberate: **choosing a file or folder** (`filedialog`, five call
   sites — save an export, open a backup `.zip`, pick a folder, attach
   files), because the OS chooser knows the user's drives and recent places
-  and a hand-built one would be worse; and **the app failing to start**
-  (the last-resort startup-crash dialog, and "Missing dependency" when
-  Pillow is not installed). This line used to say "no native OS dialogs anywhere except the
+  and a hand-built one would be worse; and **the app not starting**
+  (the last-resort startup-crash dialog, "Missing dependency" when
+  Pillow is not installed, and "Note Organizer is already open" when a
+  second launch finds its notebook in use). This line used to say "no native OS dialogs anywhere except the
   startup-crash dialog", which was wrong about the code while the code was
   right. Two different, deliberate theming patterns exist
   (`track_theme()` for persistent widgets vs. plain `.configure()` for
@@ -324,8 +328,13 @@ root (during a routine full-suite sweep) it destroyed the real notebook —
 recovered only because the app's own `notes_data_backup_*.json` existed,
 minus that day's work. Most unit tests are genuinely pure; that is
 exactly what made the dangerous one easy to misfile. The test now refuses
-to run beside a `notes_data.json` that holds real notes, but the refusal
-is the LAST line of defence, not permission to run tests in place.
+to run beside a `notes_data.json` that holds real notes, and wherever the
+folder the app will open — asked of the app's own resolver — is not the
+folder it runs in: since 2026-10-08 the checkout holds no notebook, its
+`notebook_location.txt` sends the app to the owner's, and a guard that
+looked beside itself found the folder empty and let the test delete hers
+(the final audit's tenth round). The refusal is still the LAST line of
+defence, not permission to run tests in place.
 
 The safest way is to let `tools/run_tests.py` do it for you: it makes a
 fresh temp folder far outside the project, copies in `note_organizer.py`,
@@ -335,12 +344,41 @@ afterward — the project's own files are only ever read (`py
 tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
 manual ritual below is the fallback, and the reason that tool exists.
 
+The machine is the owner's, too (2026-10-29): only one heavy job runs at
+a time — a suite, mutants, the Linux image, the Android build or its
+emulator. For this repository's runners that is enforced, not asked: each
+calls `guest.settle()` first (`tools/guest.py`, gated by
+`tools/check_guest.py`), which takes the machine's turn — a second run
+waits, naming the first — holds everything it starts to a memory
+ceiling sized to the need, and gives it `APPDATA` of its own, empty, so
+the app's code it runs can never copy in the owner's notebook (a test
+did, on every Windows run, until the final audit's eighth round). Every
+suite settles too, as its first act (`as_a_guest()` in
+`qa/_qa_support.py`): started by a runner it shares that run's turn and
+homes; started by CI or by hand it takes its own, or refuses without
+`tools/guest.py` (since the ninth round), and refuses beside an app whose
+`notebook_location.txt` names a folder (since the tenth). The
+Linux image runs only through `py tools/linux_ci.py`, never a docker
+command of one's own: a killed docker client leaves its container
+running. The Android walk takes the turn as it starts; the Android build
+and the emulator itself take none yet — keep them to one at a time by
+hand. A runaway test once took 43 GB and the owner's desktop with it
+([the story](docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+
 Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
-and the target test script into a scratch directory **outside the project
-tree entirely** (e.g. the session's own scratchpad folder), and run and
-clean up there. This makes it physically impossible for a wrong-directory
-mistake to reach real user data, rather than relying on correctly
-remembering the working directory every single time.
+`qa/_qa_support.py`, `tools/guest.py` and the target test script into a
+scratch directory **outside the project tree entirely** (e.g. the
+session's own scratchpad folder), set `NOTEORG_SCRATCH=1` in that shell —
+it declares the folder a throwaway, and the qa suite and
+`test_data_safety.py`, the suites that wipe their folder, refuse to start
+without it — and run and clean up there. This makes
+it physically impossible for a wrong-directory mistake to reach real user
+data, rather than relying on correctly remembering the working directory
+every single time. The suite settles itself there as a runner would — the
+machine's turn, the memory ceiling, `APPDATA` of its own — and refuses to
+start without `guest.py` beside it. Those files, never a copy of the
+whole project folder: that carries the git-ignored `notebook_location.txt`,
+which names the owner's notebook, and every suite refuses beside it.
 
 The `noteorganizer/` package must travel with `note_organizer.py` — the
 latter imports from it, so a copy on its own now fails with
@@ -383,8 +421,9 @@ Three tiers:
   `qa/probe_bar_width.py`, any `test_*.py`, or `note_organizer.py` itself
   inside the project tree; `reset --hard`,
   `push --force`, `rebase`, `branch -D`, `restore`, `clean`; installing
-  anything; and reading or writing `%APPDATA%\NoteOrganizer` or the real
-  data files at the project root.
+  anything; and reading or writing `%APPDATA%\NoteOrganizer`, the
+  profile's `Note Organizer` folder, or the real data files at the
+  project root.
 
 The last tier is the point: the [QA testing safety](#qa-testing-safety-hard-rule--real-data-has-been-lost-to-this-three-times)
 rule stops depending on an agent remembering it. The chat protocol is
@@ -498,7 +537,10 @@ summary.
   the build goes out, and the live page is compared with the file either
   way. No build ships until the page, opened signed out, shows the
   policy's text — a Site that is missing or private sends visitors to a
-  Google sign-in page instead of an error. The steps are in
+  Google sign-in page instead of an error. Once the apps are in the
+  stores, a change also gets a dated line under the policy's What
+  changed, and both stores' release notes say exactly what changed (the
+  owner's rule, 2026-11-08). The steps are in
   [RELEASE_WINDOWS](docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
 
 ## Git & GitHub workflow
@@ -513,13 +555,52 @@ summary.
 - Exception by agreement (2026-09-05): small, *related* docs-only changes
   may share one branch/PR to reduce review ceremony. Code changes always
   get their own branch.
+- Exception by agreement for the final audit (from 2026-10-27, written
+  down 2026-11-08): each wave works on one branch per app,
+  `audit/d-valN` here and `audit/a-valN` in the phone's repository (*val*
+  is Romanian for wave). It carries every fix of its wave — code, tests,
+  documents, the test plan — because each round attacks the branch as a
+  whole, and the last round's fixes by name. A commit still holds one change
+  and names its area. The branches are pushed only as backups; the whole
+  audit reaches `main` as one pull request per app, with one issue each.
 
 ### Commits
 
 - Make small, logical commits with messages that clearly describe the change.
+- **The subject names the part of the app, then what changed, in plain
+  words** (the owner's rule, 2026-11-07): `area: what changed`, for
+  example `banner: keep the open popup when the tab changes behind
+  Settings`, read from `git log --oneline` by someone who never saw the
+  work. A review panel found subjects such as "a popup over Settings is
+  Settings'" unreadable there. The body tells the story; the house words
+  below belong in the body and the issues log, not in a subject. Earlier
+  history stays as it is.
+- **A commit that changes the app's code names its mutant** (from
+  2026-11-20): a line `Mutant: <id>` for each mutant that guards it,
+  an id in `tools/mutants.json`, or `No mutant: <why>` (words only, a
+  pure move, a write no check can reach). `tools/check_fix_mutants.py`
+  holds it, in CI and before every push; the review panel found the rule
+  only asked.
 - Always inspect `git diff` and `git status` before committing.
 - Never commit files or changes that weren't part of the requested task
   without asking first.
+
+#### House words
+
+The issues log, the commit bodies and the agent's reports use a few words
+in a sense of their own:
+
+| Word | Means |
+|---|---|
+| banner (desktop), bar (phone) | the short message near the top of the window, or a phone's snackbar, often with one button: Undo, Show |
+| word | what a banner or bar says, as in "the list's word about a hidden note" |
+| road | one way a person can reach a piece of code: the same fix asked again "by every road" |
+| round | one pass of reviewer agents over the app, after which their findings are fixed |
+| wave | a group of rounds with one aim (lost data, an ordinary person's week, AI slop, the review panel) |
+| the lows | findings of low severity, fixed in a wave of their own |
+| mutant | a fix broken on purpose, to watch the check that guards it fail |
+| the walk | the phone's scripted run of the built app on an emulator (`tools/emulator/walk.py` there) |
+| a look | one reading of the phone's screen during the walk |
 
 ### Push
 
@@ -556,6 +637,26 @@ summary.
 - If pre-existing changes are found that weren't made by this session,
   stop and report them before touching anything.
 
+### Code that arrives from GitHub (the owner's rule, 2026-11-12)
+
+The agent runs this repository's code all day (the suites, the stories,
+the site's build), and `git pull --ff-only` runs without asking. A commit
+nobody here wrote, reaching `main` through a stolen account or a pull
+request merged unread, would run on the owner's computer with her rights,
+by the agent's hand. Pulling runs nothing; running does.
+
+- After every `pull` or `fetch`, and after the owner merges on GitHub,
+  show what arrived (`git log --format='%h %an <%ae> %s' OLD..NEW` and
+  `git diff --stat OLD..NEW`) **before** running anything from the
+  repository.
+- Expected: what was pushed from here, and the owner's merge of it. A
+  commit that is neither (another author, or a change nobody here made,
+  above all to the workflows, `requirements.txt`, `tools/` or the spec
+  file) means stop and ask before anything runs.
+- A stranger's pull request is read on GitHub, never checked out and run
+  here. CI runs it on GitHub's machines, with a token that can only read
+  (`tools/check_workflows.py`).
+
 ### Working tree
 
 - Inspect `git status` at the start of a task.
@@ -568,6 +669,8 @@ summary.
 - After the user confirms that a PR has been merged, switch to `main`,
   fetch/pull the latest `main`, prune stale remote-tracking references,
   and delete the local feature branch with `git branch -d`.
+- Before running anything after that pull, show what arrived
+  ([Code that arrives from GitHub](#code-that-arrives-from-github-the-owners-rule-2026-11-12)).
 - Do not perform these cleanup operations automatically before the user
   confirms the merge.
 - After code changes are merged into `main`, remind the user that the

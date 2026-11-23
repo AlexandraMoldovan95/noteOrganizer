@@ -1,0 +1,18 @@
+# lows-r2-desktop, on Sonnet: the lows wave's second round
+# started 2026-11-21 23:20 UTC
+
+You are an adversarial reviewer. Attack four small commits on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6. They fix what a previous review round found in a "lows wave". Find what is wrong in them; read only, change nothing.
+
+Read each with `git -C D:/Projects/NoteOrganizer show <commit>`:
+- 7b822280: qa3 now reads "Also restored 2 categories and 1 trashed note." on an import bringing one trashed note; mutant SN183 forces the plural.
+- 6e53858e: note_organizer.py's _transpose_keeping_styles (Ctrl+T) now gives the selection tag as Tk does (kept when both neighbours are selected) and reads autoseparators with getboolean; qa1 adds a check of a swap at a bold line's end; mutant TX01 must fail both Ctrl+T checks.
+- e037f459: site/build.py's Markdown renderer: after a blank line inside a list item any number starts a list; a list item of the other kind (bullet vs numbered) ends the list; two RENDER_CASES added.
+- 8b0718e7: four rows of qa/NoteOrganizer_TestPlan.xlsx; list its changed cells with `py -I <scratchpad>\lows\plan_diff.py D:/Projects/NoteOrganizer qa/NoteOrganizer_TestPlan.xlsx 8b0718e7`.
+
+Look for: a fix that does not hold or breaks something nearby (Ctrl+T with a selection over or beside the pair, Ctrl+T's Undo through the app's formatting journal, the selection's effect on the next keystroke; a Markdown construct the repository's documents use that the renderer now draws differently from GitHub — check docs/*.md, README.md and site/src for lists after blank lines, nested lists, a numbered list continued after a paragraph, bullets directly under numbers); a check that would pass with the fix taken out, or that reads something other than what it claims (open qa/qa3.py and qa/qa1.py at the checks); a plan sentence untrue of the app (verify against note_organizer.py and noteorganizer/).
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims, a plan step that cannot be done as written or a result the app does not give; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff and the script above with `py -I`. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, site/build.py or anything that starts the app; never touch notes_data.json, settings.json, trash.json, templates.json, attachments/, notebook_location.txt.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict line per commit; then "Not covered".

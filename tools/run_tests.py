@@ -2,9 +2,10 @@
 
 WHY THIS EXISTS
 ---------------
-The tests cannot be run where the code lives. Every ``qa*.py`` script starts
-by deleting ``*.json`` and ``attachments/`` in its working directory, and
-``test_data_safety.py`` calls ``initialise()`` in the current folder. Run
+The tests cannot be run where the code lives. Every ``qa*.py`` script seeds
+an empty notebook in its working directory (``hermetic_seed``, refusing
+beside real notes), this runner wipes that folder's data between suites,
+and ``test_data_safety.py`` calls ``initialise()`` in the current folder. Run
 either from the project root and it wipes the real notebook -- which has
 happened three times, and never showed up in ``git status`` because those
 files are git-ignored.
@@ -42,12 +43,18 @@ import sys
 import tempfile
 import time
 
+# Its own import too: PYTHONDONTWRITEBYTECODE reaches only the children,
+# and this one wrote tools/__pycache__ every time guest.py changed.
+sys.dont_write_bytecode = True
+import guest  # noqa: E402 -- tools/guest.py: the memory ceiling for a run
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Copied into the scratch folder. The package has to travel with the entry
 # point: note_organizer.py imports from it, so a copy on its own fails with
-# ModuleNotFoundError.
-PAYLOAD = ["note_organizer.py", "noteorganizer"]
+# ModuleNotFoundError. The licenses travel too: About opens them, and qa6
+# presses that button.
+PAYLOAD = ["note_organizer.py", "noteorganizer", "THIRD_PARTY_NOTICES.txt"]
 
 STANDALONE = ["test_recurrence.py", "test_calculator.py", "test_data_safety.py",
               "test_entry_module_identity.py", "test_richtext.py",
@@ -56,6 +63,9 @@ QA = [f"qa{i}.py" for i in range(1, 10)]
 # Every qa script imports this one; it must travel with them or the whole
 # suite dies at import. Kept out of QA itself so it is never *run* as a test.
 QA_SUPPORT = ["_qa_support.py"]
+# And every suite settles through it (_qa_support.as_a_guest), finding
+# tools/guest.py beside it: without it, each refuses to start.
+GUEST = os.path.join("tools", "guest.py")
 
 # The static checks CI runs before any of the above. They were missing here, so a
 # green run of this script did not mean a green run on GitHub -- a signature
@@ -113,6 +123,30 @@ STATIC = [
     # mutates. One lost its lines to a later fix and guarded nothing for a day.
     ("mutants find their code",
      [sys.executable, os.path.join("tools", "check_mutant_targets.py")]),
+    # The ninth: the Pillow CI tests is the one the .exe ships, and the
+    # licenses the build bundles name it.
+    ("what ships is what is tested",
+     [sys.executable, os.path.join("tools", "check_shipped.py")]),
+    # The tenth, added 2026-10-29: every runner sets guest.py's memory
+    # ceiling, and the ceiling holds -- a test took 43 GB and the desktop
+    # went down with it.
+    ("a test run is a guest",
+     [sys.executable, os.path.join("tools", "check_guest.py")]),
+    # The eleventh and twelfth, run in CI by docs.yml: the test plan's numbers
+    # where the documents give them, and every link between the documents.
+    ("the test plan counted right",
+     [sys.executable, os.path.join("tools", "check_test_plan.py")]),
+    ("document links lead somewhere",
+     [sys.executable, os.path.join("tools", "check_doc_links.py")]),
+    # The thirteenth, added 2026-11-12, before the repository went public:
+    # every workflow's token may only read, every action is pinned to a
+    # commit, and no trigger hands a fork the repository's rights.
+    ("CI may only read",
+     [sys.executable, os.path.join("tools", "check_workflows.py")]),
+    # The fourteenth, added 2026-11-19: a change to the app's code names
+    # its mutant, or why it has none.
+    ("every fix names its mutant",
+     [sys.executable, os.path.join("tools", "check_fix_mutants.py")]),
 ]
 
 
@@ -125,12 +159,33 @@ STATIC = [
 # tells everyone to use -- and it is why an entire review wave declared it
 # had run no tests at all. The runner owns the child environment, so it
 # sets this rather than asking each caller to remember two env vars.
-CHILD_ENV = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
-                 # Unbuffered, so a script that HANGS still hands over every
-                 # line it printed. Piped stdout is block-buffered, and a
-                 # killed process takes its last few kilobytes with it --
-                 # exactly the lines that say where it stopped.
-                 PYTHONUNBUFFERED="1")
+def child_env(**extra):
+    """Built when a child starts, not at import: guest.settle() has put this
+    run's turn in the environment by then, and a child that did not inherit
+    it would wait for its own parent."""
+    return dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
+                # Unbuffered, so a script that HANGS still hands over every
+                # line it printed. Piped stdout is block-buffered, and a
+                # killed process takes its last few kilobytes with it --
+                # exactly the lines that say where it stopped.
+                PYTHONUNBUFFERED="1",
+                # The gates run in the project itself: without this, each
+                # left __pycache__ folders there, and "only ever read" was untrue.
+                PYTHONDONTWRITEBYTECODE="1", **extra)
+
+
+def suite_env(child_tmp):
+    """A suite's environment: the scratch marker, and a temporary folder of
+    this run's own. The suites write zips and folders under fixed names in
+    the temporary folder (qa3_import.zip, tempfile.mkdtemp()); in one of
+    their own, nothing outlives the run and two runs never share a name."""
+    return child_env(NOTEORG_SCRATCH="1", TEMP=child_tmp, TMP=child_tmp, TMPDIR=child_tmp)
+
+
+# Where a failed run's whole output is written. A runner that reads it back
+# (tools/mutate.py) gives each run a folder of its own: under one fixed name
+# in the shared temporary folder, two runs read each other's.
+FAILURE_DIR_ENV = "NOTEORG_FAILURE_DIR"
 
 # How long one script may run before it is called hung. A hang is a real
 # finding -- usually a dialog nobody answers -- so it is reported as a
@@ -144,7 +199,9 @@ def _present(names, folder=ROOT):
 
 
 def build_scratch():
-    scratch = tempfile.mkdtemp(prefix="notesorg-tests-")
+    # Marked as this run's (guest.scratch): if the run is killed before its
+    # finally, the next run removes it.
+    scratch = guest.scratch("notesorg-tests-")
     for item in PAYLOAD:
         src = os.path.join(ROOT, item)
         dst = os.path.join(scratch, item)
@@ -158,6 +215,7 @@ def build_scratch():
     qa_dir = os.path.join(ROOT, "qa")
     for name in _present(QA + QA_SUPPORT, qa_dir):
         shutil.copy2(os.path.join(qa_dir, name), scratch)
+    shutil.copy2(os.path.join(ROOT, GUEST), scratch)
     return scratch
 
 
@@ -180,18 +238,19 @@ def _as_text(value):
     return value
 
 
-def run_one(scratch, script):
+def run_one(scratch, script, child_tmp):
     wipe_data(scratch)
     started = time.time()
     try:
         # The scratch marker: the scripts that wipe their working folder
         # refuse to run without it (qa/_qa_support.hermetic_seed,
-        # test_data_safety.py), and only a run in a throwaway folder --
-        # this one, or CI's fresh checkout -- sets it.
+        # test_data_safety.py), and only a run in a throwaway folder sets
+        # it -- this one, run_coverage's, check_guest's, CI's, or a scratch
+        # copy run by hand.
         proc = subprocess.run([sys.executable, script], cwd=scratch,
                               capture_output=True, text=True,
                               timeout=SCRIPT_TIMEOUT,
-                              env=dict(CHILD_ENV, NOTEORG_SCRATCH="1"),
+                              env=suite_env(child_tmp),
                               encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired as hung:
         # This used to escape and end the whole run: one hung script,
@@ -218,9 +277,15 @@ def run_one(scratch, script):
 def run_static(name, cmd):
     """Run one static check against the project itself. Read-only."""
     started = time.time()
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
-                          timeout=600, env=CHILD_ENV, encoding="utf-8",
-                          errors="replace")
+    try:
+        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                              timeout=SCRIPT_TIMEOUT, env=child_env(), encoding="utf-8",
+                              errors="replace")
+    except subprocess.TimeoutExpired as hung:
+        # A hang is this gate's failure, named, and the run goes on.
+        return 1, time.time() - started, (
+            _as_text(hung.stdout) + _as_text(hung.stderr)
+            + "\nHANG: %s did not finish within %d seconds" % (name, SCRIPT_TIMEOUT))
     return proc.returncode, time.time() - started, (proc.stdout or "") + (proc.stderr or "")
 
 
@@ -238,8 +303,8 @@ def _save_failure_output(label, output):
     run deletes, so it survives both.
     """
     try:
-        path = os.path.join(tempfile.gettempdir(),
-                            f"notesorg-failure-{label}.txt")
+        folder = os.environ.get(FAILURE_DIR_ENV) or tempfile.gettempdir()
+        path = os.path.join(folder, f"notesorg-failure-{label}.txt")
         with open(path, "w", encoding="utf-8", errors="replace") as fh:
             fh.write(output)
         print(f"          [full output: {path}]")
@@ -248,7 +313,7 @@ def _save_failure_output(label, output):
 
 
 def main(argv):
-    # Same reason as CHILD_ENV, for THIS process: it echoes the children's
+    # Same reason as child_env(), for THIS process: it echoes the children's
     # failing check names, glyphs and all, and a cp1252 console would
     # raise on the first one -- turning a readable report into a
     # traceback.
@@ -280,28 +345,50 @@ def main(argv):
             return 2
 
     print(f"project : {ROOT}")
+    # Before anything is started: every script below inherits the ceiling.
+    # The static gates alone are small and quick, and take no turn: a run of
+    # them never waits for a suite running elsewhere.
+    for line in guest.settle(label="run_tests " + " ".join(argv[1:]), heavy=bool(scripts)):
+        print(line)
+    if sys.platform != "win32":
+        # Stopped from outside (the Linux image's own time limit sends TERM):
+        # the finally below still removes the scratch.
+        import signal
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     scratch = build_scratch()
+    child_tmp = guest.scratch("notesorg-tmp-")
     print(f"scratch : {scratch}")
     print(f"running : {len(statics) + len(scripts)} check(s)\n")
 
     broken = []
-    # Static first: they take a moment and catch the kind of mistake that
-    # would otherwise be reported only after a minute of GUI tests.
-    for label, cmd in statics:
-        code, took, output = run_static(label, cmd)
-        print(f"  {'PASS' if code == 0 else 'FAIL'}  {label:<32} {took:5.1f}s")
-        if code != 0:
-            broken.append(label)
-            for line in output.strip().splitlines()[-25:]:
-                print(f"          {line}")
-            # ...and the WHOLE thing to a file, because the twenty-five
-            # lines above are the ones a piped `tail` throws away.
-            _save_failure_output(label, output)
+    # Every check a suite runs prints one PASS or FAIL line: counted here, so
+    # the docs' "how many checks" is a measurement, not a recollection.
+    counted = {"unit": 0, "qa": 0}
+    skipped = []
     try:
+        # Static first: they take a moment and catch the kind of mistake that
+        # would otherwise be reported only after a minute of GUI tests.
+        for label, cmd in statics:
+            code, took, output = run_static(label, cmd)
+            print(f"  {'PASS' if code == 0 else 'FAIL'}  {label:<32} {took:5.1f}s")
+            if code != 0:
+                broken.append(label)
+                for line in output.strip().splitlines()[-25:]:
+                    print(f"          {line}")
+                # ...and the WHOLE thing to a file, because the twenty-five
+                # lines above are the ones a piped `tail` throws away.
+                _save_failure_output(label, output)
         for script in scripts:
-            code, failed, took, output = run_one(scratch, script)
+            code, failed, took, output = run_one(scratch, script, child_tmp)
             ok = (code == 0 and not failed)
-            print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s")
+            ran = sum(1 for l in output.splitlines() if l.startswith(("PASS ", "FAIL ")))
+            counted["qa" if script.startswith("qa") else "unit"] += ran
+            # A check the run could not make says SKIP, and is not counted
+            # among those that passed.
+            skips = [l[len("SKIP "):] for l in output.splitlines() if l.startswith("SKIP ")]
+            skipped.extend("%s: %s" % (script, s) for s in skips)
+            print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s {ran:6,} checks"
+                  + (f", {len(skips)} skipped" if skips else ""))
             if not ok:
                 broken.append(script)
                 for line in (failed if all_failures else failed[:8]):
@@ -342,11 +429,25 @@ def main(argv):
                 _save_failure_output(script, output)
     finally:
         if keep:
-            print(f"\nscratch kept at {scratch}")
+            # Kept on purpose: a later run removes it after guest.KEPT_DAYS.
+            for folder in (scratch, child_tmp):
+                guest.keep(folder, "run_tests --keep")
+            print(f"\nscratch kept at {scratch} (its temporary folder: {child_tmp})")
         else:
-            shutil.rmtree(scratch, ignore_errors=True)
+            guest.remove(scratch)
+            guest.remove(child_tmp)
 
     print()
+    peak = guest.memory_peak()
+    if peak:
+        print(peak)
+    if scripts:
+        print(f"Individual checks run: {sum(counted.values()):,} (unit suites "
+              f"{counted['unit']:,}, qa suite {counted['qa']:,}).")
+    if skipped:
+        print(f"Skipped, not made in this run: {len(skipped)}")
+        for line in skipped:
+            print(f"  {line}")
     if broken:
         print(f"{len(broken)} check(s) failed: {', '.join(broken)}")
         return 1

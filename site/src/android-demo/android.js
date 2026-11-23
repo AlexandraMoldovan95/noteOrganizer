@@ -840,7 +840,8 @@
       var msg = el("p", { class: "msg", role: "status" });
       screen.appendChild(el("div", { class: "page-pad" },
         el("p", { text: "A share code from the desktop demo, the desktop app or the phone app brings its note here, " +
-          "formatting, checklist and repeat included. One you already have is updated." }),
+          "formatting, checklist and repeat included. One you already have is updated here; " +
+          "the app asks first, Update or Add as a new note." }),
         area, el("div", { class: "sheet-actions" },
           el("button", { type: "button", class: "btn primary", text: "Import", onclick: function () {
             if (!window.DecompressionStream) { msg.className = "msg bad"; msg.textContent = "This browser cannot read share codes."; return; }
@@ -860,8 +861,9 @@
       screen.appendChild(el("div", { class: "page-pad about" },
         el("p", null, el("b", { text: "Note Organizer for Android" }), PHONE.version ? " · version " + PHONE.version : ""),
         el("p", { text: "This page re-creates the app's screens in HTML and JavaScript. The real app is native " +
-          "Android, written in Kotlin, and on its way to Google Play. It works entirely offline: no account, " +
-          "no server, no sync." }),
+          "Android, written in Kotlin, and on its way to Google Play. It has no account and no server of its " +
+          "own, and makes no connection; the phone's own backup to a Google account copies its notes while " +
+          "that is on, and Settings → Backup turns that off." }),
         el("p", { text: "What you write here stays in this browser. Clearing this site's data removes it." }),
         el("p", null, el("a", { href: "../site-privacy.html", text: "This website's privacy notice" })),
         el("p", null, el("a", { href: "../demo/index.html", text: "The desktop demo" }), " · ",

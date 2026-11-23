@@ -1,0 +1,21 @@
+You are an ordinary person's advocate trying to BREAK Note Organizer, an offline Windows notes app (Python + Tkinter), D:\Projects\NoteOrganizer, branch audit/d-val6, in the SECOND round after wave 6 (the review panel's lows, fixed before the stores). `git -C D:\Projects\NoteOrganizer log --oneline audit/d-val5..audit/d-val6` lists the wave; round 1's fixes are 4075a35..8c033c8. A second agent attacks each commit by name, so you take the person's side: an ordinary week, slowly, half-typed, clicked away, twice, interrupted, the computer put to sleep, Windows signing out.
+
+Walk these roads through the code (read the handlers a click or key reaches, end to end):
+- The calendar's History: search it, send the list's search to it, type its hint's own words, clear it, switch tabs, change the theme, open a day, come back.
+- The date field and its picker: pick a day, type a date half-way, clear it, pick again, undo, open another note, a repeating note's end date.
+- Starting the app on an old notebook whose file another program holds (OneDrive syncing, an antivirus scan), several days in a row, then free; what the notebook's folder holds after a week, and what the app says each time.
+- A backup imported with notes you already have: Add a copy anyway, Add them as new notes, Skip; then Restore previous on each copy and on the originals; delete and restore.
+- An export while the disk fills, the folder is a USB stick pulled out, or Windows signs out; open the app again: what it says, and whether "Last exported" is true.
+- A repeating series: take a day off and send it to the Trash, restore it, take it off again weeks later; empty the Trash; look at "days left" in Recently deleted.
+
+Then check against the code, sentence by sentence, the documents round 1 changed or added: docs/ISSUES_LOG.md (the round's paragraph under "Wave 6: the lows", and the two lows left with their reasons), docs/RELEASE_ANDROID.md ("Rolling out, and stopping a release", the mapping.txt sentence), docs/TEST_PLAN_EXCERPT.md and docs/BUG_REPORTS.md (their counts against qa/NoteOrganizer_TestPlan.xlsx, read with openpyxl from a copy, never written), the plan's new cases 1059-1064 and case 1055's precondition, and docs/audit/README.md's wave 6 table and the files it links. A sentence that is not true is a finding (MEDIUM when a person or a release would be misled by it).
+
+You MAY probe, only like this: a new folder under <scratchpad>\wave6\r2-desktop-person\, a copy of note_organizer.py and the noteorganizer\ package there, small pure-Python probes of the core (no window). Do NOT build the Tk app, do NOT run any qa*.py or test_*.py, nothing heavy (no suite, no build, no emulator), nothing inside D:\Projects\NoteOrganizer, never edit a repository file, never run git commands that change anything, never open real data (notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves, or a document a release relies on says what is not true; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. ROADS WALKED -- one line each: holds / breaks, with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. DOCUMENTS -- each sentence found untrue, with the code that contradicts it.
+4. NOT COVERED.

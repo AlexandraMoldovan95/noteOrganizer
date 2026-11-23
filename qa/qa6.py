@@ -137,6 +137,26 @@ app.update()
 check('a single KeyRelease immediately corrects an over-length value, '
       'without waiting for a save', len(app.username_var.get()) == 30)
 
+# A paste past the 30 is shortened to fit and said, as in every limited box:
+# its own check refused it whole, without a word.
+app.username_var.set('Ana ')
+name_entry.icursor('end')
+_yn_told = []
+_yn_real_status = app.set_status
+app.set_status = lambda text, *a, **k: _yn_told.append(text)
+try:
+    app.clipboard_clear()
+    app.clipboard_append('Maria-Magdalena Popescu-Ionescu de la Vale')
+    _qa_fire(name_entry, '<<Paste>>')
+    app.update()
+finally:
+    app.set_status = _yn_real_status
+    app._hide_toast()
+check(f"a paste into Your name past its 30 characters is shortened to fit, and said "
+      f"({app.username_var.get()!r}; {_yn_told})",
+      app.username_var.get() == ('Ana Maria-Magdalena Popescu-Ionescu de la Vale')[:30]
+      and 'Pasted text shortened: your name can be up to 30 characters' in _yn_told)
+
 app.username_var.set('2' * 70)
 name_entry.event_generate('<Return>')
 app.update()
@@ -146,6 +166,53 @@ check('truncated name is what gets persisted',
       len(NO.load_settings().get('username', '')) == 30)
 check('greeting reflects the truncated name, not the original 70 chars',
       len(app.greeting_lbl.cget('text')) < 40)
+# ...and said saved only when it was: on a full disk the page said "Saved
+# automatically" under the red banner, the sidebar keeping the old name.
+import errno as _errno6
+_ns_store = sys.modules['noteorganizer.core.storage']
+_ns_save_was = _ns_store.save_settings
+_ns_name_was = app.username_var.get()
+_ns_store.save_settings = lambda _s: (False, OSError(_errno6.ENOSPC, 'No space left on device'))
+try:
+    app.username_var.set('Refused')
+    name_entry.event_generate('<Return>')
+    app.update()
+    _ns_said, _ns_stack, _ns_preview = [], [app], []
+    while _ns_stack:
+        _ns_w = _ns_stack.pop()
+        if isinstance(_ns_w, tk.Label) and 'aved' in str(_ns_w.cget('text')):
+            _ns_said.append(_ns_w.cget('text'))
+        if isinstance(_ns_w, tk.Label) and str(_ns_w.cget('text')).startswith('Hi '):
+            _ns_preview.append(_ns_w.cget('text'))
+        _ns_stack.extend(_ns_w.winfo_children())
+    _ns_greeting = app.greeting_lbl.cget('text')
+    # Sharp text the disk refused is not said saved either.
+    _st_toasts, _st_toast_was = [], app._show_toast
+    app._show_toast = lambda text, *a, **k: _st_toasts.append(text)
+    try:
+        from noteorganizer.core.themes import SHARP_TEXT_SETTING as _st_key
+        app._set_sharp_text('Off' if NO.get_setting(_st_key, True, expect=bool) else 'On')
+    finally:
+        app._show_toast = _st_toast_was
+finally:
+    _ns_store.save_settings = _ns_save_was
+check(f"a name the disk refused is said not saved, the sidebar and the preview keeping the old one "
+      f"({_ns_said}, {_ns_greeting!r}, {_ns_preview})",
+      any(s.startswith('Not saved') for s in _ns_said) and 'Saved automatically' not in _ns_said
+      and 'Refused' not in _ns_greeting and not any('Refused' in p for p in _ns_preview))
+check(f"...and Sharp text the disk refused is said not saved ({_st_toasts})",
+      bool(_st_toasts) and _st_toasts[-1].startswith('Not saved'))
+app.username_var.set(_ns_name_was)
+name_entry.event_generate('<Return>')
+app.update()
+_ns_said, _ns_stack = [], [app]
+while _ns_stack:
+    _ns_w = _ns_stack.pop()
+    if isinstance(_ns_w, tk.Label) and 'aved' in str(_ns_w.cget('text')):
+        _ns_said.append(_ns_w.cget('text'))
+    _ns_stack.extend(_ns_w.winfo_children())
+check(f"...and one it took is said saved ({_ns_said})",
+      'Saved automatically' in _ns_said and not any(s.startswith('Not saved') for s in _ns_said))
 
 # ---- SETTINGS + THEME SWITCH + CLICKS: NO CALLBACK ERRORS ----
 # Flipping themes rebuilds settings widgets; a click that still named a
@@ -200,18 +267,8 @@ def _take_focus(widget, cap_s=2.0):
     in a full-suite run (the same class as qa1's cell editor, closed as
     COVERAGE_LEDGER C11b). Forcing is correct here precisely because the
     promise under test is what happens when focus LEAVES."""
-    widget.focus_force()
-    t0 = time.time()
-    while time.time() - t0 < cap_s:
-        try:
-            if app.focus_get() is widget:
-                return True
-        except (KeyError, tk.TclError):
-            pass
-        app.update()
-        app.update_idletasks()
-        time.sleep(0.02)
-    return False
+    from _qa_support import take_focus
+    return take_focus(app, widget, cap_s)
 
 
 def _focus_leaves(widget, cap_s=2.0):
@@ -417,14 +474,25 @@ _stat_frames = find_all(app.stats_frame, tk.Frame)
 # script dies instead of failing, and a dead script reports no failures
 # at all. Same family as the chips held across a rebuild below.
 check('the statistics panel has a chip grid to inspect', bool(_stat_frames))
-grid_frame = _stat_frames[0] if _stat_frames else None
-chip = (grid_frame.winfo_children() or [None])[0] if grid_frame else None
-check('statistics chip has no hand cursor (not clickable-looking)',
-      chip is not None and str(chip.cget('cursor')) != 'hand2')
-if chip is not None:
-    _qa_click(chip)
-    _qa_fire(chip, '<ButtonRelease-1>')
+# The category's own pill, the frame holding its name: [0] was the Total notes tile, built first.
+chip = next((f for f in _stat_frames
+             if any(isinstance(c, tk.Label) and c.cget('text') == 'Work' for c in f.winfo_children())), None)
+check('the statistics panel draws a pill for the category Work', chip is not None)
+# Every part a click can land on, each its own: the edge, the pill, its dot,
+# its name and its count. A click on the name goes to the name alone.
+_chip_parts = [chip.master, chip] + list(chip.winfo_children()) if chip is not None else []
+# The grid holding the chips too: a cursor set there is worn by every part
+# that sets none of its own.
+check(f'statistics chip has no hand cursor (not clickable-looking), on any of its {len(_chip_parts)} parts',
+      len(_chip_parts) >= 5
+      and all(str(w.cget('cursor')) != 'hand2' for w in _chip_parts + [chip.master.master]))
+_st_open = getattr(app, '_settings_open', False)
+for _part in _chip_parts:
+    _qa_click(_part)
+    _qa_fire(_part, '<ButtonRelease-1>')
 app.update()
+check(f'clicking a statistics chip leaves Settings open (open before: {_st_open})',
+      _st_open and getattr(app, '_settings_open', False))
 check('clicking a statistics chip does not change tabs',
       app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)
 check('clicking a statistics chip does not change the filter',
@@ -552,6 +620,36 @@ check('stats show the correct checklist-notes count',
       stats_pairs().get('With a checklist') == 1)
 check('stats show the correct deleted (Trash) count',
       stats_pairs().get('In trash') == 1)
+# ...and Empty trash takes it to 0 at once: it kept the old figure until the
+# list next changed.
+app.toggle_settings_panel('trash'); app.update()
+_st_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    def _st_walk(w):
+        yield w
+        for c in w.winfo_children():
+            yield from _st_walk(c)
+    # A row's own Delete takes "In trash" down at once, as the bulk ones do.
+    app.trash.append({'id': 902, 'title': 'Deleted too', 'category': 'General',
+                      'deleted_at': '2026-01-01 00:00'})
+    app._refresh_open_trash_panel(); app._render_statistics(); app.update()
+    _st_row = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                    and str(w.cget('text')) == 'Delete'), None)
+    if _st_row is not None:
+        _st_row.invoke(); app.update()
+    _st_after_row = stats_pairs().get('In trash')
+    _st_empty = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                      and 'Empty trash' in str(w.cget('text'))), None)
+    if _st_empty is not None:
+        _st_empty.invoke(); app.update()
+finally:
+    app.ask_yes_no = _st_ask
+check(f'a row\'s own Delete takes Statistics\' "In trash" down by one at once ({_st_after_row})',
+      _st_row is not None and _st_after_row == 1)
+check(f'Empty trash takes Statistics\' "In trash" to 0 at once ({stats_pairs().get("In trash")})',
+      _st_empty is not None and stats_pairs().get('In trash') == 0)
+app.toggle_settings_panel('statistics'); app.update()
 check('stats show a first-launch date',
       any('Using Note Organizer since' in t for t in texts))
 
@@ -597,6 +695,96 @@ _qa_click(delete_btn)
 app.update()
 check('template count updates live after deleting a template, no navigation away',
       stats_pairs().get('Templates') == 0)
+
+# ...and a delete the templates file refuses keeps the template listed, and
+# says so: gone from the list, it came back at the next start.
+app.templates = [NO.normalize_template({'name': 'Kept one'})]
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+_td_page = sys.modules['noteorganizer.ui.settings_page']
+_td_save_was, _td_ask_was = _td_page.save_templates, app.ask_yes_no
+_td_page.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
+app.ask_yes_no = lambda *a, **k: True
+try:
+    _td_bin = next(c for c in find_all2(app.settings_templates_panel, tk.Canvas)
+                   if getattr(c, '_icon_kind', None) == 'trash')
+    _qa_click(_td_bin); app.update()
+    _td_status = str(app.status_lbl.cget('text'))
+    _td_listed = [t.get('name') for t in app.templates]
+finally:
+    _td_page.save_templates, app.ask_yes_no = _td_save_was, _td_ask_was
+check(f"a template delete the file refuses keeps it listed and says so ({_td_listed}, "
+      f"{_td_status!r})",
+      _td_listed == ['Kept one'] and _td_status.startswith('Not deleted'))
+app.templates = []
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+
+# Over held templates and Trash files Statistics said 0 of files that hold
+# them, as "Trash is empty" did: a dash, not known this time.
+def _st_tile(caption):
+    found = []
+
+    def walk(w):
+        labels = [c for c in w.winfo_children() if isinstance(c, tk.Label)]
+        if len(labels) == 2 and str(labels[1].cget('text')) == caption:
+            found.append(str(labels[0].cget('text')))
+        for c in w.winfo_children():
+            walk(c)
+    walk(app.stats_frame)
+    return found[0] if found else None
+
+
+NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    app._render_statistics(); app.update()
+    _st_held = (_st_tile('Templates'), _st_tile('In trash'))
+finally:
+    for _st_path in (NO.TEMPLATES_FILE, NO.TRASH_FILE):
+        NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_st_path)))
+    app._render_statistics(); app.update()
+check(f"over held templates and Trash files Statistics shows a dash, not 0 ({_st_held})",
+      _st_held == ('—', '—'))
+
+# The template editor kept a template's styles as offsets beside its text,
+# so any edit before a bold run moved the bold onto other words -- and every
+# note made from the template inherited it.
+_tf_body = 'Attendees: Ana, Bo\nDecisions are final'
+app.templates = [NO.normalize_template({
+    'name': 'Minutes', 'body': _tf_body,
+    'formatting': [{'start': 19, 'end': 38, 'style': 'bold'}]})]
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+app._edit_template(app.templates[0], app._refresh_templates_panel)
+app.update()
+_tf_box = find_all2(app._mini_popup, tk.Text)[0]
+_tf_box.insert('1.0', 'Present: ')
+next(b for b in find_all2(app._mini_popup, tk.Button)
+     if str(b.cget('text')) == 'Save').invoke()
+app.update()
+_tf_saved = next(t for t in app.templates if t.get('name') == 'Minutes')
+_tf_bold = [_tf_saved['body'][s['start']:s['end']]
+            for s in _tf_saved.get('formatting') or [] if s.get('style') == 'bold']
+check(f'an edit in the template editor keeps the bold on the words it was on '
+      f'({_tf_bold})', _tf_bold == ['Decisions are final'])
+# ...and a field a newer version wrote on it (the owner's decision of 14 November): built from
+# the editor's boxes alone, the edit erased it.
+app.templates = [NO.normalize_template({'name': 'Minutes', 'body': 'b', 'reminder_time': '09:00'})]
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+app._edit_template(app.templates[0], app._refresh_templates_panel)
+app.update()
+find_all2(app._mini_popup, tk.Text)[0].insert('1.0', 'More ')
+next(b for b in find_all2(app._mini_popup, tk.Button)
+     if str(b.cget('text')) == 'Save').invoke()
+app.update()
+_tf_newer = [(t.get('reminder_time'), t.get('body')) for t in NO.load_templates() if t.get('name') == 'Minutes']
+check(f"...and a field a newer version wrote on it, through the edit's save ({_tf_newer})",
+      _tf_newer == [('09:00', 'More b')])
+app.templates = []
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
 
 # ---- SETTINGS: templates/checklists stay current when switching away and
 # back (regression) ---- Checklist edits happen in the note editor, a
@@ -656,6 +844,140 @@ app.load_note(saved_note)
 app.update()
 check('attachment survives switching away and back', len(app.current_attachments) == 1)
 
+# The same file picked again made a second attachment, and a second copy on
+# the disk, without a word; an empty file went in without a remark (the
+# review panel, 22 November). Asked once, No chosen; a file of the same name
+# with other bytes is another file; an empty one is attached and said.
+_d7_real_ask = app.ask_yes_no
+_d7_dir = tempfile.mkdtemp(prefix='qa6_d7_')
+_d7_paths = {}
+for _d7_name, _d7_text in (('qa6_attachment.txt', 'other content'), ('qa6_new.txt', 'new'),
+                           ('qa6_empty.txt', ''), ('qa6_empty_too.txt', '')):
+    _d7_paths[_d7_name] = os.path.join(_d7_dir, _d7_name)
+    with open(_d7_paths[_d7_name], 'w') as f:
+        f.write(_d7_text)
+
+
+def _d7_pick(paths, answer):
+    """Attach *paths*, answering every question with *answer*; the questions."""
+    asked = []
+    fd.askopenfilenames = lambda **k: tuple(paths)
+    app.ask_yes_no = lambda t, m, **k: (asked.append((t, m, k)),
+                                        answer() if callable(answer) else answer)[1]
+    try:
+        app.add_attachment(); app.update()
+    finally:
+        app.ask_yes_no = _d7_real_ask
+        fd.askopenfilenames = lambda **k: (tmp_file,)
+    return asked
+
+
+def _d7_names():
+    return [a.get('filename') for a in app.current_attachments]
+
+
+def _d7_drop_from(index):
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        while len(app.current_attachments) > index:
+            app.remove_attachment(len(app.current_attachments) - 1); app.update()
+    finally:
+        app.ask_yes_no = _d7_real_ask
+
+
+_d7_disk = len(os.listdir(NO.ATTACHMENTS_DIR))
+_d7_asked = _d7_pick([tmp_file], False)
+check(f'picking a file the note already holds asks first, No pre-selected, and No '
+      f'attaches nothing and copies nothing ({_d7_asked}; {_d7_names()})',
+      len(_d7_asked) == 1 and _d7_asked[0][0] == 'Already attached'
+      and '“qa6_attachment.txt” is already attached' in _d7_asked[0][1]
+      and _d7_asked[0][2].get('default') == 'no'
+      and _d7_asked[0][2].get('icon') != 'warning'
+      and _d7_names() == ['qa6_attachment.txt']
+      and len(os.listdir(NO.ATTACHMENTS_DIR)) == _d7_disk)
+_d7_pick([tmp_file], True)
+check(f'...and Yes attaches it again ({_d7_names()})',
+      _d7_names() == ['qa6_attachment.txt', 'qa6_attachment.txt'])
+_d7_drop_from(1)
+_d7_asked = _d7_pick([_d7_paths['qa6_attachment.txt']], False)
+check(f'...while a file of the same name with other bytes is attached unasked '
+      f'({_d7_asked}; {_d7_names()})',
+      not _d7_asked and _d7_names() == ['qa6_attachment.txt', 'qa6_attachment.txt'])
+_d7_drop_from(1)
+_d7_asked = _d7_pick([tmp_file, _d7_paths['qa6_new.txt']], False)
+check(f'...and with a new file beside it, No keeps the repeat out and attaches the '
+      f'new one, asked once ({len(_d7_asked)}; {_d7_names()})',
+      len(_d7_asked) == 1 and _d7_names() == ['qa6_attachment.txt', 'qa6_new.txt'])
+_d7_drop_from(1)
+_d7_before = (app.selected_note_id, app.current_attachments)
+_d7_other = []
+
+
+def _d7_moved_on():
+    app.selected_note_id = (_d7_before[0] or 0) + 999
+    app.current_attachments = _d7_other
+    return True
+
+
+try:
+    _d7_pick([tmp_file], _d7_moved_on)
+finally:
+    app.selected_note_id, app.current_attachments = _d7_before
+check(f'...and a Yes given after the editor moved on attaches nothing to the note '
+      f'that opened meanwhile ({_d7_other})', _d7_other == [])
+
+
+def _d7_banner():
+    return ' '.join(str(lbl.cget('text')) for frame, lbl in (
+        (app.toast_frame, app.toast_lbl),
+        (getattr(app, '_words_frame', None), getattr(app, '_words_lbl', None)))
+        if frame is not None and app._is_placed(frame))
+
+
+_d7_asked = _d7_pick([_d7_paths['qa6_empty.txt']], False)
+_d7_said = _d7_banner()
+check(f'an empty file is attached, and the banner says so ({_d7_asked}; {_d7_said!r})',
+      not _d7_asked and _d7_names() == ['qa6_attachment.txt', 'qa6_empty.txt']
+      and '“qa6_empty.txt” is empty (0 bytes) — attached anyway' in _d7_said)
+_d7_drop_from(1)
+app._hide_toast()
+_d7_pick([_d7_paths['qa6_empty.txt'], _d7_paths['qa6_empty_too.txt']], False)
+_d7_said = _d7_banner()
+check(f'...and two of them, counted ({_d7_said!r})',
+      '2 files are empty (0 bytes) — attached anyway' in _d7_said)
+_d7_drop_from(1)
+app._hide_toast()
+# A file the disk has no room for: said in words, not "[Errno 28]", and the
+# half copy is not left in the folder, named by nothing.
+import noteorganizer.ui.attachments as _d7_mod
+_d7_real_copy, _d7_errors = _d7_mod.shutil.copy2, []
+
+
+def _d7_full(src, dst, *a, **k):
+    with open(dst, 'wb') as half:
+        half.write(b'half')
+    raise OSError(28, 'No space left on device')
+
+
+_d7_disk = set(os.listdir(NO.ATTACHMENTS_DIR))
+_d7_real_err = app.show_error
+app.show_error = lambda *a, **k: _d7_errors.append(' '.join(map(str, a)))
+_d7_mod.shutil.copy2 = _d7_full
+try:
+    _d7_pick([_d7_paths['qa6_new.txt']], False)
+finally:
+    _d7_mod.shutil.copy2 = _d7_real_copy
+    app.show_error = _d7_real_err
+_d7_left = set(os.listdir(NO.ATTACHMENTS_DIR)) - _d7_disk
+check(f'a file the disk has no room for is said in words, nothing attached ({_d7_errors})',
+      any('wasn’t attached: the disk is full' in e or "wasn't attached: the disk is full" in e
+          for e in _d7_errors)
+      and not any('Errno' in e for e in _d7_errors) and _d7_names() == ['qa6_attachment.txt'])
+check(f'...and its half copy is not left in the folder ({sorted(_d7_left)})', not _d7_left)
+for _d7_path in _d7_paths.values():
+    os.remove(_d7_path)
+os.rmdir(_d7_dir)
+
 # ---- Removing an attachment CONFIRMS first (the no-confirm sweep) ----
 # The ✕ deleted the stored file permanently with no question at all —
 # the one destructive gesture outside the dialog system, found by the
@@ -682,6 +1004,124 @@ check('the confirm asks with the warning glyph and No pre-selected',
       _att_ask.get('icon') == 'warning' and _att_ask.get('default') == 'no')
 check('remove_attachment clears the list', len(app.current_attachments) == 0)
 check('remove_attachment deletes the file from disk', not os.path.isfile(stored_path))
+
+# The stored file goes after the save that stops naming it: deleted first, a
+# save the disk refused left the note on disk naming a file no longer there.
+import json as _json6r
+_rf_path = os.path.join(NO.ATTACHMENTS_DIR, 'rf_keep.txt')
+with open(_rf_path, 'w') as _rf_f:
+    _rf_f.write('keep me')
+app.current_attachments = [{'filename': 'rf_keep.txt', 'stored_as': 'rf_keep.txt'}]
+app.save_current_note(auto=True)
+app.update()
+_rf_id = app.selected_note_id
+_rf_real_save, _rf_real_err = NO.core_save_notes, app.show_error
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
+    app.ask_yes_no = _orig_ask_att
+with open(NO.DATA_FILE, encoding='utf-8') as _rf_fh:
+    _rf_disk = next((n for n in _json6r.load(_rf_fh) if n.get('id') == _rf_id), {})
+check('a Remove whose save the disk refuses keeps the file the note on disk names',
+      _rf_id is not None and os.path.isfile(_rf_path)
+      and any(a.get('stored_as') == 'rf_keep.txt'
+              for a in _rf_disk.get('attachments', [])))
+app.save_notes()
+app.update()
+check('and the next save that lands takes the file away', not os.path.isfile(_rf_path))
+# A save the disk refuses says so on the status line: "Saved at" was written
+# before the write and stayed under the red banner.
+app.body_text.insert('end', ' more words')
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+try:
+    app.save_current_note(auto=False); app.update()
+    _sv_status = str(app.status_lbl.cget('text'))
+finally:
+    NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
+app.save_notes(); app.update()
+check(f"a save the disk refuses says Not saved on the status line ({_sv_status!r})",
+      _sv_status.startswith('Not saved'))
+# ...and so does every change that writes the notes and then says what it did:
+# Restore previous reloaded the editor over its "Not saved" ("Last updated"
+# read as saved), and Pin said "Pinned to top" over a refused write.
+_ns_note = NO.normalize_note({'id': 9311, 'title': 'Restore me', 'body': 'new words'})
+_ns_note['_prev'] = {'body': 'old words', 'title': 'Restore me'}
+app.notes.append(_ns_note)
+_ns_other = NO.normalize_note({'id': 9312, 'title': 'Another', 'body': 'other words'})
+app.notes.append(_ns_other)
+app.refresh_note_list(); app.update()
+app.open_note_in_tab(_ns_note); app.update()
+_ns_ask_was = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+try:
+    app.restore_previous_version(); app.update()
+    _ns_restore = str(app.status_lbl.cget('text'))
+    app.toggle_pin(_ns_note); app.update()
+    _ns_pin = str(app.status_lbl.cget('text'))
+    # Opening any note wrote "Created · Last updated" over notes not saved.
+    app.open_note_in_tab(_ns_other); app.update()
+    _ns_open = str(app.status_lbl.cget('text'))
+finally:
+    NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
+    app.ask_yes_no = _ns_ask_was
+_ns_restored = 'old words' in (app.find_note(9311) or {}).get('body', '')
+app.save_notes(); app.update()
+# A write that lands takes "Not saved" back: it wrote every note, and a road
+# that says nothing (a drag, a rename) left it up over a file holding all.
+_ns_back = str(app.status_lbl.cget('text'))
+check(f"opening a note over notes not saved says Not saved, and a write that lands "
+      f"takes it back ({_ns_open[:40]!r}, {_ns_back!r})",
+      _ns_open.startswith('Not saved') and _ns_back.startswith('Saved at'))
+# ...its own words alone: the editor's "Not saved yet" is about an edit no
+# notes write carries, and a drag's write said "Saved at" over it.
+app.set_status("Not saved yet — fix what could not be saved to go back to the calendar")
+app.save_notes(); app.update()
+_ns_editor = str(app.status_lbl.cget('text'))
+check(f"a write that lands takes back only its own Not saved, not the editor's ({_ns_editor[:30]!r})",
+      _ns_editor.startswith('Not saved yet'))
+# A run that did not read the Trash leaves an import's copied files where they
+# are: one an unread trashed note names looked free and went.
+_du_path = os.path.join(NO.ATTACHMENTS_DIR, 'du_left.bin')
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(_du_path, 'w') as _du_f:
+    _du_f.write('x')
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    app._drop_unclaimed_import_files({'copied': ['du_left.bin']})
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+_du_kept = os.path.isfile(_du_path)
+app._drop_unclaimed_import_files({'copied': ['du_left.bin']})
+check(f"an import's copied file is kept in a run that did not read the Trash, and goes once "
+      f"it did ({_du_kept}, {os.path.isfile(_du_path)})",
+      _du_kept and not os.path.isfile(_du_path))
+app.toggle_pin(_ns_note); app.update()
+_ns_pin_ok = str(app.status_lbl.cget('text'))
+check(f"Restore previous and Pin over a refused write say Not saved, and Pin over "
+      f"one that lands says so ({_ns_restore!r}, {_ns_pin!r}, {_ns_pin_ok!r})",
+      _ns_restored and _ns_restore.startswith('Not saved')
+      and _ns_pin.startswith('Not saved') and _ns_pin_ok == 'Unpinned')
+# A category move's Undo whose notes' category was deleted since says that,
+# not "Nothing left to put back" with the notes still there.
+_cu_note = NO.normalize_note({'id': 9301, 'title': 'Homeless', 'body': 'x', 'category': 'Work'})
+app.notes.append(_cu_note)
+_cu_toasts, _cu_toast_was = [], app._show_toast
+app._show_toast = lambda text, *a, **k: _cu_toasts.append(text)
+try:
+    app._undo_bulk_category([(9301, 'Gone category', '2026-01-01 00:00:00', _cu_note['uid'])], 'Work')
+finally:
+    app._show_toast = _cu_toast_was
+app.notes = [n for n in app.notes if n.get('id') != 9301]
+check(f"a category move's Undo over a category gone since says so ({_cu_toasts})",
+      bool(_cu_toasts) and 'could not go back to a category that no longer exists' in _cu_toasts[-1])
 
 # The file asked about is the file removed. While the question waited, the
 # editor could move on to another note; the index then named THAT note's
@@ -736,6 +1176,10 @@ for _sh_where in ('notes', 'trash'):
     try:
         app.remove_attachment(0)
         app.update()
+        # The file goes only after a save that lands: one made while the
+        # other note still shows it must spare it.
+        app.save_notes()
+        app.update()
     finally:
         app.ask_yes_no = _orig_ask_att
         getattr(app, _sh_where).remove(_sh_holder)
@@ -745,6 +1189,28 @@ for _sh_where in ('notes', 'trash'):
 # reach its footer to say so.
 if os.path.isfile(_sh_path):
     os.remove(_sh_path)
+
+# A new note's file removed while the question waits and the autosave inside
+# it gives the note its id: read as the editor having moved on, Remove did
+# nothing and said nothing.
+app.new_note()
+app.title_entry.insert(0, 'NewWithFile')
+_nf_path = os.path.join(NO.ATTACHMENTS_DIR, 'new_file_rm.txt')
+with open(_nf_path, 'w') as _nf_f:
+    _nf_f.write('attached to a new note')
+app.current_attachments = [{'filename': 'new.txt', 'stored_as': 'new_file_rm.txt'}]
+app.ask_yes_no = lambda *a, **k: (app._autosave_now(), True)[1]
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+check("a new note's file removed while its first save runs under the question goes (%s, %s)"
+      % (app.selected_note_id, app.current_attachments),
+      app.selected_note_id is not None and app.current_attachments == []
+      and not os.path.isfile(_nf_path))
+if os.path.isfile(_nf_path):
+    os.remove(_nf_path)
 
 # A file attached or removed after a save in the same visit. The save stored
 # the editor's own list in the note, so the attach changed the note too: the
@@ -794,12 +1260,14 @@ try:
     app.update()
 finally:
     app.ask_yes_no = _orig_ask_att
+# Remove saves at once, its file going after the save lands: the editor
+# agrees with the note, and the disk has the removal before any flush.
 _aa_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+check(f'...and a file removed after that save is stored at once '
+      f'(unsaved {_aa_unsaved}, on disk {_aa_disk()})',
+      not _aa_unsaved and _aa_disk() == ['qa6_after_one.txt'])
 app._flush_autosave()
 app.update()
-check(f'...and a file removed after that save reads as unsaved '
-      f'({_aa_unsaved}), and the next flush stores the removal ({_aa_disk()})',
-      _aa_unsaved and _aa_disk() == ['qa6_after_one.txt'])
 app.ask_yes_no = lambda *a, **k: True
 try:
     app.remove_attachment(0)
@@ -1164,9 +1632,10 @@ app.update()
 # at all. The browser is stood in for here: nothing is opened. The running
 # app's own details still head every crash_log.txt entry (core/diagnostics).
 import webbrowser as _fb_web
-from noteorganizer.core import diagnostics as _fb_diag
+from noteorganizer.core import diagnostics as _fb_diag, paths as _fb_paths
 _fb_opened, _fb_warned = [], []
-_fb_real = (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning)
+_fb_real = (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning,
+            _fb_diag.NOTICES, getattr(os, 'startfile', None))
 app.notes = [NO.normalize_note({'id': 1, 'title': 'SECRET-TITLE', 'body': 'SECRET-BODY',
                                 'attachments': [{'name': 'a.pdf', 'stored_as': '1_a.pdf'}]}),
              NO.normalize_note({'id': 2, 'title': 'two', 'body': 'x'})]
@@ -1210,6 +1679,28 @@ try:
     check('a browser that will not open leaves the link copied, and says so',
           bool(_fb_warned) and 'copied' in _fb_warned[-1]
           and app.clipboard_get() == _fb_diag.PRIVACY_URL)
+    # The licenses: a text file that ships with the app, opened in the
+    # person's editor -- stood in for here too.
+    os.startfile = lambda p, *a, **k: _fb_opened.append(p)
+    _fb_lic = find_btn_qa6(_fb_frame, 'Open')
+    if _fb_lic is not None:
+        _fb_lic.invoke()
+    _fb_lic_path = _fb_paths.bundled_file(_fb_diag.NOTICES)
+    check('About opens the licenses file that ships with the app',
+          _fb_lic is not None and _fb_opened[-1:] == [_fb_lic_path])
+    _fb_lic_text = open(_fb_lic_path, encoding='utf-8').read() if os.path.isfile(_fb_lic_path) else ''
+    check('...which holds the app\'s own license and those of Python, Pillow and '
+          'the PyInstaller bootloader',
+          all(part in _fb_lic_text for part in
+              ('Note Organizer -- MIT License', 'PYTHON SOFTWARE FOUNDATION LICENSE',
+               '\nPillow ', 'Bootloader Exception')))
+    _fb_diag.NOTICES = 'no-such-licenses.txt'
+    _fb_count = len(_fb_opened)
+    if _fb_lic is not None:
+        _fb_lic.invoke()
+    check('a copy of the app without the file says so, and opens nothing',
+          len(_fb_opened) == _fb_count and bool(_fb_warned)
+          and 'missing' in _fb_warned[-1])
     # Once the app has a Store page, feedback is a review there.
     _fb_diag.STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=TEST'
     _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]
@@ -1224,7 +1715,12 @@ try:
 finally:
     # Put back what was there -- the script's own silent stand-in from its
     # first lines -- not the real dialog a del would have uncovered.
-    _fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning = _fb_real
+    (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning,
+     _fb_diag.NOTICES, _fb_startfile) = _fb_real
+    if _fb_startfile is not None:
+        os.startfile = _fb_startfile
+    elif hasattr(os, 'startfile'):
+        del os.startfile   # not Windows: there was none to put back
     _fb_frame.destroy()
     app.update()
 
@@ -1671,6 +2167,105 @@ check('retention: answering Yes moves the label',
       str(app.trash_retention_var.get()) == '7 days')
 check('retention: answering Yes moves the subtitle',
       'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
+# ...and a window the disk refuses puts the label back: it read the new one
+# while the subtitle, the "days left" and the start's purge kept the old.
+_rt_store = sys.modules['noteorganizer.core.storage']
+_rt_save_was = _rt_store.save_settings
+_rt_store.save_settings = lambda _s: (False, OSError(28, 'No space left on device'))
+try:
+    _rt_pick('14 days')
+finally:
+    _rt_store.save_settings = _rt_save_was
+check(f"retention: a window the disk refuses leaves the label on the kept one "
+      f"({app.trash_retention_var.get()!r})",
+      NO.trash_retention_days() == 7 and str(app.trash_retention_var.get()) == '7 days'
+      and 'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
+app._hide_toast()
+# ...over a settings file held, the subtitle gives no advice the choice would
+# refuse; and with the notes file unread, a delete for good keeps every file,
+# so its question does not promise them gone.
+_rt_page = sys.modules['noteorganizer.ui.settings_page']
+_rt_days_was = _rt_page.trash_retention_days
+_rt_page.trash_retention_days = lambda: None
+NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+try:
+    _rt_line = app._trash_window_line()
+finally:
+    _rt_page.trash_retention_days = _rt_days_was
+    # The set holds each path as hold_writes spells it: normcase, abspath.
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.SETTINGS_FILE)))
+_rt_entry = {'title': 'x', 'attachments': [{'filename': 'a.txt', 'stored_as': 'a.txt'}]}
+_rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].add(NO.DATA_FILE)
+try:
+    _rt_words = (app._attached_files_words([_rt_entry]),
+                 app._attached_files_words([_rt_entry], now=False))
+finally:
+    _rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].discard(NO.DATA_FILE)
+check(f"over a held settings file the Trash's line asks for no choice, and with the notes "
+      f"unread a delete for good names no files ({_rt_line!r}, {_rt_words})",
+      'once Note Organizer is opened again' in _rt_line and 'choose one below' not in _rt_line
+      and _rt_words[0] == '' and 'along with 1 attached file' in _rt_words[1])
+# ...and the dropdown over it puts the choice back at once, said, asking no
+# question first whose Yes it would refuse; and Remove attachment, with the
+# notes unread, does not promise the stored copy gone.
+_rt_toasts, _rt_toast_was = [], app._show_toast
+app._show_toast = lambda text, *a, **k: _rt_toasts.append(text)
+NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+try:
+    _rt_pick('14 days')
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.SETTINGS_FILE)))
+    app._show_toast = _rt_toast_was
+_rt_asked_was, _rt_said = app.ask_yes_no, []
+app.ask_yes_no = lambda title, msg='', **k: (_rt_said.append(msg), False)[1]
+app.current_attachments = [{'filename': 'a.txt', 'stored_as': 'a.txt'}]
+_rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].add(NO.DATA_FILE)
+try:
+    app.remove_attachment(0)
+finally:
+    _rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].discard(NO.DATA_FILE)
+    app.ask_yes_no = _rt_asked_was
+    app.current_attachments = []
+check(f"over held settings the Trash dropdown puts the choice back at once, and Remove "
+      f"attachment keeps its promise ({app.trash_retention_var.get()!r}, {_rt_toasts}, "
+      f"{(_rt_said or [''])[-1][-70:]!r})",
+      str(app.trash_retention_var.get()) == '7 days' and NO.trash_retention_days() == 7
+      and any('once Note Organizer is opened again' in t for t in _rt_toasts)
+      and bool(_rt_said) and 'stays on the disk' in _rt_said[-1]
+      and "can't be undone" not in _rt_said[-1])
+
+# Over a held Trash file (its read refused at the start) the Trash shows
+# empty, so no question could say what a shorter time removes at the next
+# start: the dropdown puts the choice back at once, said, and keeps nothing
+# (the next start purged old notes and their files unasked).
+_rt_toasts, _rt_trash_was = [], list(app.trash)
+app._show_toast = lambda text, *a, **k: _rt_toasts.append(text)
+app.trash = []
+_rt_asked.clear()
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+
+
+def _rt_label_texts(widget):
+    out = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            out.append(str(child.cget('text')))
+        out += _rt_label_texts(child)
+    return out
+
+
+try:
+    _rt_pick('30 days')
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+    app._show_toast = _rt_toast_was
+    app.trash = _rt_trash_was
+check(f"over a held Trash file the dropdown keeps no new length, asks nothing and says why "
+      f"({app.trash_retention_var.get()!r}, {NO.trash_retention_days()}, {_rt_toasts}, "
+      f"asked {bool(_rt_asked)})",
+      str(app.trash_retention_var.get()) == '7 days' and NO.trash_retention_days() == 7
+      and not _rt_asked
+      and any("the Trash couldn't be read this time" in t for t in _rt_toasts))
 
 
 def _rt_row_lines():
@@ -1694,9 +2289,51 @@ def _rt_row_lines():
 _rt_left = app._days_left_in_trash(_RT_RECENT['deleted_at'])
 check("retention: ...and a row's days left follow the new window at once",
       _rt_left in (6, 7)
-      and any('%d day(s) left' % _rt_left in t for t in _rt_row_lines())
-      and not any('%d day(s) left' % (_rt_left + 23) in t
+      and any('%d days left' % _rt_left in t for t in _rt_row_lines())
+      and not any('%d days left' % (_rt_left + 23) in t
                   for t in _rt_row_lines()))
+
+# Over a held Trash its page says why it shows nothing: "Trash is empty" over
+# notes the file holds, and "Kept for N days" over a choice the dropdown
+# refuses. (After the rows' check above: rebuilt, the page read the rows anew.)
+_rt_trash_was = list(app.trash)
+app.trash = []
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    app.toggle_settings_panel('trash'); app.update()
+    _rt_held_page = _rt_label_texts(app.settings_trash_panel)
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+    app.trash = _rt_trash_was
+check(f"over a held Trash file its page says it couldn't be read, not that it is empty "
+      f"or kept for some days ({[t[:50] for t in _rt_held_page if 'Trash' in t or 'Kept' in t]})",
+      any("The Trash couldn't be read this time, so nothing in it is shown" in t
+          for t in _rt_held_page)
+      and any("The Trash couldn't be read this time, so nothing is removed" in t
+              for t in _rt_held_page)
+      and not any(t == "Trash is empty." or t.startswith("Kept for") for t in _rt_held_page))
+
+# ...and over a held templates file, Use template and Settings → Templates said
+# "You don't have any templates" and "No templates yet" of a file that has them.
+_rt_tpl_was, _rt_info_was, _rt_infos = list(app.templates), app.show_info, []
+app.templates = []
+app.show_info = lambda title, msg='', *a, **k: _rt_infos.append((title, msg))
+NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
+try:
+    app.show_template_picker(); app.update()
+    app.toggle_settings_panel('templates'); app.update()
+    _rt_tpl_page = _rt_label_texts(app.settings_templates_panel)
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TEMPLATES_FILE)))
+    app.show_info = _rt_info_was
+    app.templates = _rt_tpl_was
+check(f"over a held templates file Use template and Settings → Templates say it couldn't "
+      f"be read, not that there are none ({_rt_infos}, "
+      f"{[t[:40] for t in _rt_tpl_page if 'templates' in t.lower()]})",
+      bool(_rt_infos) and _rt_infos[-1][0] == "Templates couldn't be read"
+      and "couldn't be read this time" in _rt_infos[-1][1]
+      and any(t.startswith("Your templates couldn't be read this time") for t in _rt_tpl_page)
+      and not any(t.startswith("No templates yet") for t in _rt_tpl_page))
 
 # The preview and the purge must be the same judgement. A dialog that
 # counts with one rule while the purge deletes by another is a dialog
@@ -1757,6 +2394,16 @@ app.announce_startup_changes()
 check('window not known: ...and says it once',
       not any('Nothing will be removed' in m for m in _rt_said)
       and NO.trash_retention_days() is None)
+# The start's '(earlier text)' notes are said for both reasons, a day the
+# note deleted among them: those were once said to be of days holding text
+# of their own. The phone's line is the same.
+_rt_said.clear()
+app._set_aside_at_start = 1
+app.announce_startup_changes()
+app._set_aside_at_start = 0
+check('the start says why earlier text became a note: other text there, or the day deleted',
+      any('those days now show other text, or were deleted' in m
+          and 'kept as 1 note of its own' in m for m in _rt_said))
 app.show_info = _rt_real_info
 app.trash = [dict(_RT_ANCIENT), dict(_RT_RECENT)]
 app.toggle_settings_panel('trash')
@@ -2500,6 +3147,24 @@ _sa_press('permanently')
 check(f"answering Yes deletes the 28 and keeps the two unticked ({[e['title'] for e in app.trash]})",
       sorted(e['title'] for e in app.trash) == ['Trashed 05', 'Trashed 06']
       and sorted(e['title'] for e in NO.load_trash()) == ['Trashed 05', 'Trashed 06'])
+# ...said where it can be read: the status line it went to is out of sight
+# behind Settings.
+check(f"...and said on the banner, the status line being behind Settings "
+      f"({app.toast_lbl.cget('text')!r})",
+      'Deleted 28 notes permanently' in app.toast_lbl.cget('text'))
+# A Trash whose file could not be opened at the start refuses the write for
+# that reason, not the disk's: Settings' deletes asked "Is the disk full?".
+_tw_said, _tw_warn_was = [], app.show_warning
+app.show_warning = lambda *a, **k: _tw_said.append(' '.join(map(str, a)))
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    _tw_ok = app._trash_written(list(app.trash))
+finally:
+    NO._core_paths.WRITES_HELD.clear()
+    app.show_warning = _tw_warn_was
+check(f"a delete in Settings over a Trash held since the start says why ({' '.join(_tw_said)[-90:]!r})",
+      _tw_ok is False and 'could not be opened when Note Organizer started' in ' '.join(_tw_said)
+      and 'disk full' not in ' '.join(_tw_said))
 check('...a file a living note uses stays, one only the deleted used goes',
       os.path.exists(_sa_files['sa_shared.txt']) and not os.path.exists(_sa_files['sa_own.txt']))
 check('...and nothing is left ticked, so nothing is offered',
@@ -2535,13 +3200,16 @@ _lk_clean, _lk_said = _qa_leaves_nothing_behind(app, _lk_redraw, 30)
 check(f'redrawing Recently deleted leaves no Tcl command behind ({_lk_said})',
       _lk_clean)
 _lk_canvas = app._active_panel_canvas
-_lk_items = _lk_canvas.find_all()
-_lk_rows = (_lk_canvas.nametowidget(_lk_canvas.itemcget(_lk_items[0], 'window'))
-            if _lk_items else None)
+# The rows stand in chunks on the canvas (RowStack): the wheel on each chunk
+# covers what lies between the rows, as it did on the one frame.
+_lk_stack = getattr(_lk_canvas, '_row_stack', None)
+_lk_chunks = ([c for g in _lk_stack.groups for c in g.chunks]
+              if _lk_stack is not None else [])
+_lk_rows = _lk_stack.rows() if _lk_stack is not None else []
 check('...while the wheel still reaches the list and every row in it',
-      _lk_rows is not None and bool(_lk_rows.bind('<MouseWheel>'))
-      and len(_lk_rows.winfo_children()) >= 3
-      and all(r.bind('<MouseWheel>') for r in _lk_rows.winfo_children()))
+      bool(_lk_chunks) and all(c.bind('<MouseWheel>') for c in _lk_chunks)
+      and len(_lk_rows) >= 3
+      and all(r.bind('<MouseWheel>') for r in _lk_rows))
 app.trash = []; NO.save_trash(app.trash)
 # A hand-edited trash.json can hold a deleted_at that is not text (the
 # backup import keeps text only): sorting it beside the dates, and showing
@@ -2558,9 +3226,8 @@ try:
 except Exception as _od_exc:   # noqa: BLE001 -- the check reports it
     _od_err = repr(_od_exc)
 _od_canvas = app._active_panel_canvas
-_od_items = _od_canvas.find_all()
-_od_rows = (_od_canvas.nametowidget(_od_canvas.itemcget(_od_items[0], 'window'))
-            if _od_items else None)
+_od_rows = getattr(_od_canvas, '_row_stack', None)
+_od_rows = _od_rows.groups[0] if _od_rows is not None else None
 
 
 def _od_texts(w):
@@ -2609,6 +3276,149 @@ check(f'redrawing the Templates list leaves no Tcl command behind '
       f'({_lk_said})', _lk_clean)
 app.templates = _lk_tpl_saved
 app.hide_settings_page(); app.update()
+
+# A category recoloured in Settings recolours the open note's category
+# button too: its dot kept the old colour beside the new swatch, card and
+# calendar.
+app.new_note(); app.update()
+app.category_var.set('General'); app.update()
+_rc_was = NO.CATEGORY_COLORS['General']
+_rc_real_palette = app._show_color_palette
+
+
+def _rc_swatch(widget, colour):
+    for child in widget.winfo_children():
+        if (isinstance(child, tk.Frame) and str(child.cget('cursor')) == 'hand2'
+                and str(child.cget('bg')).lower() == colour.lower()):
+            return child
+        found = _rc_swatch(child, colour)
+        if found is not None:
+            return found
+    return None
+
+
+def _rc_recolour(colour_from, colour_to):
+    app._show_color_palette = lambda anchor, current, apply, **k: apply(colour_to)
+    try:
+        app.show_settings_page(); app.update()
+        app.toggle_settings_panel('categories'); app.update()
+        swatch = _rc_swatch(app.settings_categories_panel, colour_from)
+        if swatch is not None:
+            swatch.event_generate('<Button-1>'); app.update()
+        return swatch is not None
+    finally:
+        app._show_color_palette = _rc_real_palette
+
+
+_rc_found = _rc_recolour(_rc_was, '#123456')
+_rc_dot = str(app._cat_dot.cget('fg'))
+check(f"a category recoloured in Settings recolours the open note's category dot ({_rc_found}, {_rc_dot})",
+      _rc_found and _rc_dot.lower() == '#123456')
+_rc_recolour('#123456', _rc_was)
+app.hide_settings_page(); app.update()
+
+# A category added at the foot of a list longer than its 220 pixels is
+# brought into sight: "+ Add" looked as if it did nothing.
+_ac_saved = dict(NO.CATEGORY_COLORS)
+for _ac_i in range(14):
+    NO.CATEGORY_COLORS['Shelf %02d' % _ac_i] = '#888888'
+NO.persist_categories()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('categories'); app.update()
+
+
+def _ac_find(widget, kind, text=None):
+    for child in widget.winfo_children():
+        if isinstance(child, kind) and (text is None or str(child.cget('text')) == text):
+            return child
+        found = _ac_find(child, kind, text)
+        if found is not None:
+            return found
+    return None
+
+
+_ac_entry = _ac_find(app.settings_categories_panel, tk.Entry)
+_ac_add = _ac_find(app.settings_categories_panel, tk.Button, '+ Add')
+if _ac_entry is not None and _ac_add is not None:
+    _ac_entry.insert(0, 'Zeta shelf')
+    _ac_add.invoke(); app.update()
+_ac_view = app._active_panel_canvas.yview()
+check(f'a category added at the foot of a long list is brought into sight ({_ac_view})',
+      'Zeta shelf' in NO.CATEGORY_COLORS and _ac_view[0] > 0 and _ac_view[1] == 1.0)
+NO.CATEGORY_COLORS.clear(); NO.CATEGORY_COLORS.update(_ac_saved); NO.persist_categories()
+app.hide_settings_page(); app.update()
+
+# The welcome note brought back from About under a Show that hides it: Show
+# all first, so it is on the list it opens over.
+_wn_notes = list(app.notes)
+app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+app.show_welcome_note(); app.update()
+_wn_uid = NO.load_settings().get('welcome_note_uid')
+_wn_id = next((n['id'] for n in app.notes if _wn_uid and n.get('uid') == _wn_uid), None)
+check(f'the welcome note brought back under Show is on the list it opens over '
+      f'({app.filter_var.get()!r}, {_wn_id}, {app.selected_note_id})',
+      app.filter_var.get() == 'All' and _wn_id is not None and app.selected_note_id == _wn_id)
+app.filter_var.set('All')
+app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
+# ...and over a settings file that refuses its uid, a second Show opens the one
+# the first brought back: every press added another welcome note.
+_wn_settings = NO.load_settings(); _wn_settings.pop('welcome_note_uid', None); NO.save_settings(_wn_settings)
+app.__dict__.pop('_welcome_uid_run', None)
+_wn_save_was = NO.save_setting
+NO.save_setting = lambda *a, **k: False
+try:
+    app.show_welcome_note(); app.update()
+    app.show_welcome_note(); app.update()
+    _wn_count = sum(1 for n in app.notes if n.get('title') == app.find_note(app.selected_note_id).get('title'))
+finally:
+    NO.save_setting = _wn_save_was
+check(f"over a settings file that refuses its uid, a second Show opens the same welcome note ({_wn_count})",
+      _wn_count == 1)
+app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
+# ...and a uid that is not text (hand-edited, a newer version) is no uid: Show
+# opened nothing, only "Something went wrong" (a list cannot go in a set).
+NO.save_setting('welcome_note_uid', ['not', 'a', 'uid'])
+app.__dict__.pop('_welcome_uid_run', None)
+_wn_before = len(app.notes)
+try:
+    app.show_welcome_note(); app.update()
+    _wn_said = 'opened'
+except TypeError as _wn_exc:
+    _wn_said = 'RAISED %s' % _wn_exc
+_wn_open = app.find_note(app.selected_note_id) if app.selected_note_id else None
+check(f"a welcome uid that is not text is no uid: Show brings a welcome note back "
+      f"({_wn_said}, {len(app.notes) - _wn_before} added)",
+      _wn_said == 'opened' and _wn_open is not None and len(app.notes) == _wn_before + 1)
+app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
+
+# A long category name is cut with "…" in the note's category list and on
+# its button: cut bare at 13 letters, two sharing a start read the same,
+# and a long one crowded out the title.
+_lc_name = 'Household paperwork and receipts 2026'
+NO.CATEGORY_COLORS[_lc_name] = '#888888'
+app.new_note(); app.update()
+app.category_var.set(_lc_name); app.update()
+_lc_button = str(app._cat_btn_lbl.cget('text'))
+app._open_category_dropdown(); app.update()
+
+
+def _lc_texts(widget):
+    out = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            out.append(str(child.cget('text')))
+        out.extend(_lc_texts(child))
+    return out
+
+
+_lc_rows = _lc_texts(app._mini_popup) if getattr(app, '_mini_popup', None) is not None else []
+app._dismiss_mini_popup(); app.update()
+check(f'a long category name is cut with "…" on the note\'s button and in its list ({_lc_button!r}, '
+      f'{[t for t in _lc_rows if t.startswith("Household")]})',
+      _lc_button.endswith('…') and len(_lc_button) <= 21
+      and any(t.startswith('Household paperwork') and t.endswith('…') and len(t) <= 31 for t in _lc_rows))
+del NO.CATEGORY_COLORS[_lc_name]
+app.new_note(); app.update()
 
 # 107: the wheel over an empty Trash panel must reach the page beneath
 # it. A fully-shown list has nothing of its own to scroll, and trapping
@@ -2928,21 +3738,8 @@ app.update()
 
 
 def _settle():
-    """Stop anything that would rebuild the list on a timer of its own.
-
-    The sidebar search debounces with after(180, refresh_note_list), and
-    a full rebuild puts every header back correctly -- which would repair
-    a broken surgical update before a check could see it. That is not
-    hypothetical: the mutant for the collapsed-group count died when its
-    suite ran alone and survived when it ran under load, because the
-    timer landed on the other side of the assertion. A check whose answer
-    depends on machine speed is measuring the machine.
-    """
-    app._flush_autosave()
-    if getattr(app, '_search_debounce_job', None) is not None:
-        app.after_cancel(app._search_debounce_job)
-        app._search_debounce_job = None
-    app.update()
+    from _qa_support import settle_list
+    settle_list(app)
 
 
 def _header_text(cat):
@@ -3089,7 +3886,7 @@ _dup_yes6 = app.ask_yes_no
 _kept6, _gone6, _dv6 = _dup_setup6()
 _files_before6 = sorted(os.listdir(NO.ATTACHMENTS_DIR))
 app.ask_yes_no = lambda *a, **k: False
-app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app._cleanup_selected_duplicates(_dv6, refresh=lambda: None)
 app.ask_yes_no = _dup_yes6
 check('answering No to the duplicates clean-up merges nothing',
       _kept6['attachments'] == []
@@ -3098,7 +3895,7 @@ check('answering No to the duplicates clean-up merges nothing',
 _kept6, _gone6, _dv6 = _dup_setup6()
 app.open_note_in_tab(_kept6); app.update()
 app.ask_yes_no = lambda *a, **k: True
-app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app._cleanup_selected_duplicates(_dv6, refresh=lambda: None)
 app.ask_yes_no = _dup_yes6
 app.update()
 check('...Yes gives the kept copy the merged file, in the editor too',
@@ -3111,7 +3908,7 @@ _kept6, _gone6, _dv6 = _dup_setup6()
 app.open_note_in_tab(_gone6); app.update()
 app.body_text.insert('end', '\naction: Ana sends the figures')
 app.ask_yes_no = lambda *a, **k: True
-app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app._cleanup_selected_duplicates(_dv6, refresh=lambda: None)
 app.ask_yes_no = _dup_yes6
 app.update()
 check('...and the copy open in the editor goes to the Trash with its typing',
@@ -3156,8 +3953,8 @@ check('...while the note filed there goes to the Trash, restorable',
       and app.find_note(2) is None)
 check(f'...and the question counts only that note, naming the day apart '
       f'({_cd_asked and _cd_asked[0][1]!r})',
-      len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1]
-      and 'have a day filed under' in _cd_asked[0][1])
+      len(_cd_asked) == 1 and 'has 1 note. What should happen to it?' in _cd_asked[0][1]
+      and '1 repeating note has a day filed under' in _cd_asked[0][1])
 # Held by a day alone, there is no note to trash, so nothing offers to.
 NO.CATEGORY_COLORS['Away6d'] = '#aa6622'
 app.find_note(1)['overrides']['2026-09-21'] = {'body': 'away', 'category': 'Away6d'}
@@ -3192,7 +3989,7 @@ app._delete_category('Late6d', lambda: None); app.update()
 app._themed_dialog = _cd_real_dlg
 check(f'...and it counts the notes as they are once the open note is saved '
       f'({_cd_asked and _cd_asked[0][1]!r})',
-      len(_cd_asked) == 1 and '2 note(s)' in _cd_asked[0][1]
+      len(_cd_asked) == 1 and 'has 2 notes. What should happen to them?' in _cd_asked[0][1]
       and 'repeating' not in _cd_asked[0][1]
       and app.find_note(1)['category'] == 'Late6d')
 app.new_note(); app.update()
@@ -3228,7 +4025,7 @@ check(f'Yes to deleting a category\'s notes trashes the notes its question '
       f'{_cd_asked and _cd_asked[0][1]!r})',
       [e.get('title') for e in app.trash] == ['Counted']
       and _cd_late == 'General'
-      and len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1])
+      and len(_cd_asked) == 1 and 'has 1 note.' in _cd_asked[0][1])
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 
@@ -3297,6 +4094,133 @@ app.ask_yes_no = _rn_yes
 check('...and a day restored under a category that is gone comes back under General',
       (app.find_note(2).get('overrides') or {}).get('2026-09-14', {}).get('category')
       == 'General')
+# Restore previous from a day the restored version had deleted: the editor
+# leaves the day for the whole note. It stayed on the date, and what was
+# typed there was saved to a day no screen showed and no search found
+# (found on the phone first).
+app.new_note(); app.update()
+_rg_note = NO.normalize_note({'id': 5, 'title': 'Team meeting',
+                              'body': 'Agenda', 'date': '2026-11-03',
+                              'recurrence': {'freq': 'weekly',
+                                             'weekdays': [1]}})
+_rg_note['_prev'] = {'title': 'Team meeting', 'body': 'Agenda',
+                     'formatting': [], 'paragraphs': [], 'comments': '',
+                     'exceptions': ['2026-11-17']}
+app.notes = [_rg_note]; app.save_notes()
+app.open_note_in_tab(app.find_note(5), occurrence_date='2026-11-17')
+app.update()
+_rg_on_day = app.current_occurrence_date
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+app.body_text.insert('end', '\nCall the supplier')
+app._flush_autosave(); app.update()
+_rg_after = app.find_note(5) or {}
+check(f'Restore previous from a day the restored version deleted leaves the '
+      f'day for the whole note ({_rg_on_day} -> '
+      f'{app.current_occurrence_date}, days of its own: '
+      f'{sorted(_rg_after.get("overrides") or {})})',
+      _rg_on_day == '2026-11-17' and app.current_occurrence_date is None
+      and '2026-11-17' in (_rg_after.get('exceptions') or [])
+      and '2026-11-17' not in (_rg_after.get('overrides') or {})
+      and 'Call the supplier' in _rg_after.get('body', ''))
+# A day showing the series' words shows the series' lines' looks; a day with
+# text of its own shows none: put on by line number, they centred the wrong
+# lines (found on the phone first).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 6, 'title': 'Plan', 'body': 'Agenda\nsecond',
+                                'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                                'paragraphs': [{'line': 0, 'align': 'center'}],
+                                'overrides': {'2026-11-16': {'body': 'own words\nhere'}}})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-09'); app.update()
+_pl_series_day = app._extract_paragraphs(app.body_text)
+app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-16'); app.update()
+_pl_own_day = app._extract_paragraphs(app.body_text)
+check(f"a day showing the series' words shows its lines' looks, a day of its own text none "
+      f"({_pl_series_day}; {_pl_own_day})",
+      any(p.get('line') == 0 and p.get('align') == 'center' for p in _pl_series_day)
+      and not any(p.get('align') for p in _pl_own_day)
+      and any(p.get('line') == 0 and p.get('align') == 'center'
+              for p in app.find_note(6).get('paragraphs') or []))
+# ...but a list's depth, which lives in its entries alone, stays on a day of
+# its own text where the line keeps its marker: dropped, a nested numbered
+# list read flat and the next Enter renumbered it as one run.
+app.new_note(); app.update()
+app.notes.append(NO.normalize_note({'id': 7, 'title': 'Weekly agenda',
+                                'body': 'Agenda\n1. Buy\n1. milk\n2. eggs\n2. Clean',
+                                'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                                'paragraphs': [{'line': 1, 'kind': 'number'},
+                                               {'line': 2, 'kind': 'number', 'indent': 1},
+                                               {'line': 3, 'kind': 'number', 'indent': 1},
+                                               {'line': 4, 'kind': 'number'}],
+                                'overrides': {'2026-11-16': {
+                                    'body': 'Agenda today\n1. Buy\n1. milk\n2. eggs\n2. Clean'}}}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-16'); app.update()
+_nl_day = app._extract_paragraphs(app.body_text)
+check(f"a day of its own text keeps the series' list depth where its lines keep their markers ({_nl_day})",
+      [(p.get('line'), p.get('indent', 0)) for p in _nl_day if p.get('kind')]
+      == [(1, 0), (2, 1), (3, 1), (4, 0)])
+# ...and a day keeps its OWN lists' structure (the owner's choice): an item
+# added to a sub-list keeps its level when the day is opened
+# again -- taken from the series by line, it slid to the outer list.
+app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-23'); app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'Agenda\n1. Buy\n1. milk\n2. butter\n3. eggs\n2. Clean')
+app._apply_paragraphs(app.body_text, [{'line': 1, 'kind': 'number'},
+                                      {'line': 2, 'kind': 'number', 'indent': 1},
+                                      {'line': 3, 'kind': 'number', 'indent': 1},
+                                      {'line': 4, 'kind': 'number', 'indent': 1},
+                                      {'line': 5, 'kind': 'number'}])
+# (Laid on lines whose tags the delete above took: as typing then Enter leave them.)
+app._flush_autosave(); app.update()
+_kl_kept = ((app.find_note(7).get('overrides') or {}).get('2026-11-23') or {}).get('paragraphs')
+app.open_note_in_tab(app.find_note(6)); app.update()
+app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-23'); app.update()
+_kl_day = [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text) if p.get('kind')]
+check(f"a day keeps its own lists' structure: an item added to a sub-list keeps its level ({_kl_day}; {_kl_kept})",
+      _kl_day == [(1, 0), (2, 1), (3, 1), (4, 1), (5, 0)]
+      and [(p['line'], p.get('indent', 0)) for p in _kl_kept or []] == _kl_day)
+# ...a list's level changed on a day showing the series' words -- Tab on a
+# one-item list, its words unchanged -- stays that day's, the series
+# untouched; and opening it again saves nothing.
+app.notes.append(NO.normalize_note({'id': 8, 'title': 'Plan', 'body': 'Plan\n1. Only',
+                                    'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                                    'paragraphs': [{'line': 1, 'kind': 'number'}]}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(8), occurrence_date='2026-11-30'); app.update()
+app.body_text.mark_set('insert', '2.end')
+app._on_body_tab(None, +1); app.update()
+_kl_tabbed = (app.body_text.get('1.0', 'end-1c'),
+              [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text) if p.get('kind')])
+app._flush_autosave(); app.update()
+app.open_note_in_tab(app.find_note(6)); app.update()
+app.open_note_in_tab(app.find_note(8), occurrence_date='2026-11-30'); app.update()
+_kl_same = [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text) if p.get('kind')]
+_kl_stamp = app.find_note(8).get('updated')
+_kl_clean = app.editor_state_matches_saved(app.capture_editor_state())
+app._flush_autosave(); app.update()
+check(f"a level changed on a day of the series' words is that day's, and reopening saves nothing "
+      f"({_kl_tabbed}, {_kl_same}, {_kl_clean}, {(app.find_note(8).get('overrides') or {}).get('2026-11-30')})",
+      _kl_tabbed[0].startswith('Plan\n1. Only') and _kl_same == [(1, 1)] and _kl_clean
+      and app.find_note(8).get('updated') == _kl_stamp
+      and [p.get('indent', 0) for p in app.find_note(8).get('paragraphs')] == [0])
+# A change made behind a day opened from the calendar -- an import's Update,
+# a category change -- reads the note back and keeps "Back to Calendar": the
+# reopening cleared it.
+app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-09'); app.update()
+app._pending_calendar_return = {'year': 2026, 'month': 11, 'date_str': '2026-11-09', 'origin': 'edit'}
+app._update_calendar_return_button()
+app.find_note(6)['title'] = 'Plan, renamed behind'
+app._editor_follows_external_change({6}); app.update()
+check(f'a change made behind a day opened from the calendar keeps its way back '
+      f'({app._pending_calendar_return}, {app.current_occurrence_date})',
+      (app._pending_calendar_return or {}).get('date_str') == '2026-11-09'
+      and app.current_occurrence_date == '2026-11-09'
+      and app.title_entry.get() == 'Plan, renamed behind')
+app._pending_calendar_return = None
+app._update_calendar_return_button()
 # The note the question named is the note restored, and the editor is
 # filled only while it still holds that note. Moved on to another note
 # while the question waited, the editor took the rescue copy's text into
@@ -3362,22 +4286,71 @@ _fit_geo = app.geometry()
 app.notes = [NO.normalize_note({'id': 61, 'title': 'Fit', 'body': 'b',
                                 'category': 'General', 'comments': 'c'})]
 app.save_notes(); app.refresh_note_list()
-for _fit_size in ('1100x850', '640x600'):
+# The smallest windows: the sidebar and the editor side by side at the
+# floor, and 640x600 with the sidebar hidden, where the Notes page alone is
+# laid out narrower (the review panel: at 640 it was cut off, under a bar).
+for _fit_size, _fit_hidden in (('1100x850', False), ('900x600', False),
+                               ('640x600', True)):
+    if _fit_hidden != app._sidebar_hidden:
+        app.toggle_sidebar()
     app.geometry(_fit_size)
     app.notebook.select(app.TAB_NOTES)
     app.open_note_in_tab(app.find_note(61))
     _fit_lost = _fit_wait(app)
+    _fit_bar = app._is_placed(app._main_hscroll)
+    _fit_width = app.winfo_width()
     app.notebook.select(app.TAB_CALENDAR)
     _fit_lost += [f'calendar: {l}' for l in _fit_wait(app)]
+    _fit_pages = {'calendar': app.main_inner.winfo_width()}
+    # Settings opened from the Notes page, the one laid out narrower.
+    app.notebook.select(app.TAB_NOTES); app.update()
     app.show_settings_page()
     for _fit_key, _fit_label, _fit_b, _fit_e in app.SETTINGS_SECTIONS:
         app.toggle_settings_panel(_fit_key)
         _fit_lost += [f'{_fit_key}: {l}' for l in _fit_wait(app)]
+    _fit_pages['settings'] = app.main_inner.winfo_width()
     app.hide_settings_page()
+    _fit_wait(app)
+    _fit_bar = (_fit_bar, app._is_placed(app._main_hscroll))
+    if _fit_hidden:
+        check(f'...with the sidebar hidden the Calendar and Settings are laid out as '
+              f'wide as they always were ({_fit_pages})',
+              all(w >= app.px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH)
+                  for w in _fit_pages.values()))
     app.notebook.select(app.TAB_NOTES); app.update()
-    check(f'at {_fit_size}, every button, label and tick box on the notes page, the '
+    _fit_where = f'{_fit_size}{" with the sidebar hidden" if _fit_hidden else ""}'
+    check(f'at {_fit_where}, every button, label and tick box on the notes page, the '
           f'calendar and every Settings section is wholly in sight ({_fit_lost})',
           _fit_lost == [])
+    check(f'...and at {_fit_where} (made {_fit_width} wide) the Notes page needs no '
+          f'bar to scroll sideways, before Settings and back from it ({_fit_bar})',
+          _fit_bar == (False, False)
+          and _fit_width == int(_fit_size.split('x')[0]))
+if app._sidebar_hidden:
+    app.toggle_sidebar()
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+_fit_shown = (app.minsize(), app.winfo_width())
+check(f'the sidebar shown again makes the window as wide as the sidebar and the '
+      f'editor side by side, no narrower ({_fit_shown})',
+      _fit_shown[0][0] == app.px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH)
+      and _fit_shown[1] >= _fit_shown[0][0])
+# Grown from its left edge, a window beside the screen's right edge is pulled
+# back onto the screen (Windows: elsewhere there is no work area to ask).
+if sys.platform.startswith('win'):
+    app.toggle_sidebar(); app.update()
+    app.geometry('640x600+%d+40' % (app.winfo_screenwidth() - 660))
+    for _ in range(10):
+        app.update(); time.sleep(0.02)
+    app.toggle_sidebar()
+    for _ in range(10):
+        app.update(); time.sleep(0.02)
+    _fit_edge = app._window_rect_and_work_area()
+    check(f'...and grown beside the right edge of the screen it stays on it '
+          f'({_fit_edge})', _fit_edge is not None and _fit_edge[0][2] <= _fit_edge[1][2])
+else:
+    print('SKIP grown beside the right edge of the screen (no work area to ask off Windows)')
+app.geometry(_fit_geo); app.update()
 
 # A Settings row places its control before its words: built narrow, with a
 # description long enough to need wrapping, its button keeps its width and
@@ -3423,7 +4396,7 @@ _fit_wide = app._action_buttons[4]
 # As it was set, to put back: "3m" under Linux's Tk, a number here.
 _fit_padx = _fit_wide.cget('padx')
 _fit_wide.configure(padx=_fit_wide.winfo_pixels(_fit_padx) + 30)
-app.geometry('640x600')
+app.geometry('900x600')   # the editor's narrowest: beside the sidebar, at its floor
 _fit_lost = _fit_wait(_fit_row)
 _fit_bottom = max(b.winfo_y() + b.winfo_height() for b in app._action_buttons)
 check(f'a row with no room for three of its widest button deals them into fewer '
@@ -3534,17 +4507,22 @@ for _sc_scale in (1.5, 2.0):
           int(_sc.sidebar.cget('width')) == _sc_px(NO.SIDEBAR_WIDTH)
           and _sc._main_min_width == _sc_px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH))
 
-    # The window: 900x600 and its 640x600 floor at this scale -- but never
-    # bigger than the screen can show, which a 1920x1080 laptop at 175% is.
+    # The window: 900x600, and its floor -- the sidebar and the editor side by
+    # side, 640x600 with the sidebar hidden -- at this scale, but never bigger
+    # than the screen can show, which a 1920x1080 laptop at 175% is.
     _sc_opened = tuple(int(n) for n in _sc.geometry().split('+')[0].split('x'))
+    _sc_floor = _sc.minsize()
     _sc._screen_room = lambda: (1000, 700)
-    _sc_small = (_sc._fit_to_screen(900, 600), _sc._fit_to_screen(640, 600))
+    _sc_small = (_sc._fit_to_screen(900, 600), _sc._fit_to_screen(*_sc.WINDOW_FLOOR))
     del _sc._screen_room
     check(f'...its window opens at 900x600 grown to {_sc_opened}, with its smallest '
-          f'size grown the same way ({_sc.minsize()}), and never past the screen '
+          f'size grown the same way ({_sc_floor}), and never past the screen '
           f'({_sc_small} on a screen with room for 1000x700)',
           _sc_opened == (_sc_px(900), _sc_px(600))
-          and _sc.minsize() == (_sc_px(640), _sc_px(600))
+          # Set again once the window shows, where the screen can say how
+          # much room it has: grown, but held to it.
+          and _sc_floor == _sc._fit_to_screen(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH, 600)
+          and _sc_floor[0] > NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH
           and _sc_small == ((1000, 700), (min(_sc_px(640), 1000), 700)))
 
     # Every control in sight, on the pages and popups that hold the sizes
@@ -3646,6 +4624,9 @@ class _MgApp:
     def on_app_close(self):
         pass
 
+    def on_session_end(self):
+        pass
+
 
 import tkinter.messagebox as _mg_box
 _mg_kept = (NO.NoteOrganizer, NO._draw_sharp_on_scaled_screens, NO.initialise,
@@ -3689,6 +4670,18 @@ if sys.platform.startswith('win'):
           f'({len(_st_rows)} row; {_st_off}, {_st_on}; "{_st_said}")',
           len(_st_rows) == 1 and _st_off is False and _st_on is True
           and 'next time you open' in _st_said)
+    # ...and Off the disk refused leaves the dropdown on what stays, On: it
+    # read the refused choice under "Not saved".
+    _sd_store = sys.modules['noteorganizer.core.storage']
+    _sd_save_was = _sd_store.save_settings
+    _sd_store.save_settings = lambda _s: (False, OSError(28, 'No space left on device'))
+    try:
+        app.sharp_text_var.set('Off')          # as the dropdown sets it first
+        app._set_sharp_text('Off')
+    finally:
+        _sd_store.save_settings = _sd_save_was
+    check(f"...and Off the disk refused leaves the dropdown on On ({app.sharp_text_var.get()!r})",
+          app.sharp_text_var.get() == 'On')
     # The real declaration, in a process of its own that opens no window:
     # the one this suite runs in has windows already, and Windows decides a
     # program's drawing mode only once.
@@ -3711,6 +4704,70 @@ else:
           f'declaration does nothing and says so',
           _st_rows == [] and NO._draw_sharp_on_scaled_screens() is False)
 app.hide_settings_page(); app.notebook.select(app.TAB_NOTES); app.update()
+
+# Where the window opens. Windows places it; one as tall as the screen allows
+# opened, in Windows Sandbox at 150%, with its foot under the taskbar and the
+# Settings button half hidden. Pulled inside its monitor's work area once,
+# when it first shows; left alone when it fits.
+_wa_pull = NO.NoteOrganizer._pull_inside
+_wa_cases = {
+    'fits': (_wa_pull((100, 100, 900, 700), (0, 0, 1920, 1032)), (0, 0)),
+    'foot under the taskbar': (_wa_pull((100, 120, 1454, 1067), (0, 0, 1920, 1032)), (0, -35)),
+    'past the right edge': (_wa_pull((1000, 100, 2354, 1047), (0, 0, 1920, 1080)), (-434, 0)),
+    'bigger than the screen': (_wa_pull((50, 50, 2050, 1150), (0, 0, 1920, 1032)), (-50, -50)),
+    'a second monitor, from its left and top': (
+        _wa_pull((1800, -20, 2600, 600), (1920, 0, 3840, 1040)), (120, 20)),
+}
+check(f'a window is pulled just inside the work area, its title bar kept in when '
+      f'it is bigger ({ {k: v[0] for k, v in _wa_cases.items() if v[0] != v[1]} })',
+      all(got == want for got, want in _wa_cases.values()))
+
+_wa_moves, _wa_logged = [], []
+_wa_kept_log = app._log_swallowed
+app._log_swallowed = lambda where: _wa_logged.append(where)
+app._window_rect_and_work_area = lambda: ((100, 120, 1454, 1067), (0, 0, 1920, 1032))
+app._move_window_by = lambda dx, dy: _wa_moves.append((dx, dy))
+app._placed_in_work_area = False
+try:
+    for _ in range(2):
+        app.withdraw(); app.update()
+        app.deiconify(); app.update()
+    _wa_once = list(_wa_moves)
+
+    def _wa_refuse():
+        raise OSError('the window manager would not say')
+    app._window_rect_and_work_area = _wa_refuse
+    app._placed_in_work_area = False
+    app.withdraw(); app.update()
+    app.deiconify(); app.update()
+finally:
+    del app._window_rect_and_work_area, app._move_window_by
+    app._log_swallowed = _wa_kept_log
+    app._placed_in_work_area = True
+    app.update()
+check(f'when the window first shows it is moved inside, once, and a question '
+      f'Windows refuses only leaves a line in the crash log ({_wa_once}; {_wa_logged})',
+      _wa_once == [(0, -35)] and _wa_logged == ['window kept in the work area'])
+
+if sys.platform.startswith('win'):
+    # The real questions, of the suite's own window: a rectangle and its
+    # monitor's work area, and a move of one pixel that is one pixel.
+    _wa_found = app._window_rect_and_work_area()
+    _wa_moved = None
+    if _wa_found:
+        app._move_window_by(0, -1)
+        _wa_moved = app._window_rect_and_work_area()
+        app._move_window_by(0, 1)
+    _wa_back = app._window_rect_and_work_area()
+    check(f'on Windows the window and its work area are measured, and a move '
+          f'moves it as asked ({_wa_found}; {_wa_moved}; {_wa_back})',
+          bool(_wa_found) and all(r[2] > r[0] and r[3] > r[1] for r in _wa_found)
+          and _wa_moved is not None
+          and _wa_moved[0] == tuple(v - (i % 2) for i, v in enumerate(_wa_found[0]))
+          and _wa_back == _wa_found)
+else:
+    check('off Windows the window is left where the window manager puts it',
+          app._window_rect_and_work_area() is None)
 
 
 # ---- SPELLING ----
@@ -3929,6 +4986,26 @@ NO.save_setting(_sp_rules.SPELLING_SETTING, None)
 _sp_new = app._spell_on()
 NO.save_setting(_sp_rules.SPELLING_SETTING, True)
 check(f'...and someone new, with nothing stored, has it on ({_sp_new})', _sp_new is True)
+# ...and Off the disk refuses puts the dropdown back on On, said: it read Off
+# while the underlines, read from the file, stayed.
+_sp_ui = sys.modules['noteorganizer.ui.spelling']
+_sp_save_was, _sp_var_was = _sp_ui.save_setting, getattr(app, 'spelling_var', None)
+if _sp_var_was is None:
+    app.spelling_var = tk.StringVar(app, value='On')
+_sp_toasts, _sp_toast_was = [], app._show_toast
+app._show_toast = lambda text, *a, **k: _sp_toasts.append(text)
+_sp_ui.save_setting = lambda *a, **k: False
+try:
+    app.spelling_var.set('Off')               # as the dropdown sets it first
+    app._set_spelling('Off')
+finally:
+    _sp_ui.save_setting, app._show_toast = _sp_save_was, _sp_toast_was
+_sp_shown = app.spelling_var.get()
+if _sp_var_was is None:
+    del app.spelling_var
+check(f"...and Off the disk refuses leaves the dropdown on On, said ({_sp_shown!r}, {_sp_toasts})",
+      _sp_shown == 'On' and NO.get_setting(_sp_rules.SPELLING_SETTING, True, expect=bool) is True
+      and any('Not saved' in t for t in _sp_toasts))
 
 # A long note is read in slices, and a long line in pieces: the editor is
 # never held up for the whole of it at once.
@@ -3938,11 +5015,13 @@ _sp_b.delete('1.0', 'end')
 _sp_b.insert('1.0', _sp_long)
 app._spell_run(_sp_b)
 _sp_first = len(_sp_dict.asked)
-_sp_settle(cap=10)
+# ...and once the last slice has run, no look is still due: its timer's id
+# stayed behind, and every wait for the look ran to its cap.
+_sp_done = _sp_settle(cap=10)
 check(f'a long note is read a slice at a time ({_sp_first} lines in the first, '
       f'{app.SPELL_SLICE} allowed), and all of it in the end '
-      f'({len(_sp_lines(_sp_b))} of 300 underlined)',
-      _sp_first <= app.SPELL_SLICE and len(_sp_lines(_sp_b)) == 300)
+      f'({len(_sp_lines(_sp_b))} of 300 underlined), the look then said done ({_sp_done})',
+      _sp_first <= app.SPELL_SLICE and len(_sp_lines(_sp_b)) == 300 and _sp_done)
 _sp_dict.asked.clear()
 _sp_b.delete('1.0', 'end')
 _sp_b.insert('1.0', ('word ' * 2500) + 'recieve')
@@ -3965,7 +5044,7 @@ if sys.platform.startswith('win') and _sp_win.languages():
     check(f"Windows' own dictionary is reached and finds a misspelling where it is "
           f"({[s.tag for s in _sp_real]}; {_sp_found})", _sp_found == [(2, 7)])
 elif sys.platform.startswith('win'):
-    print("INFO this Windows has no spelling dictionary; the real one is asked on a machine that does")
+    print("SKIP Windows' own dictionary: this Windows has none; the real one is asked on a machine that does")
 else:
     check('off Windows there is no dictionary to reach, and nothing is underlined '
           'with the real one', not _sp_win.available() and _sp_win.languages() == [])
@@ -3976,6 +5055,3142 @@ app.new_note(); app.update()
 app.notes = []
 app.save_notes(); app.refresh_note_list(); app.update()
 
+# ---- KEYBOARD: what Tab lands on is scrolled into sight ----
+# Tk's Tab moves the keyboard and never the view, and the editor, Settings
+# and the Trash list are frames drawn on canvases: at the app's opening size
+# Tab walked onto Save and Delete below the fold, and onto sixty Trash
+# controls nobody could see, with the view standing still.
+def _kv_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+def _kv_in_view(w, canvas):
+    top = w.winfo_rooty() - canvas.winfo_rooty()
+    return 0 <= top and top + w.winfo_height() <= canvas.winfo_height()
+
+
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.geometry('900x600')
+app.new_note()
+_kv_settle(10)
+_kv_ec = app.editor_canvas
+_kv_save = find_widget(app.editor, tk.Button, '💾 Save')
+_kv_ec.yview_moveto(0)
+_kv_settle()
+_kv_from = _kv_save.tk_focusPrev() if _kv_save is not None else None
+check(f'fixture: at 900x600 the editor\'s Save lies below the fold, and so does '
+      f'the control before it ({_kv_ec.yview()})',
+      _kv_from is not None and not _kv_in_view(_kv_save, _kv_ec)
+      and not _kv_in_view(_kv_from, _kv_ec) and _take_focus(_kv_from))
+_kv_from.event_generate('<Tab>')
+_kv_settle()
+check(f'Tab onto Save, below the fold, scrolls the editor to show it '
+      f'({_kv_ec.yview()})', _kv_in_view(_kv_save, _kv_ec))
+_kv_view = _kv_ec.yview()
+if _take_focus(_kv_save):
+    _kv_save.event_generate('<Shift-Tab>')
+    _kv_settle()
+check(f'...and Shift+Tab back onto a control already in sight leaves the view '
+      f'where it was ({_kv_view} -> {_kv_ec.yview()})',
+      _kv_ec.yview() == _kv_view and _kv_in_view(_kv_from, _kv_ec))
+_kv_ec.yview_moveto(1.0)
+_kv_settle()
+_kv_after_title = app.title_entry.tk_focusNext()
+check('fixture: scrolled to the bottom, the title box is out of sight',
+      not _kv_in_view(app.title_entry, _kv_ec) and _take_focus(_kv_after_title))
+_kv_after_title.event_generate('<Shift-Tab>')
+_kv_settle()
+check(f'Shift+Tab onto the title, above the fold, scrolls back up to it '
+      f'({_kv_ec.yview()})', _kv_in_view(app.title_entry, _kv_ec))
+
+# Recently deleted: a list on a canvas, on a page on a canvas. Both move.
+app.trash = [{'id': 700 + i, 'uid': f'kv-{i}', 'title': f'Sight{i:02d}',
+              'body': 'x', 'category': 'General',
+              'deleted_at': f'2026-10-{1 + i % 25:02d} 10:00:00'} for i in range(30)]
+NO.save_trash(app.trash)
+app.geometry('1000x650')
+app.show_settings_page()
+app.toggle_settings_panel('trash')
+_kv_settle(20)
+_kv_list = app._active_panel_canvas
+_kv_page = app.settings_canvas
+_kv_rows = [w for w in _kv_list._row_stack.rows()
+            if getattr(w, '_trash_buttons', None)]
+_kv_first = (next(c for c in _kv_rows[0].winfo_children()
+                  if isinstance(c, tk.Checkbutton)) if _kv_rows else None)
+def _kv_keyboard():
+    """Where the keyboard is, by Tk's record for the window."""
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+_kv_hidden, _kv_landed = [], 0
+if _kv_first is not None and _take_focus(_kv_first):
+    for _kv_i in range(70):
+        _kv_held = _kv_keyboard()
+        if _kv_held is None:
+            break
+        _kv_held.event_generate('<Tab>')
+        _kv_settle(2)
+        _kv_held = _kv_keyboard()
+        if _kv_held is not None and str(_kv_held).startswith(str(_kv_list)):
+            _kv_landed += 1
+            if not (_kv_in_view(_kv_held, _kv_list)
+                    and _kv_in_view(_kv_held, _kv_page)):
+                _kv_hidden.append(str(_kv_held.cget('text')) or 'tick')
+check(f'fixture: Tab walked deep into a Trash list longer than its box '
+      f'({_kv_landed} landings, the list at {_kv_list.yview()})',
+      _kv_landed >= 60 and _kv_list.yview()[0] > 0)
+check(f'every Trash control Tab lands on is in sight, in the list and on the '
+      f'page ({len(_kv_hidden)} out of sight: {_kv_hidden[:6]})', not _kv_hidden)
+app.hide_settings_page()
+app.trash = []
+NO.save_trash(app.trash)
+app.geometry('1100x850')
+_kv_settle()
+
+# ---- KEYBOARD: a Tk button its own press destroys hands the keyboard on ----
+# Every "Show N more" goes as it draws the next
+# page, and the keyboard fell to the window -- about a hundred Tabs back to
+# the rows just drawn. Tk's own buttons take Space through their class
+# binding, which never reached _keyboard_stays; nor did a template
+# checklist's tick box, whose press draws its list again.
+_kr_asked = []
+_kr_real_focus_set = tk.Misc.focus_set
+
+
+def _kr_record(self):
+    _kr_asked.append(self)
+    return _kr_real_focus_set(self)
+
+
+def _kr_all(w):
+    for c in w.winfo_children():
+        yield c
+        yield from _kr_all(c)
+
+
+def _kr_press(widget, top, is_new, click_after=None):
+    """Space on *widget*, the keyboard forced there first; then the first
+    control under *top* the press drew that *is_new* accepts, and the
+    focus_set calls the press made. With *click_after*, a left press on it
+    straight after the key, as a click elsewhere would come."""
+    if widget is None or not _take_focus(widget):
+        return None, []
+    before = {str(w) for w in _kr_all(top)}
+    del _kr_asked[:]
+    widget.event_generate('<space>')
+    if click_after is not None:
+        click_after.event_generate('<ButtonPress-1>', x=2, y=2)
+        click_after.event_generate('<ButtonRelease-1>', x=2, y=2)
+    _kv_settle(20)      # Tk runs a Button's command 100 ms after the key
+    new = next((w for w in _kr_all(top)
+                if str(w) not in before and is_new(w)), None)
+    return new, list(_kr_asked)
+
+
+def _kr_more(top):
+    return next((w for w in _kr_all(top) if isinstance(w, tk.Button)
+                 and str(w.cget('text')).startswith('Show ')
+                 and w.winfo_viewable()), None)
+
+
+_kr_box = lambda w: isinstance(w, tk.Checkbutton)  # noqa: E731
+app.notes = ([NO.normalize_note({'id': 7300 + i, 'title': f'Twin {i // 2:02d}',
+                                 'body': f'same {i // 2}'}) for i in range(44)]
+             + [NO.normalize_note({'id': 7400 + i, 'title': f'Dated {i:03d}',
+                                   'body': 'd', 'date': f'2026-{1 + i // 28:02d}-'
+                                                        f'{1 + i % 28:02d}'})
+                for i in range(110)])
+app.save_notes()
+app.refresh_note_list()
+app.trash = [{'id': 7600 + i, 'uid': f'kr-{i}', 'title': f'MoreGone{i:02d}',
+              'body': 'x', 'category': 'General',
+              'deleted_at': f'2026-10-{1 + i % 25:02d} 11:{i:02d}:00'}
+             for i in range(30)]
+NO.save_trash(app.trash)
+app.templates = [{'name': 'KR template', 'title': '', 'body': '', 'comments': '',
+                  'category': 'General',
+                  'checklist': [{'text': 'one', 'done': False},
+                                {'text': 'two', 'done': False}]}]
+app.geometry('1000x650')
+tk.Misc.focus_set = _kr_record
+try:
+    app.show_settings_page()
+    app.toggle_settings_panel('trash')
+    _kv_settle(20)
+    _kr_list, _kr_page = app._active_panel_canvas, app.settings_canvas
+    _kr_new, _kr_did = _kr_press(_kr_more(app.settings_page), app.settings_page, _kr_box)
+    check(f'Space on the Trash\'s "Show 5 more" puts the keyboard on the first '
+          f'row it drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, _kr_list) and _kv_in_view(_kr_new, _kr_page))
+    # The counter a closing popup reads: a left click is a click too.
+    _kr_heading = find_widget(app.settings_page, tk.Label, 'Recently deleted')
+    _kr_was = app._pointer_presses
+    if _kr_heading is not None:
+        _kr_heading.event_generate('<ButtonPress-1>', x=2, y=2)
+        _kr_heading.event_generate('<ButtonRelease-1>', x=2, y=2)
+        _kv_settle(2)
+    check(f'a left click is counted as a click ({_kr_was} -> {app._pointer_presses})',
+          _kr_heading is not None and app._pointer_presses == _kr_was + 1)
+    app.toggle_settings_panel('duplicates')
+    _kv_settle(20)
+    _kr_list = app._active_panel_canvas
+    # A click straight after the key put the keyboard where it wanted.
+    _kr_heading = find_widget(app.settings_page, tk.Label, 'Duplicates')
+    _kr_new, _kr_did = _kr_press(_kr_more(app.settings_page), app.settings_page,
+                                 _kr_box, click_after=_kr_heading)
+    check(f'...and a click straight after Space on "Show more" keeps the keyboard '
+          f'out of the list ({_kr_did})', _kr_new is not None and not any(
+              str(w).startswith(str(_kr_list)) for w in _kr_did))
+    app.toggle_settings_panel('duplicates')
+    _kv_settle(20)
+    _kr_list = app._active_panel_canvas
+    _kr_new, _kr_did = _kr_press(_kr_more(app.settings_page), app.settings_page, _kr_box)
+    check(f'Space on Duplicates\' "Show 2 more groups" puts the keyboard on the '
+          f'first copy it drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, _kr_list))
+    app.toggle_settings_panel('templates')
+    _kv_settle(20)
+    app._edit_template(app.templates[0], redraw=lambda: None)
+    _kv_settle(10)
+    _kr_ed = app._mini_popup
+    _kr_tick = next((w for w in _kr_all(_kr_ed) if isinstance(w, tk.Checkbutton)), None)
+    _kr_new, _kr_did = _kr_press(_kr_tick, _kr_ed, _kr_box)
+    # The first item's box is the first box drawn again.
+    check(f'Space on a template checklist\'s tick box, which draws the list again, '
+          f'leaves the keyboard on that item\'s new box ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_tick is not None and _kr_new is not None and _kr_did[-1:] == [_kr_new])
+    app._dismiss_mini_popup()
+    _kv_settle()
+    app.hide_settings_page()
+    app.toggle_share_panel()
+    _kv_settle(20)
+    _kr_share = app._share_checklist_canvas
+    _kr_new, _kr_did = _kr_press(_kr_more(_kr_share), _kr_share, _kr_box)
+    check(f'Space on the Share list\'s "Show 54 more" puts the keyboard on the '
+          f'first box it drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, _kr_share))
+    app.toggle_share_panel()
+    app.notebook.select(app.TAB_CALENDAR)
+    _kv_settle(10)
+    app._show_calendar_history()
+    _kv_settle(20)
+    _kr_rows = app._history_rows
+    _kr_new, _kr_did = _kr_press(_kr_more(_kr_rows), _kr_rows,
+                                 lambda w: getattr(w, '_key_press', None) is not None)
+    check(f'Space on History\'s "Show more" puts the keyboard on the first row it '
+          f'drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, app.cal_scroll_canvas))
+    app._hide_calendar_history()
+finally:
+    tk.Misc.focus_set = _kr_real_focus_set
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+app.trash, app.templates = [], []
+NO.save_trash(app.trash)
+app.geometry('1100x850')
+_kv_settle()
+
+# Text size, the app's own setting for reading, from the keyboard alone: it
+# was a frame and two labels Tab never stopped on.
+app.show_settings_page()
+app.toggle_settings_panel('appearance')
+_kv_settle(20)
+
+
+def _ks_dropdown_showing(text):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if (isinstance(c, tk.Frame) and getattr(c, '_key_press', None)
+                    and any(isinstance(k, tk.Label) and str(k.cget('text')) == text
+                            for k in c.winfo_children())):
+                found.append(c)
+            walk(c)
+    walk(app.settings_content)
+    return found[0] if found else None
+
+
+_ks_size = app.editor_font_size
+_ks_dd = _ks_dropdown_showing(str(_ks_size))
+_ks_chain, _ks_at = [], str(app._settings_nav_buttons['appearance'])
+for _ in range(40):
+    _ks_at = str(app.tk.call('tk_focusNext', _ks_at))
+    _ks_chain.append(_ks_at)
+check(f'Tab from Appearance in the menu reaches the Text size dropdown '
+      f'({len(_ks_chain)} stops looked at)',
+      _ks_dd is not None and str(_ks_dd) in _ks_chain)
+_ks_pop, _ks_rows = None, []
+if _ks_dd is not None and _take_focus(_ks_dd):
+    _ks_dd.event_generate('<space>')
+    _kv_settle()
+    _ks_pop = app._mini_popup
+    _ks_rows = [c for c in (_ks_pop.winfo_children()[0].winfo_children()
+                            if _ks_pop is not None and _ks_pop.winfo_exists() else [])
+                if getattr(c, '_key_press', None)]
+_ks_next = next((i + 1 for i, r in enumerate(_ks_rows)
+                 if r._key_current and i + 1 < len(_ks_rows)), None)
+if _ks_next is not None and _take_focus(_ks_rows[_ks_next]):
+    _ks_rows[_ks_next].event_generate('<Return>')
+    _kv_settle()
+check(f'Space opens it and Return on the next size chooses it '
+      f'({_ks_size} -> {app.editor_font_size})',
+      _ks_next is not None
+      and app.editor_font_size == NO.FONT_SIZES[NO.FONT_SIZES.index(_ks_size) + 1])
+app._set_editor_font(size=_ks_size)
+app.hide_settings_page()
+_kv_settle()
+
+# ---- KEYBOARD: every control a click acts on, Tab reaches ----
+# Canvases, labels and frames of labels bound only to the mouse were out of
+# Tab's reach: a category's rename, colour and delete, a template's edit,
+# the themes, Light/Dark, the alignment, the sidebar's arrow. Asked of every
+# page: a widget a click acts on is a Tab stop, inside one, or names the
+# Tab stop that does the same (_key_route). The tooltip's own click, which
+# only hides the tip, acts on nothing.
+_kb_hide = str(getattr(app, '_hide_tooltip_command', '')) or None
+
+
+def _kb_tab_chain():
+    seen, at = [], str(app)
+    for _ in range(800):
+        at = str(app.tk.call('tk_focusNext', at))
+        if not at or at in seen:
+            break
+        seen.append(at)
+    return set(seen)
+
+
+def _kb_clicked(w):
+    own = [str(w.bind(s)).strip() for s in ('<Button-1>', '<ButtonPress-1>',
+                                             '<ButtonRelease-1>') if w.bind(s)]
+    acts = [o for o in own if o.lstrip('+').strip() != _kb_hide]
+    return (bool(acts) or isinstance(w, (tk.Button, tk.Checkbutton, tk.Radiobutton))
+            or str(w.cget('cursor')) == 'hand2')
+
+
+def _kb_unreachable(top):
+    chain = _kb_tab_chain()
+    out = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Toplevel) or not c.winfo_viewable():
+                continue
+            if _kb_clicked(c):
+                route = getattr(c, '_key_route', None)
+                anc, ok = c, route is not None and str(route) in chain
+                while anc is not None and not ok:
+                    # The tab strip is a Tab stop, and no key of its own
+                    # reaches into a page: an attachment's name passed as
+                    # "inside" it while the keyboard could not open it.
+                    ok = str(anc) in chain and (
+                        anc is c or anc.winfo_class() != 'TNotebook')
+                    anc = anc.master
+                if not ok:
+                    text = str(c.cget('text'))[:20] if 'text' in c.keys() else ''
+                    out.append(f"{c.winfo_class()} {text!r}"
+                               f"{' ' + c._icon_kind if hasattr(c, '_icon_kind') else ''}")
+            walk(c)
+    walk(top)
+    return sorted(set(out))
+
+
+NO.CATEGORY_COLORS.setdefault('Work', '#7c5cff')
+app.templates = [{'name': 'KbTemplate', 'title': 'x', 'body': 'y', 'category': 'General'}]
+app.notes = [{'id': 801, 'title': 'KbNote', 'body': 'x', 'category': 'Work',
+              'date': '2026-10-02', 'created': '2026-01-01 00:00',
+              'updated': '2026-01-01 00:00', 'checklist': [],
+              'attachments': [{'filename': 'kb.pdf',
+                               'stored_as': '20261002120000000000_kb.pdf'},
+                              {'filename': 'kb.png',
+                               'stored_as': '20261002120000000000_kb.png'}]}]
+with open(os.path.join(NO.ATTACHMENTS_DIR, '20261002120000000000_kb.pdf'), 'wb') as f:
+    f.write(b'%PDF-1.4')
+import PIL.Image as _kb_Image
+_kb_Image.new('RGB', (40, 30), (200, 40, 40)).save(
+    os.path.join(NO.ATTACHMENTS_DIR, '20261002120000000000_kb.png'))
+app.trash = [{'id': 802, 'uid': 'kb-t', 'title': 'KbGone', 'body': 'x', 'category': 'General',
+              'deleted_at': '2026-10-20 10:00:00'}]
+app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+_kv_settle(10)
+_kb_where = {'the notes page': _kb_unreachable(app)}
+# An attachment opens from the keyboard as a click opens it: its name was a
+# label bound to the mouse alone, and only the remove ✕ beside it was a Tab
+# stop. A picture's preview takes the keyboard on its Close, Escape shuts
+# it, and the keyboard goes back to the row. The names are found where the
+# rows hold them, and the clicks below take those: a name that lost its keys
+# fails the key checks, and the click checks after them still run.
+_ka_rows = [w for w in app.attachments_frame.winfo_children()
+            for w in w.winfo_children() for w in w.winfo_children()
+            if isinstance(w, tk.Label)]
+_ka_names = [w for w in _ka_rows if getattr(w, '_key_press', None)]
+_ka_opened = []
+_ka_real_start = getattr(NO.os, 'startfile', None)
+NO.os.startfile = lambda p, *a, **k: _ka_opened.append(os.path.basename(p))
+_ka_preview = _ka_on_close = _ka_shut = _ka_back = False
+
+
+def _ka_holder():
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+try:
+    if len(_ka_names) == 2 and _take_focus(_ka_names[0]):
+        _ka_names[0].event_generate('<space>')
+        _kv_settle()
+    if len(_ka_names) == 2 and _take_focus(_ka_names[1]):
+        _ka_names[1].event_generate('<Return>')
+        _kv_settle()
+        _ka_pop = app._mini_popup
+        _ka_preview = _ka_pop is not None and bool(_ka_pop.winfo_exists())
+        _ka_held = _ka_holder()
+        _ka_on_close = (_ka_preview and isinstance(_ka_held, tk.Button)
+                        and str(_ka_held).startswith(str(_ka_pop) + '.')
+                        and 'Close' in str(_ka_held.cget('text')))
+        (_ka_held or app).event_generate('<Escape>')
+        _kv_settle()
+        _ka_shut = app._mini_popup is None
+        _ka_back = _ka_holder() is _ka_names[1]
+except tk.TclError as _ka_exc:
+    print(f'  (attachment keys raised {_ka_exc!r})')
+finally:
+    app._dismiss_mini_popup()
+    if _ka_real_start is None:
+        del NO.os.startfile
+    else:
+        NO.os.startfile = _ka_real_start
+check(f"Space on an attachment's name opens the file, as a click does "
+      f"({len(_ka_names)} names are Tab stops; opened {_ka_opened})",
+      len(_ka_names) == 2 and _ka_opened == ['20261002120000000000_kb.pdf'])
+check(f"...Return on a picture's shows it with the keyboard on Close ({_ka_preview}, "
+      f"{_ka_on_close}), Escape shuts it ({_ka_shut}), and the keyboard goes back "
+      f"to the row ({_ka_back})",
+      _ka_preview and _ka_on_close and _ka_shut and _ka_back)
+# A click's preview takes the keyboard too, and Tab stays on its two buttons:
+# a frame over the window, it left the caret in the note under it and Tab
+# walked there, so keys typed at a picture edited a note nobody could see.
+_kp_inside, _kp_pop, _kp_typed, _kp_open, _kp_back = [], None, None, False, False
+_kp_in_body = False
+try:
+    _kp_in_body = _take_focus(app.body_text)
+    app.body_text.tag_add('sel', '1.0', 'end-1c')
+    _qa_click(_ka_rows[1])
+    _kv_settle()
+    _kp_pop = app._mini_popup
+    # Generated on the window, so Tk sends each key where the keyboard is.
+    for _kp_key in ('<KeyPress-Delete>', '<KeyPress-BackSpace>', '<KeyPress-x>'):
+        app.event_generate(_kp_key)
+        _kv_settle(2)
+    _kp_typed = app.body_text.get('1.0', 'end-1c')
+    for _kp_key in ['<Tab>'] * 3 + ['<Shift-Tab>'] * 3:
+        app.event_generate(_kp_key)
+        _kv_settle(2)
+        _kp_h = _ka_holder()
+        _kp_inside.append(_kp_h is not None and _kp_pop is not None
+                          and str(_kp_h).startswith(str(_kp_pop) + '.'))
+    _kp_open = _kp_pop is not None and app._mini_popup is _kp_pop
+    app.event_generate('<Escape>')
+    _kv_settle()
+    _kp_back = _ka_holder() is app.body_text
+finally:
+    app._dismiss_mini_popup()
+app._flush_autosave()
+_kp_saved = (app.find_note(801) or {}).get('body')
+check(f"a picture's preview opened by a click takes the keyboard, so keys "
+      f"typed at it leave the note alone ({_kp_in_body}, body {_kp_typed!r}, "
+      f"saved {_kp_saved!r}), and Escape gives it back ({_kp_back})",
+      _kp_in_body and _kp_pop is not None and _kp_typed == 'x'
+      and _kp_saved == 'x' and _kp_back)
+check(f"...and Tab and Shift+Tab walk its two buttons only ({_kp_inside}, "
+      f"still open {_kp_open})", len(_kp_inside) == 6 and all(_kp_inside)
+      and _kp_open)
+# Enter presses the preview's button the keyboard is on, as Space
+# does and as a question's answers take it -- a Tk button answers Space alone,
+# and Enter on Close did nothing. And Open externally opens the picture: a
+# name reused below it in the same function made it open the overlay's name.
+# The keypad's Enter is asked where Tk can make one: Tk on Windows has no
+# keycode for KP_Enter (qa9's questions say the same).
+_kr_seen, _kr_opened = {}, []
+_kr_keys = [('<Return>', 0), ('<Return>', 1)]
+if not sys.platform.startswith('win'):
+    _kr_keys.insert(1, ('<KP_Enter>', 0))
+app._open_externally = lambda path, *a, **k: _kr_opened.append(os.path.basename(path))
+try:
+    for _kr_key, _kr_steps in _kr_keys:
+        _take_focus(app.body_text)
+        _qa_click(_ka_rows[1])
+        _kv_settle()
+        _kr_pop = app._mini_popup
+        for _ in range(_kr_steps):                      # Tab to Open externally
+            app.event_generate('<Tab>')
+            _kv_settle(2)
+        _kr_held = _ka_holder()
+        _kr_on = (str(_kr_held.cget('text'))
+                  if isinstance(_kr_held, tk.Button) and _kr_pop is not None
+                  and str(_kr_held).startswith(str(_kr_pop) + '.') else None)
+        if _kr_on is not None:
+            _kr_held.event_generate(_kr_key)
+            _kv_settle()
+        _kr_seen[f'{_kr_key} on {_kr_on}'] = (app._mini_popup is None,
+                                              _ka_holder() is app.body_text)
+finally:
+    del app._open_externally
+    app._dismiss_mini_popup()
+    _kv_settle()
+check(f"Enter (and the keypad's, off Windows) presses the preview's Close, and its "
+      f"Open externally opens the picture ((closed, keyboard back in the note): "
+      f"{_kr_seen}; opened {_kr_opened})",
+      _kr_seen == {f'{k} on {"Open externally" if s else "✕ Close"}': (True, True)
+                   for k, s in _kr_keys}
+      and _kr_opened == ['20261002120000000000_kb.png'])
+# Enter held on a picture's name presses it once. The preview gave
+# its Close the keyboard, Close took the next repeat and shut it, the name got
+# the keyboard back and the next one, and the preview opened and shut over and
+# over. A held key repeats as presses alone on Windows, as a release and a
+# press at one time on X11: both are sent, with times, as a held key's come.
+# And let go of, Enter presses again.
+_kh_built, _kh_seen = [], {}
+_kh_real_build = app._build_image_preview
+app._build_image_preview = lambda *a, **k: (_kh_built.append(1),
+                                            _kh_real_build(*a, **k))[1]
+# Its keys carry times, as a keyboard's do, and are this check's own: kept
+# out of the run's REAL KEYS (_qa_support), which would say someone typed.
+import _qa_support as _kh_support
+_kh_keys_kept = _kh_support.REAL_KEYS
+_kh_support.REAL_KEYS = [('the held-Enter check', 'its own keys')]
+
+
+def _kh_key(kind, when):
+    (_ka_holder() or app).event_generate(f'<Key{kind}-Return>', time=when)
+    _kv_settle(2)
+
+
+def _kh_on():
+    held, pop = _ka_holder(), app._mini_popup
+    if pop is not None and held is not None and str(held).startswith(str(pop) + '.'):
+        return str(held.cget('text'))
+    return 'the name' if held is _ka_rows[1] else str(held)[-24:]
+
+
+try:
+    for _kh_shape, _kh_t in (('presses alone', 100_000), ('release and press', 200_000)):
+        del _kh_built[:]
+        _take_focus(_ka_rows[1])
+        _kh_key('Press', _kh_t)
+        for _kh_i in range(10):
+            _kh_when = _kh_t + 500 + 33 * _kh_i
+            if _kh_shape == 'release and press':
+                _kh_key('Release', _kh_when)
+            _kh_key('Press', _kh_when)
+        _kh_key('Release', _kh_t + 900)
+        _kh_seen[f'held on the name, {_kh_shape}'] = (len(_kh_built), _kh_on())
+        _kh_key('Press', _kh_t + 1500)                 # pressed again: Close
+        for _kh_i in range(10):
+            _kh_when = _kh_t + 2000 + 33 * _kh_i
+            if _kh_shape == 'release and press':
+                _kh_key('Release', _kh_when)
+            _kh_key('Press', _kh_when)
+        _kh_key('Release', _kh_t + 2400)
+        _kh_seen[f'held on Close, {_kh_shape}'] = (len(_kh_built), _kh_on(),
+                                                   app._mini_popup is None)
+finally:
+    app._build_image_preview = _kh_real_build
+    app._dismiss_mini_popup()
+    _kv_settle()
+    _kh_support.REAL_KEYS = _kh_keys_kept
+check(f"Enter held on a picture's name opens its preview once, and held on its "
+      f"Close shuts it once ((previews built, the keyboard on): {_kh_seen})",
+      _kh_seen == {f'held on the name, {s}': (1, '✕ Close') for s in
+                   ('presses alone', 'release and press')}
+      | {f'held on Close, {s}': (1, 'the name', True) for s in
+         ('presses alone', 'release and press')})
+# Ctrl+F and Ctrl+N gave the keyboard to a box under the preview,
+# left open over it, and the keys went into a note nobody could see. The
+# shortcut closes it, as a click outside does. Ctrl+N last: it clears the note.
+_ks_seen = {}
+try:
+    for _ks_key, _ks_box in (('<Control-f>', lambda: getattr(app, '_find_entry', None)),
+                             ('<Control-n>', lambda: app.title_entry)):
+        _take_focus(app.body_text)
+        _qa_click(_ka_rows[1])
+        _kv_settle()
+        _ks_pop, _ks_held = app._mini_popup, _ka_holder()
+        _ks_ready = (_ks_pop is not None and _ks_held is not None
+                     and str(_ks_held).startswith(str(_ks_pop) + '.'))
+        app.event_generate(_ks_key)
+        _kv_settle()
+        _ks_seen[_ks_key] = (_ks_ready, app._mini_popup is None,
+                             _ka_holder() is _ks_box())
+        app._close_find()
+        _kv_settle()
+finally:
+    app._dismiss_mini_popup()
+app.open_note_in_tab(app.find_note(801))
+_kv_settle(6)
+check(f"Ctrl+F and Ctrl+N close a picture's preview before they give the keyboard "
+      f"to the box under it ((preview had it, closed, in the box): {_ks_seen})",
+      len(_ks_seen) == 2 and all(v == (True, True, True) for v in _ks_seen.values()))
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 10
+app.render_calendar()
+_kv_settle(10)
+app.open_day_popup('2026-10-02')
+_kv_settle(10)
+_kb_where['the calendar, a day open'] = _kb_unreachable(app)
+app._toggle_calendar_history()
+_kv_settle(10)
+_kb_where['the History register'] = _kb_unreachable(app)
+app._toggle_calendar_history()
+app.notebook.select(app.TAB_NOTES)
+app.show_settings_page()
+for _kb_key, _kb_label, _b, _e in app.SETTINGS_SECTIONS:
+    app.toggle_settings_panel(_kb_key)
+    _kv_settle(6)
+    _kb_where['Settings, ' + _kb_label] = _kb_unreachable(app.settings_page)
+_kb_missing = {k: v for k, v in _kb_where.items() if v}
+check(f'every control a click acts on, on every page, is a Tab stop or inside one '
+      f'({len(_kb_where)} pages; out of reach: {_kb_missing})', not _kb_missing)
+
+# The drawn ones press from the keyboard too, and the keyboard stays where
+# a press that redraws the list put it back.
+app.toggle_settings_panel('categories')
+_kv_settle(10)
+
+
+def _kb_icons(kind):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if getattr(c, '_icon_kind', None) == kind and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    walk(app.settings_content)
+    return found
+
+
+_kb_renamed = []
+_kb_real_rename = app._show_inline_rename
+app._show_inline_rename = lambda anchor, current, on_save: _kb_renamed.append(current)
+try:
+    _kb_pencil = _kb_icons('pencil')
+    if _kb_pencil and _take_focus(_kb_pencil[0]):
+        _kb_pencil[0].event_generate('<space>')
+        _kv_settle()
+finally:
+    del app._show_inline_rename
+_kb_first = [k for k in NO.CATEGORY_COLORS if k != NO.PROTECTED_CATEGORY][:1]
+check(f'Space on a category\'s pencil renames it, as a click does ({_kb_renamed})',
+      _kb_first and _kb_renamed == _kb_first)
+app.toggle_settings_panel('appearance')
+_kv_settle(10)
+_kb_theme = app.theme_name
+_kb_ring = False
+
+
+def _kb_theme_tiles():
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Frame) and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    walk(app.theme_picker_frame)
+    return found
+
+
+_kb_tiles = _kb_theme_tiles()
+_kb_target = _kb_tiles[1] if len(_kb_tiles) > 1 else None
+if _kb_target is not None and _take_focus(_kb_target):
+    _kv_settle(2)       # its <FocusIn>, which Tk may hand over after the focus
+    _kb_ring = str(_kb_target.cget('bg')).lower() == app._focus_ring().lower()
+    _kb_target.event_generate('<Return>')
+    _kv_settle(10)
+_kb_after = _kb_theme_tiles()
+_kb_held = None
+try:
+    _kb_held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+except (KeyError, tk.TclError):
+    pass
+check(f'a theme tile is a Tab stop ringed in the keyboard\'s colour, and Return '
+      f'chooses it ({_kb_ring}, {_kb_theme} -> {app.theme_name})',
+      _kb_target is not None and _kb_ring and app.theme_name != _kb_theme)
+check(f'...and the keyboard is on that tile, drawn again in the new theme '
+      f'({_kb_held}; {[getattr(w, "_theme_name", None) for w in _kb_after[:2]]})',
+      len(_kb_after) > 1 and _kb_held is _kb_after[1])
+app.set_theme(_kb_theme)
+_kv_settle(6)
+_kb_mode = app.theme_name in NO.DARK_THEMES
+_kb_switch = app._settings_mode_buttons['light' if _kb_mode else 'dark']
+if _take_focus(_kb_switch):
+    _kb_switch.event_generate('<space>')
+    _kv_settle(6)
+check('Space on the Light/Dark switch flips the theme',
+      (app.theme_name in NO.DARK_THEMES) != _kb_mode)
+app.set_theme(_kb_theme)
+app.hide_settings_page()
+app.notes = []; app.trash = []; app.templates = []
+app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list()
+_kv_settle()
+
+# ---- KEYBOARD: the way out of the note, and what Text size promises ----
+# In the note body Tab types a tab, so the one way out is Tk's Ctrl+Tab --
+# and the page saying "Everything the keyboard can do" never named it.
+_kw_groups = dict((g[0], [c for c, _d in g[1]]) for g in app.SHORTCUT_GROUPS)
+check(f'the shortcuts page names, under Anywhere, the way out of the note and '
+      f'Escape ({_kw_groups.get("Anywhere")})',
+      'Ctrl+Tab  /  Ctrl+Shift+Tab' in _kw_groups.get('Anywhere', [])
+      and 'Escape' in _kw_groups.get('Anywhere', []))
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+_kv_settle()
+_kw_next = app.body_text.tk_focusNext()
+if _take_focus(app.body_text):
+    app.body_text.event_generate('<Control-Tab>')
+    _kv_settle()
+_kw_held = None
+try:
+    _kw_held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+except (KeyError, tk.TclError):
+    pass
+check(f'...and Ctrl+Tab does leave the note, for the control after it ({_kw_held})',
+      _kw_held is _kw_next and app.body_text.get('1.0', 'end-1c') == '')
+# A Tab pressed to leave the note typed a tab, and nothing said why (the
+# review panel): the first plain Tab into prose says Ctrl+Tab moves on, once
+# a run, and still types its tab; not Ctrl+Tab, nor a list line's indent.
+_th_said = []
+_th_real_say = app._say_by_the_box
+app._say_by_the_box = lambda box, text: (_th_said.append((box, text)),
+                                         _th_real_say(box, text))[1]
+app._ctrl_tab_said = False
+try:
+    app.new_note(); _kv_settle()
+    if _take_focus(app.body_text):
+        app.body_text.event_generate('<Control-Tab>'); _kv_settle()
+    _th_ctrl = list(_th_said)
+    app.new_note(); _kv_settle()
+    app.body_text.insert('1.0', '• milk')
+    if _take_focus(app.body_text):
+        app.body_text.mark_set('insert', '1.end')
+        app.body_text.event_generate('<Tab>'); _kv_settle()
+    _th_list = list(_th_said)
+    app.new_note(); _kv_settle()
+    app.body_text.insert('1.0', 'prose')
+    if _take_focus(app.body_text):
+        app.body_text.mark_set('insert', '1.end')
+        app.body_text.event_generate('<Tab>'); _kv_settle()
+        app.body_text.event_generate('<Tab>'); _kv_settle()
+    _th_body = (list(_th_said), app.body_text.get('1.0', 'end-1c'))
+    app._ctrl_tab_said = False
+    del _th_said[:]
+    if _take_focus(app.comments_text):
+        app.comments_text.event_generate('<Control-Tab>'); _kv_settle()
+    _th_comments_ctrl = list(_th_said)
+    if _take_focus(app.comments_text):
+        app.comments_text.event_generate('<Tab>'); _kv_settle()
+    _th_comments = (list(_th_said), app.comments_text.get('1.0', 'end-1c'))
+finally:
+    app._say_by_the_box = _th_real_say
+check(f'the first Tab typed into prose says how to move on, once, and types its '
+      f'tab ({_th_body})',
+      [(b, t) for b, t in _th_body[0]] == [(app.body_text, NO.NoteOrganizer.CTRL_TAB_WORDS)]
+      and _th_body[1] == 'prose\t\t'
+      and 'Ctrl+Tab moves on to the next control' in NO.NoteOrganizer.CTRL_TAB_WORDS)
+check(f"...but not at Ctrl+Tab, nor at a list line's indent ({_th_ctrl}; {_th_list})",
+      _th_ctrl == [] and _th_list == [])
+check(f'...and in the comments too, where Ctrl+Tab says nothing either '
+      f'({_th_comments_ctrl}; {_th_comments})',
+      _th_comments_ctrl == []
+      and [(b, t) for b, t in _th_comments[0]] == [(app.comments_text, NO.NoteOrganizer.CTRL_TAB_WORDS)]
+      and _th_comments[1] == '\t')
+app.comments_text.delete('1.0', 'end')
+app.new_note(); _kv_settle()
+# The body's own Tab and Shift+Tab matched a Control-held press first: on a
+# list line Ctrl+Tab indented and Ctrl+Shift+Tab outdented, and in prose
+# Ctrl+Shift+Tab did nothing at all.
+app.new_note()
+_kv_settle()
+app.body_text.insert('1.0', '• milk')
+_kw_prev = app.body_text.tk_focusPrev()
+_kw_next = app.body_text.tk_focusNext()
+_kw_paras = app.capture_editor_state().get('paragraphs')
+for _kw_key, _kw_want, _kw_way in (('<Control-Shift-Tab>', _kw_prev, 'before'),
+                                   ('<Control-Tab>', _kw_next, 'after')):
+    _kw_got = None
+    if _take_focus(app.body_text):
+        app.body_text.mark_set('insert', '1.end')
+        app.body_text.event_generate(_kw_key)
+        _kv_settle()
+        try:
+            _kw_got = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        except (KeyError, tk.TclError):
+            pass
+    check(f'...{_kw_key} from a list line leaves for the control {_kw_way} it, '
+          f'the line as it was ({_kw_got})',
+          _kw_got is _kw_want and app.body_text.get('1.0', 'end-1c') == '• milk'
+          and app.capture_editor_state().get('paragraphs') == _kw_paras)
+# A drawn table's open cell has Tab bindings of its own, and Tk matched
+# Ctrl+Tab to them as well: it moved a cell, and on the last one added a
+# row. From there too it leaves the note, the
+# cell's typing kept.
+app.notes = [NO.normalize_note({'id': 982, 'title': 'CtNote',
+                                'body': '| Item | Qty |\n| --- | --- |\n| cinnamon | 1 |'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(8)
+_ct_way = {'<Control-Tab>': app.body_text.tk_focusNext(),
+           '<Control-Shift-Tab>': app.body_text.tk_focusPrev()}
+_ct_got = {}
+for _ct_key in _ct_way:
+    _ct_grid = app._grid_at_line(1)
+    if _ct_grid is None:
+        break
+    app._open_cell_editor(_ct_grid, *max(_ct_grid['cells']), select=False)
+    _kv_settle(4)
+    _ct_entry = app._cell_editor['entry'] if app._cell_editor else None
+    if _ct_entry is not None and _take_focus(_ct_entry):
+        _ct_entry.insert('end', 's')
+        _ct_entry.event_generate(_ct_key)
+        _kv_settle()
+        try:
+            _ct_got[_ct_key] = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        except (KeyError, tk.TclError):
+            _ct_got[_ct_key] = None
+_ct_body = app.body_text.get('1.0', 'end-1c')
+for _ct_key, _ct_want in _ct_way.items():
+    check(f'...{_ct_key} from a table cell leaves the note too '
+          f'({_ct_got.get(_ct_key)} for {_ct_want})',
+          _ct_key in _ct_got and _ct_got[_ct_key] is _ct_want)
+check(f'...the table no longer grows a row on it, and the cell keeps its typing '
+      f'({_ct_body!r})',
+      len(_ct_body.strip('\n').split('\n')) == 3 and '1ss' in _ct_body)
+# The formatting four style an open cell, as the toolbar does; Tk's own Text
+# answered them there -- Ctrl+I put a tab over the selected words. The other
+# boxes of plain text swallow them.
+_ct_grid = app._grid_at_line(1)
+_ct_kept = None
+if _ct_grid is not None:
+    app._open_cell_editor(_ct_grid, 1, 0)
+    _kv_settle(4)
+    _ct_entry = app._cell_editor['entry'] if app._cell_editor else None
+    if _ct_entry is not None and _take_focus(_ct_entry):
+        _ct_entry.event_generate('<Control-i>')
+        _kv_settle()
+        _ct_kept = _ct_entry.get('1.0', 'end-1c')
+        app._commit_cell_editor()
+        _kv_settle()
+_ct_at = app.body_text.search('cinnamon', '1.0', 'end', elide=True)  # a drawn table's text is hidden
+check(f'...Ctrl+I in an open cell italicises its words and keeps them '
+      f'({_ct_kept!r}, {app.body_text.tag_names(_ct_at) if _ct_at else None})',
+      _ct_kept == 'cinnamon' and bool(_ct_at)
+      and any('italic' in t for t in app.body_text.tag_names(_ct_at)))
+app.comments_text.delete('1.0', 'end')
+app.comments_text.insert('1.0', 'pick up cinnamon')
+app.comments_text.tag_add('sel', '1.0', 'end-1c')
+# The keys pressed is part of the promise: a focus not taken pressed none,
+# and "the words unchanged" passed on nothing.
+_ct_pressed = _take_focus(app.comments_text)
+if _ct_pressed:
+    app.comments_text.event_generate('<Control-i>')
+    app.comments_text.event_generate('<Control-d>')
+    _kv_settle()
+check(f"...and in the comments box the four do nothing to the words "
+      f"({_ct_pressed}, {app.comments_text.get('1.0', 'end-1c')!r})",
+      _ct_pressed and app.comments_text.get('1.0', 'end-1c') == 'pick up cinnamon')
+app.comments_text.delete('1.0', 'end')
+# Tk's Entry kept edits of its own on Ctrl+D, Ctrl+K and Ctrl+T: in the
+# title, saved at once with no Undo, a letter, the line's rest, two letters
+# swapped.
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Buy milk today')
+app.title_entry.icursor(8)
+_ek_pressed = _take_focus(app.title_entry)
+if _ek_pressed:
+    for _ek in ('<Control-d>', '<Control-k>', '<Control-t>'):
+        app.title_entry.event_generate(_ek)
+    _kv_settle()
+check(f"...and in the title Ctrl+D, Ctrl+K and Ctrl+T leave the words as they "
+      f"were ({_ek_pressed}, {app.title_entry.get()!r})",
+      _ek_pressed and app.title_entry.get() == 'Buy milk today')
+# Ctrl+Tab leaves the note through Tk's own traversal, so what it lands on
+# is scrolled into sight as after any Tab; focus set by hand left it below
+# the fold.
+app.geometry('900x400'); app.update(); app.update_idletasks()
+app.editor_canvas.yview_moveto(0); app.update()
+_lv_target = app.body_text.tk_focusNext()
+_lv_hidden = _lv_target is not None and not app._in_sight(_lv_target)
+_lv_seen = False
+if _lv_hidden and _take_focus(app.body_text):
+    app.body_text.event_generate('<Control-Tab>')
+    _kv_settle()
+    _lv_seen = app._in_sight(_lv_target)
+check(f'Ctrl+Tab brings the control it lands on into sight '
+      f'({_lv_target}, out of sight before it: {_lv_hidden})',
+      _lv_hidden and _lv_seen)
+app.geometry('1100x850'); app.update()
+# Text size makes the notes bigger, not the rest of the app: its words say so.
+def _walk_all(w):
+    for c in w.winfo_children():
+        yield c
+        yield from _walk_all(c)
+
+
+app.show_settings_page()
+app.toggle_settings_panel('appearance')
+_kv_settle(6)
+_kw_hint = [str(w.cget('text')) for w in _walk_all(app.settings_content)
+            if isinstance(w, tk.Label) and str(w.cget('text')).startswith('Bigger text')]
+check(f'the Text size row promises bigger text in every note, not everywhere '
+      f'({_kw_hint})', _kw_hint == ['Bigger text in every note, without '
+                                    'reformatting a single one.'])
+app.hide_settings_page()
+_kv_settle()
+
+# ---- KEYBOARD: the Settings page scrolled from the keyboard ----
+# Keyboard shortcuts is labels alone, nothing to
+# Tab to, and four fifths of it lay below the fold with no key to reach it --
+# the page telling keyboard users how to use the keyboard.
+app.geometry('1100x750')
+app.show_settings_page()
+app.toggle_settings_panel('shortcuts')
+_kv_settle(10)
+_kp_page = app.settings_canvas
+_kp_nav = app._settings_nav_buttons.get('shortcuts')
+
+
+def _kp_key(widget, key):
+    """*key* on *widget*, the keyboard forced there first; the page's top."""
+    if widget is not None and _take_focus(widget):
+        widget.event_generate(key)
+        _kv_settle(2)
+    return _kp_page.yview()
+
+
+_kp_page.yview_moveto(0)
+_kv_settle(2)
+check(f'fixture: most of Keyboard shortcuts lies below the fold ({_kp_page.yview()})',
+      _kp_page.yview()[1] < 0.6)
+_kp_down = _kp_key(_kp_nav, '<Next>')[0]
+_kp_end = _kp_key(_kp_nav, '<End>')[1]
+_kp_home = _kp_key(_kp_nav, '<Home>')[0]
+_kp_arrow = _kp_key(_kp_nav, '<Down>')[0]
+check(f'with the keyboard on its menu entry, Page Down, End, Home and Down '
+      f'scroll the page ({_kp_down:.2f}, {_kp_end:.2f}, {_kp_home:.2f}, '
+      f'{_kp_arrow:.2f})',
+      _kp_down > 0.1 and _kp_end > 0.999 and _kp_home == 0.0
+      and 0.0 < _kp_arrow < _kp_down)
+_kp_groups = ' '.join(c for t, rows in app.SHORTCUT_GROUPS
+                      if t.startswith('Settings') for c, _d in rows)
+check(f'...and the page names them, in a Settings group ({_kp_groups!r})',
+      'Page Up' in _kp_groups and 'Page Down' in _kp_groups)
+# The keyboard in the menu follows the entry chosen by a click: a click does
+# not move it, and its ring stayed on General with Statistics marked.
+_kp_general = app._settings_nav_buttons.get('name')
+_kp_stats = app._settings_nav_buttons.get('statistics')
+if _take_focus(_kp_general):
+    _kp_stats.invoke()
+    _kv_settle(4)
+_kp_follow = _focus_settles_on(_kp_stats)
+check(f'a menu entry chosen by a click takes the keyboard from the entry it was on '
+      f'({app.focus_get()})',
+      _kp_follow)
+# ...and only a choice moves it: the menu is repainted at every theme change,
+# and the keyboard an arrow put on another entry stays there.
+_kp_moved = False
+if _take_focus(_kp_general):
+    app._recolor_settings_nav_icons()
+    _kp_moved = _focus_settles_on(_kp_stats, cap_s=1.0)
+check(f'...and a repaint of the menu leaves the keyboard on the entry it was on '
+      f'({app.focus_get()})',
+      not _kp_moved and app.focus_get() is _kp_general)
+app.toggle_settings_panel('shortcuts')
+_kv_settle(6)
+# In a box being typed in, End is the box's own. No section that runs past
+# the window holds one, so a box is put on this one for the question.
+_kp_box = tk.Entry(app.settings_shortcuts_panel)
+_kp_box.insert(0, 'typed')
+_kp_box.pack(before=app.settings_shortcuts_panel.winfo_children()[0])
+_kp_page.yview_moveto(0)
+_kv_settle(4)
+_kp_still = _kp_key(_kp_box, '<End>')[0]
+check(f'...but in a text box on the page, End stays the box\'s own (the page '
+      f'at {_kp_still}, the caret at {_kp_box.index("insert")})',
+      _kp_still == 0.0 and _kp_box.index('insert') == 5)
+_kp_box.destroy()
+app.hide_settings_page()
+app.geometry('1100x850')
+_kv_settle()
+
+
+# ---- KEYBOARD: a Tk button whose own press hides it ----
+# Tk's buttons hand the keyboard on after a press
+# that destroys them, and one that only HID itself kept it -- on a control no
+# longer on screen, no ring anywhere, Tab starting again from the window's
+# top. Share and Import's Close, the Trash's bulk delete, Settings and
+# Back to Notes.
+def _kh_space(button):
+    """Space on *button*, the keyboard forced there first: where it is after."""
+    if button is None:
+        return 'no button'
+    app._bring_into_sight(button)
+    _kv_settle(4)
+    if not _take_focus(button):
+        return (f'not taken (viewable {button.winfo_viewable()}, keyboard on '
+                f'{app.tk.call("focus", "-lastfor", app)})')
+    button.event_generate('<space>')
+    _kv_settle(15)
+    try:
+        held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        if held is button or not held.winfo_viewable():
+            return f'hidden {held.winfo_class()}'
+    except (KeyError, tk.TclError):
+        return 'nowhere'
+    return 'in sight'
+
+
+_kh_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+_kh = {}
+try:
+    app.geometry('1100x850')
+    app.notebook.select(app.TAB_NOTES)
+    app.notes = [NO.normalize_note({'id': 901, 'title': 'KhOne', 'body': 'x',
+                                    'date': '2026-10-02'}),
+                 NO.normalize_note({'id': 902, 'title': 'KhTwo', 'body': 'y'})]
+    app.trash = [{'id': 903 + _i, 'uid': f'kh-{_i}', 'title': f'KhGone{_i}',
+                  'body': 'x', 'category': 'General',
+                  'deleted_at': '2026-10-20 10:00:00'} for _i in range(3)]
+    app.save_notes(); NO.save_trash(app.trash)
+    app.refresh_note_list()
+    _kv_settle(6)
+    app.toggle_share_panel()
+    _kv_settle(6)
+    _kh['Share Close'] = _kh_space(find_btn_qa6(app.share_panel, 'Close'))
+    app.toggle_import_panel()
+    _kv_settle(6)
+    _kh['Import Close'] = _kh_space(find_btn_qa6(app.import_panel, 'Close'))
+    # The day's ✕ goes the same road. It was walked in a fresh app; here, this
+    # far into the script, its button would not take the keyboard to begin
+    # with (not viewable), for a reason the round did not find.
+    _kh['⚙ Settings'] = _kh_space(find_btn_qa6(app.sidebar, '⚙ Settings'))
+    app.toggle_settings_panel('trash')
+    _kv_settle(10)
+
+    def _kh_rows(w):
+        for c in w.winfo_children():
+            if getattr(c, '_trash_buttons', None):
+                yield c
+            else:
+                yield from _kh_rows(c)
+
+    for _kh_row in list(_kh_rows(app.settings_trash_panel))[:2]:
+        next(c for c in _kh_row.winfo_children()
+             if isinstance(c, tk.Checkbutton)).invoke()
+    _kv_settle(6)
+    _kh['the Trash\'s bulk delete'] = _kh_space(
+        find_btn_qa6(app.settings_trash_panel, 'Delete 2 selected permanently'))
+    _kh['Back to Notes'] = _kh_space(find_btn_qa6(app.settings_page, 'Back to Notes'))
+finally:
+    app.ask_yes_no = _kh_real_ask
+    if getattr(app, '_settings_open', False):
+        app.hide_settings_page()
+    if app._is_placed(app.share_panel) or app._is_placed(app.import_panel):
+        app.share_panel.pack_forget(); app.import_panel.pack_forget()
+check(f'a Tk button whose own press hides it hands the keyboard to a control '
+      f'in sight ({_kh})',
+      len(_kh) == 5 and all(v == 'in sight' for v in _kh.values()))
+check('...and the Trash\'s bulk delete did delete the two ticked',
+      len(app.trash) == 1)
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list()
+_kv_settle()
+
+# ---- KEYBOARD: Settings opened by a click, from the note ----
+# A click on ⚙ Settings takes no keyboard, which
+# stayed in the note body, out of sight. Page Down moved its caret instead of
+# the page, and Tab, letters and Backspace edited the note, which was saved.
+def _ks_holder():
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+app.geometry('1100x750')
+app.notebook.select(app.TAB_NOTES)
+app.notes = [NO.normalize_note({'id': 911, 'title': 'KsNote',
+                                'body': 'milk\neggs\nbread'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+_ks_in_body = _take_focus(app.body_text)
+app.body_text.mark_set('insert', 'end-1c')
+find_btn_qa6(app.sidebar, '⚙ Settings').invoke()      # a click: no keyboard
+_kv_settle(6)
+_ks_on_page = str(getattr(_ks_holder(), '_w', '')).startswith(str(app.settings_page) + '.')
+app.toggle_settings_panel('shortcuts')
+_kv_settle(10)
+app.settings_canvas.yview_moveto(0)
+_kv_settle(2)
+_ks_top = app.settings_canvas.yview()[0]
+# Generated on the window, so Tk sends each key where the keyboard is.
+for _ks_key in ('<Next>', '<Tab>', '<KeyPress-x>', '<KeyPress-BackSpace>'):
+    app.event_generate(_ks_key)
+    _kv_settle(2)
+_ks_scrolled = app.settings_canvas.yview()[0]
+_ks_body = app.body_text.get('1.0', 'end-1c')
+find_btn_qa6(app.settings_page, 'Back to Notes').invoke()
+_kv_settle(6)
+_ks_back = _ks_holder() is app.body_text
+app._flush_autosave()
+_ks_saved = (app.find_note(911) or {}).get('body')
+check(f'a click on Settings from the note brings the keyboard onto the page '
+      f'({_ks_in_body}, {_ks_on_page}): Page Down scrolls it ({_ks_top:.2f} -> '
+      f'{_ks_scrolled:.2f}) and no key reaches the hidden note ({_ks_body!r}, '
+      f'saved {_ks_saved!r})',
+      _ks_in_body and _ks_on_page and _ks_scrolled > _ks_top
+      and _ks_body == 'milk\neggs\nbread' and _ks_saved == 'milk\neggs\nbread')
+check(f'...and a click on Back to Notes gives the keyboard back to the note '
+      f'({_ks_holder()})', _ks_back)
+# A box out of sight is no box being typed in: whatever left the keyboard in
+# one, Page Down still reads the page on.
+_take_focus(app.body_text)
+app._keyboard_to = lambda target: None    # as if nothing had moved it
+app._keyboard_off_part = lambda held: None    # the put-away watcher neither
+try:
+    app.show_settings_page()
+finally:
+    del app._keyboard_to
+app.toggle_settings_panel('shortcuts')
+_kv_settle(10)
+app.settings_canvas.yview_moveto(0)
+_kv_settle(2)
+_ks_left = _ks_holder() is app.body_text
+app.event_generate('<Next>')
+_kv_settle(2)
+_ks_paged = app.settings_canvas.yview()[0]
+del app._keyboard_off_part
+app.hide_settings_page()
+_kv_settle(4)
+check(f'...and with the keyboard left in the hidden note, Page Down still '
+      f'scrolls the page ({_ks_left}, {_ks_paged:.2f})',
+      _ks_left and _ks_paged > 0)
+# The same for the note list, put away by a click on its arrow.
+_ks_list = _take_focus(app.canvas)
+_qa_click(app.sidebar_toggle)
+_kv_settle(6)
+_ks_arrow = _ks_holder() is app.sidebar_toggle and bool(app.sidebar_toggle.winfo_viewable())
+if app._sidebar_hidden:
+    app.toggle_sidebar()
+_kv_settle(4)
+check(f'a click on the sidebar\'s arrow with the keyboard on the note list '
+      f'brings it to the arrow ({_ks_list}, {_ks_holder()})', _ks_list and _ks_arrow)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
+# ---- THE TEMPLATE EDITOR'S TABLE PREVIEW SHORTENS A LONG CELL BY HALVES ----
+# A cell wider than its column was shortened a
+# letter at a time, the rest measured whole at each step, on every key typed
+# in the body: 2 s a key at 12 rows of 1,200 characters, minutes for one long
+# cell. Counted in measures asked of Tk, never in time.
+import tkinter.font as _tp_font
+_tp_cell = 'lorem ipsum ' * 500
+_tp_body = tk.Text(app)
+_tp_body.insert('1.0', '| Item | Notes |\n| --- | --- |\n| one | ' + _tp_cell + ' |')
+_tp_canvas = tk.Canvas(app)
+_tp_calls = [0]
+_tp_real_measure = _tp_font.Font.measure
+
+
+def _tp_count(self, *a, **k):
+    _tp_calls[0] += 1
+    return _tp_real_measure(self, *a, **k)
+
+
+_tp_font.Font.measure = _tp_count
+try:
+    app._measure_text_cache = {}        # the first drawing: nothing remembered
+    app._draw_template_table_preview(_tp_canvas, _tp_body)
+    _tp_first = _tp_calls[0]
+    app._draw_template_table_preview(_tp_canvas, _tp_body)
+    _tp_again = _tp_calls[0] - _tp_first
+finally:
+    _tp_font.Font.measure = _tp_real_measure
+_tp_shown = [_tp_canvas.itemcget(i, 'text') for i in _tp_canvas.find_all()
+             if _tp_canvas.type(i) == 'text'
+             and _tp_canvas.itemcget(i, 'text').startswith('lorem')]
+_tp_body.destroy(); _tp_canvas.destroy()
+check(f'the template preview shortens a {len(_tp_cell):,}-character cell in a few '
+      f'dozen measures, not one per letter ({_tp_first}, then {_tp_again} drawn '
+      f'again; shows {_tp_shown[0][:16] if _tp_shown else None!r}...)',
+      _tp_first <= 80 and _tp_again <= 4 and len(_tp_shown) == 1
+      and _tp_shown[0].endswith('…') and len(_tp_shown[0]) < 100
+      and _tp_cell.startswith(_tp_shown[0][:-1]))
+
+# ---- THE TEMPLATE EDITOR'S BOXES HAVE LIMITS OF THEIR OWN ----
+# The checklist's box took a paste of any length,
+# one item drawn as one label as tall as its text, and so did the template's
+# name and title. Each keeps a limit now, as the note's own title box does.
+def _tl_entries(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Entry):
+            yield c
+        yield from _tl_entries(c)
+
+
+_tl_told = []
+_tl_real_status, _tl_real_read = app.set_status, NO.clipboard.read_text
+app.set_status = lambda text, *a, **k: _tl_told.append(text)
+_tl_kept = {}
+try:
+    app._edit_template(None, lambda: None)
+    app.update()
+    _tl_pop = app._mini_popup
+    _tl_boxes = list(_tl_entries(_tl_pop)) if _tl_pop is not None else []
+    for _tl_box, _tl_limit in zip(_tl_boxes[:3], (app.TITLE_MAX_LEN, app.TITLE_MAX_LEN,
+                                                   NO.MAX_CHECKLIST_ITEM_CHARS)):
+        _tl_box.delete(0, 'end')
+        NO.clipboard.read_text = lambda n=_tl_limit + 1: 'q' * n
+        _tl_box.event_generate('<<Paste>>')           # a paste past the limit
+        _tl_whole = _tl_box.get()                     # shortened to fit
+        _tl_box.delete(0, 'end')
+        _tl_box.insert(0, 'q' * _tl_limit)            # one at the limit
+        _tl_box.insert('end', 'q')                    # and a key past it
+        _tl_kept[_tl_limit, len(_tl_kept)] = (len(_tl_whole), len(_tl_box.get()))
+    app.update()
+finally:
+    app.set_status, NO.clipboard.read_text = _tl_real_status, _tl_real_read
+    app._dismiss_mini_popup()
+    app.update()
+check(f'the template editor\'s name, title and checklist boxes shorten a paste '
+      f'past their limits, refuse a key past them, and say so ({_tl_kept}; '
+      f'{_tl_told[:4]})',
+      len(_tl_kept) == 3
+      and all(v == (k[0], k[0]) for k, v in _tl_kept.items())
+      and {f'Pasted text shortened: {what} can be up to {n:,} characters'
+           for what, n in (('a template name', app.TITLE_MAX_LEN),
+                           ('a note title', app.TITLE_MAX_LEN),
+                           ('a checklist item', NO.MAX_CHECKLIST_ITEM_CHARS))
+           } <= set(_tl_told)
+      and 'A checklist item can be up to 2,000 characters' in _tl_told)
+
+# ...and a template's item already longer keeps every word, its row drawn cut,
+# as a note's row is (qa1): a backup's 60,000 characters stood one label past
+# what X can draw.
+_tl_label = None
+try:
+    app._edit_template({'name': 'Long item', 'checklist': [
+        {'text': 'w ' * 30000, 'done': False}]}, lambda: None)
+    app.update()
+    _tl_texts = []
+
+    def _tl_labels(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label):
+                _tl_texts.append(c.cget('text'))
+            _tl_labels(c)
+
+    if app._mini_popup is not None:
+        _tl_labels(app._mini_popup)
+    _tl_label = max(_tl_texts, key=len, default='')
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f'the template editor draws a checklist item past the limit cut '
+      f'({len(_tl_label or "")} characters drawn)',
+      _tl_label is not None and _tl_label.endswith('…')
+      and len(_tl_label) <= NO.MAX_CHECKLIST_ITEM_CHARS + 1)
+
+# ---- A NAME KEPT WHOLE IS DRAWN ON ONE LINE, CUT ----
+# Save as template's name box took a pasted page,
+# and the picker and Settings > Templates drew a name whole -- 300 letters made
+# the picker wider than the screen, 5,000 passed X's limit and ended the app
+# at every visit. Names stay whole in the file; boxes keep the limit, and
+# rows and buttons draw one line, cut. Long enough to show it, short enough
+# that drawing them whole under a mutant does not end the process.
+_nm_long = 'Weekly meeting minutes ' * 13              # 299 characters
+_nm_lines = 'line\n' * 40
+
+
+def _tl_widgets(w, cls):
+    for c in w.winfo_children():
+        if isinstance(c, cls):
+            yield c
+        yield from _tl_widgets(c, cls)
+
+
+app.notes = [NO.normalize_note({'id': 951, 'title': 'NmNote', 'body': 'b'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+_nm_box = None
+_nm_told = []
+_nm_real_status, _nm_real_read = app.set_status, NO.clipboard.read_text
+try:
+    app.save_current_as_template()
+    app.update()
+    _nm_box = next(_tl_entries(app._mini_popup), None)
+    if _nm_box is not None:
+        _nm_box.delete(0, 'end')
+        NO.clipboard.read_text = lambda: 'p' * 5000
+        app.set_status = lambda text, *a, **k: _nm_told.append(text)
+        _nm_box.event_generate('<<Paste>>')           # a page pasted: shortened
+        _nm_box_len = len(_nm_box.get())
+finally:
+    app.set_status, NO.clipboard.read_text = _nm_real_status, _nm_real_read
+    app._dismiss_mini_popup()
+    app.update()
+check(f"Save as template's name box shortens a paste to the note title's "
+      f"{app.TITLE_MAX_LEN} ({_nm_box_len if _nm_box else None} kept; {_nm_told[:1]})",
+      _nm_box is not None and _nm_box_len == app.TITLE_MAX_LEN
+      and _nm_told[:1] == ['Pasted text shortened: a template name can be up '
+                           f'to {app.TITLE_MAX_LEN} characters'])
+
+# Opened from Settings, where the note's page and its status line
+# stand hidden, the template editor cut a paste without a word on screen; it
+# says so on a line of its own. And a paste is weighed with each line break
+# one character, as Tk's own paste puts it in: Windows' clipboard keeps CR LF,
+# so ten lines that fitted were cut and kept their CRs. The clipboard reads
+# here as the app reads Windows' (CR LF), Tk's own as Tk translates it.
+_lw_seen = {}
+_lw_real_read = NO.clipboard.read_text
+
+
+def _lw_paste(box, lines):
+    NO.clipboard.read_text = lambda: '\r\n'.join(lines)
+    app.clipboard_clear()
+    app.clipboard_append('\n'.join(lines))
+    box.delete(0, 'end')
+    box.event_generate('<<Paste>>')
+    _kv_settle(2)
+    return box.get()
+
+
+try:
+    app.show_settings_page()
+    app.toggle_settings_panel('templates')
+    _kv_settle(6)
+    app._edit_template(None, lambda: None)
+    _kv_settle(6)
+    _lw_pop = app._mini_popup
+    _lw_boxes = list(_tl_entries(_lw_pop))
+    _lw_seen['status line in sight'] = bool(app.status_lbl.winfo_viewable())
+    _lw_paste(_lw_boxes[0], ['Weekly review ' * 25])
+    _lw_seen['said in the editor'] = [
+        str(w.cget('text')) for w in _tl_widgets(_lw_pop, tk.Label)
+        if app._is_placed(w) and 'can be up to' in str(w.cget('text'))]
+    _lw_ten = _lw_paste(_lw_boxes[2], ['w' * 199] * 10)          # 1,999 in all
+    _lw_seen['ten lines that fit'] = (len(_lw_ten), _lw_ten.count('\r'))
+    _lw_eleven = _lw_paste(_lw_boxes[2], ['w' * 199] * 11)       # 2,199
+    _lw_seen['eleven lines, shortened'] = (len(_lw_eleven), _lw_eleven.count('\r'),
+                                           _lw_eleven.count('\n'))
+finally:
+    NO.clipboard.read_text = _lw_real_read
+    app._dismiss_mini_popup()
+    app.hide_settings_page()
+    app.notebook.select(app.TAB_NOTES)
+    _kv_settle(4)
+check(f"the template editor, opened from Settings, says in itself that a paste "
+      f"was shortened, and weighs a line break as one character ({_lw_seen})",
+      _lw_seen.get('status line in sight') is False
+      and _lw_seen.get('said in the editor') == [
+          'Pasted text shortened: a template name can be up to '
+          f'{app.TITLE_MAX_LEN} characters']
+      and _lw_seen.get('ten lines that fit') == (1999, 0)
+      and _lw_seen.get('eleven lines, shortened') == (NO.MAX_CHECKLIST_ITEM_CHARS, 0, 10))
+
+# On the note's page the status line stands at the foot of the
+# scrolled editor -- mapped, and far below the view at the window's own
+# sizes -- and a paste cut to fit the checklist's Add box or the title was
+# said there, where nobody saw it. Out of sight, it is said in a banner over
+# the window; in sight, on the line alone.
+_ns_seen = {}
+_ns_geo = app.geometry()
+_ns_real_read = NO.clipboard.read_text
+# The banners the paste raised, as asked for: an autosave's "Note created"
+# can stand on the banner a moment later, and is no answer about the paste.
+_ns_banners = []
+app._show_toast = lambda text, *a, **k: (
+    _ns_banners.append((text, k.get('kind'))),
+    NO.NoteOrganizer._show_toast(app, text, *a, **k))[1]
+
+
+def _ns_paste(box, text, read_text=True):
+    if read_text:
+        NO.clipboard.read_text = lambda: text
+    app.clipboard_clear()
+    app.clipboard_append(text)
+    box.delete(0, 'end')
+    del _ns_banners[:]
+    box.event_generate('<<Paste>>')
+    _kv_settle(3)
+    kept = len(box.get())
+    if box is app.title_entry:
+        box.delete(0, 'end')            # no note is made of it meanwhile
+    return kept, [t for t, kind in _ns_banners if kind == 'info']
+
+
+try:
+    app.geometry('900x600'); _kv_settle(6)
+    app.notebook.select(app.TAB_NOTES)
+    app.new_note(); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    _kv_settle(6)
+    app.editor_canvas.yview_moveto(0); _kv_settle(4)
+    _ns_seen['status line in sight'] = app._in_sight(app.status_lbl)
+    _ns_seen['Add box'] = _ns_paste(app.checklist_add_entry, 'x' * 2500)
+    _ns_seen['title'] = _ns_paste(app.title_entry, 'T' * 300, read_text=False)
+    app.editor_canvas.yview_moveto(1.0); _kv_settle(4)
+    _ns_seen['status line in sight, scrolled down'] = app._in_sight(app.status_lbl)
+    _ns_seen['Add box, the line in sight'] = _ns_paste(app.checklist_add_entry, 'x' * 2500)
+finally:
+    del app._show_toast
+    NO.clipboard.read_text = _ns_real_read
+    app.checklist_add_entry.delete(0, 'end')
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+    app.geometry(_ns_geo); _kv_settle(6)
+check(f"the note's page says a paste cut to fit where it is seen: in a banner "
+      f"while its status line is scrolled away, on the line alone in sight ({_ns_seen})",
+      _ns_seen.get('status line in sight') is False
+      and _ns_seen.get('Add box') == (
+          2000, ['Pasted text shortened: a checklist item can be up to 2,000 characters'])
+      and _ns_seen.get('title') == (200, ['Pasted title shortened to 200 characters'])
+      and _ns_seen.get('status line in sight, scrolled down') is True
+      and _ns_seen.get('Add box, the line in sight') == (2000, []))
+
+# While an Undo was on offer the banner stayed quiet "because the
+# words stay on the line" -- the line out of sight -- so a paste cut to fit
+# was said nowhere seen for the offer's eight seconds. The words stand on a
+# banner of their own beneath it, the offer untouched.
+_wb_seen = {}
+_wb_geo = app.geometry()
+_wb_real_read = NO.clipboard.read_text
+_wb_undone = []
+
+
+def _wb_state():
+    words = getattr(app, '_words_frame', None)
+    shown = words is not None and words.winfo_manager() == 'place'
+    app.update_idletasks()
+    return {'offer': (str(app.toast_lbl.cget('text')), app._toast_action is not None,
+                      app.toast_action_lbl.winfo_manager() == 'pack'),
+            'words': str(app._words_lbl.cget('text')) if shown else None,
+            'beneath': (shown and words.winfo_y()
+                        >= app.toast_frame.winfo_y() + app.toast_frame.winfo_height())}
+
+
+try:
+    app.geometry('900x600'); _kv_settle(6)
+    app.notebook.select(app.TAB_NOTES)
+    app.new_note(); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    _kv_settle(6)
+    app.editor_canvas.yview_moveto(0); _kv_settle(4)
+    _wb_seen['status line in sight'] = app._in_sight(app.status_lbl)
+    app._show_toast('Removed “milk”', action=lambda: _wb_undone.append(1))
+    _wb_seen['an Undo on offer'] = app._offer_on_banner()
+    NO.clipboard.read_text = lambda: 'x' * 2500
+    app.checklist_add_entry.delete(0, 'end')
+    app.checklist_add_entry.event_generate('<<Paste>>')
+    _kv_settle(3)
+    _wb_seen['Add box'] = (len(app.checklist_add_entry.get()), _wb_state())
+    app.clipboard_clear()
+    app.clipboard_append('T' * 300)
+    app.title_entry.delete(0, 'end')
+    app.title_entry.event_generate('<<Paste>>')
+    _kv_settle(3)
+    _wb_seen['title'] = (len(app.title_entry.get()), _wb_state())
+    app.title_entry.delete(0, 'end')     # no note is made of it meanwhile
+    app._run_toast_action()
+    _wb_seen['the Undo still taken'] = _wb_undone == [1]
+    # The offer gone, its words still beneath: the autosave's reassurance
+    # waits for them as it waits for words on the banner.
+    app._show_toast('Note updated', yield_to_action=True)
+    _wb_seen['Note updated after the Undo'] = app.toast_frame.winfo_manager() == 'place'
+    # ...and the next words go on the banner, the older ones beneath gone.
+    app.checklist_add_entry.delete(0, 'end')
+    app.checklist_add_entry.event_generate('<<Paste>>')
+    _kv_settle(3)
+    _wb_seen['no offer'] = _wb_state()
+finally:
+    NO.clipboard.read_text = _wb_real_read
+    app.checklist_add_entry.delete(0, 'end')
+    app._hide_toast()
+    app._hide_words_beneath()
+    app.geometry(_wb_geo); _kv_settle(6)
+_wb_offer = ('✓  Removed “milk”', True, True)
+check(f"a paste cut to fit while an Undo is on offer is said on a banner beneath it, "
+      f"the offer untouched ({_wb_seen})",
+      _wb_seen.get('status line in sight') is False
+      and _wb_seen.get('an Undo on offer') is True
+      and _wb_seen.get('Add box') == (2000, {
+          'offer': _wb_offer, 'beneath': True,
+          'words': 'i  Pasted text shortened: a checklist item can be up to 2,000 characters'})
+      and _wb_seen.get('title') == (200, {
+          'offer': _wb_offer, 'beneath': True,
+          'words': 'i  Pasted title shortened to 200 characters'})
+      and _wb_seen.get('the Undo still taken') is True
+      and _wb_seen.get('Note updated after the Undo') is False
+      and _wb_seen.get('no offer') == {
+          'offer': ('i  Pasted text shortened: a checklist item can be up to 2,000 '
+                    'characters', False, False),
+          'beneath': False, 'words': None})
+
+# ...and the autosave the title's paste sets off, half a second later, wrote
+# "Note updated" over that banner and "Auto-saved" over the line:
+# reassurance yields to the words, on the banner and on the line in sight.
+_wa_seen = {}
+_wa_geo = app.geometry()
+_wa_kept_notes = list(app.notes)
+_wa_paste = ' and ' + 'more words ' * 30
+
+
+def _wa_run(in_sight):
+    app.new_note(); _kv_settle(2)        # the last run's note left, as it stands
+    note = NO.normalize_note({'id': 4801, 'title': 'Groceries', 'body': 'b'})
+    app.notes = [note]; app.save_notes()
+    app.open_note_in_tab(note); _kv_settle(4)
+    app.editor_canvas.yview_moveto(1.0 if in_sight else 0); _kv_settle(4)
+    app._hide_toast()
+    app._hide_words_beneath()
+    app._box_words_until = 0
+    seen = {'status line in sight': app._in_sight(app.status_lbl)}
+    app.title_entry.icursor('end')
+    app.clipboard_clear()
+    app.clipboard_append(_wa_paste)
+    app.title_entry.event_generate('<<Paste>>')
+    app._autosave_now()                 # what Ctrl+V's release sets off
+    with open(NO.DATA_FILE, encoding='utf-8') as fh:
+        stored = next((n for n in _json6a.load(fh) if n.get('id') == 4801), {})
+    seen['saved'] = len(stored.get('title') or '')
+    seen['banner'] = (str(app.toast_lbl.cget('text'))
+                      if app.toast_frame.winfo_manager() == 'place' else None)
+    seen['line'] = str(app.status_lbl.cget('text'))
+    return seen
+
+
+try:
+    app.geometry('900x600'); _kv_settle(6)
+    app.notebook.select(app.TAB_NOTES)
+    _wa_seen['out of sight'] = _wa_run(False)
+    _wa_seen['in sight'] = _wa_run(True)
+finally:
+    app._hide_toast()
+    app.new_note(); _kv_settle(2)
+    app.notes = _wa_kept_notes; app.save_notes()
+    app.refresh_note_list()
+    app.geometry(_wa_geo); _kv_settle(6)
+_wa_words = 'Pasted title shortened to 200 characters'
+check(f"the autosave a title's paste sets off writes over neither the banner nor the "
+      f"line that say it was shortened ({_wa_seen})",
+      _wa_seen.get('out of sight') == {'status line in sight': False, 'saved': 200,
+                                       'banner': 'i  ' + _wa_words, 'line': _wa_words}
+      and _wa_seen.get('in sight', {}).get('status line in sight') is True
+      and _wa_seen['in sight'].get('saved') == 200
+      and _wa_seen['in sight'].get('line') == _wa_words)
+
+# ...and the hold ends once other words take the line. Kept by the clock alone,
+# it held "Auto-saved" back under words that had replaced the held ones (a day
+# opened within eight seconds of a cancelled import said nothing of its save).
+# Held long here, so only the hold's own rule can end it in time.
+_bh = {}
+try:
+    app._say_by_the_box(app.title_entry, 'Held words')
+    app._box_words_until = time.monotonic() + 600
+    app.set_status('Auto-saved', reassurance=True)
+    _bh['held'] = str(app.status_lbl.cget('text'))
+    app.set_status('Only this day: 12.10.2026')
+    app.set_status('Auto-saved 12.10.2026 only', reassurance=True)
+    _bh['after'] = str(app.status_lbl.cget('text'))
+finally:
+    app._box_words_until = 0
+    app._hide_toast()
+    app._hide_words_beneath()
+check(f'a hold keeps its own words from the autosave, and ends once other words take '
+      f'the line ({_bh})',
+      _bh == {'held': 'Held words', 'after': 'Auto-saved 12.10.2026 only'})
+
+# ...and once another note is opened under it: words about one note, a big
+# table's, were read as keeping the next note's own "Auto-saved" back until
+# their clock ran out. The note's opening words end the hold. Held long, as above.
+_bn = {}
+_bn_notes_was = app.notes
+try:
+    app.notes = [NO.normalize_note({'id': 981, 'uid': 'bn-hold-a', 'title': 'BnHoldA', 'body': 'a'}),
+                 NO.normalize_note({'id': 982, 'uid': 'bn-hold-b', 'title': 'BnHoldB', 'body': 'b'})]
+    app.save_notes()
+    app.open_note_in_tab(app.notes[0]); app.update()
+    app.set_status('Held words')
+    app._box_words_until = time.monotonic() + 600
+    app.open_note_in_tab(app.notes[1]); app.update()
+    app.set_status('Auto-saved', reassurance=True)
+    _bn['another note'] = str(app.status_lbl.cget('text'))
+    # A note whose table is too big to draw, opened: the words saying why it is
+    # its text are what the line says, not the note's dates written over them.
+    app.notes.append(NO.normalize_note({'id': 983, 'uid': 'bn-big', 'title': 'BnBig',
+                                        'body': '| A | B |\n| 1 | 2 |\n| 3 | 4 |\n| 5 | 6 |\nafter'}))
+    app.save_notes()
+    app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+    app.open_note_in_tab(app.notes[2]); app.update()
+    _bn['big table opened'] = str(app.status_lbl.cget('text'))
+finally:
+    app._box_words_until = 0
+    app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+    app.new_note(); app.update()
+    app.notes = _bn_notes_was
+    app.save_notes()
+check(f'a hold on the status line ends when another note is opened ({_bn})',
+      _bn.get('another note') == 'Auto-saved')
+check(f'a note opened with a table too big to draw says why it is shown as its text ({_bn})',
+      str(_bn.get('big table opened')).startswith('A table this large is shown as its text'))
+
+# ...and a title is weighed as it goes in, on one line: a line copied with its
+# line break, or Windows' CR LF, was "shortened" by the space it lost.
+_tw_told, _tw_kept = [], {}
+_tw_real_status = app.set_status
+try:
+    app.new_note(); _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _tw_told.append(text)
+    # (what the title held, where the caret was, what was pasted)
+    for _tw_was, _tw_at, _tw_paste in (
+            ('', 0, 'Shopping list\n'), ('', 0, 'Shopping list\r\n'),
+            ('', 0, 'Shopping  list'),
+            # ...and a paste's own spaces at its edges stay: str.split() took
+            # them, and two words ran together.
+            ('Buy milk', 4, 'fresh '), ('Buy milk', 3, ' fresh'),
+            ('Groceries', 9, ' and more\r\n')):
+        app.title_entry.delete(0, 'end')
+        app.title_entry.insert(0, _tw_was)
+        app.title_entry.icursor(_tw_at)
+        app.clipboard_clear()
+        app.clipboard_append(_tw_paste)
+        app.title_entry.event_generate('<<Paste>>')
+        _kv_settle(2)
+        _tw_kept[_tw_paste] = app.title_entry.get()
+finally:
+    app.set_status = _tw_real_status
+    app.title_entry.delete(0, 'end')
+check(f"a title pasted with its line break, or a double space, is not said to be "
+      f"shortened, and a paste keeps the spaces at its edges ({_tw_kept}; said {_tw_told})",
+      _tw_kept == {'Shopping list\n': 'Shopping list', 'Shopping list\r\n': 'Shopping list',
+                   'Shopping  list': 'Shopping  list', 'fresh ': 'Buy fresh milk',
+                   ' fresh': 'Buy fresh milk', ' and more\r\n': 'Groceries and more'}
+      and not [t for t in _tw_told if 'shortened' in t])
+
+# ...and the join takes time in proportion to the paste: "\s*" around a break
+# tried every place in a run of spaces, and 40,000 with no break in them froze
+# the window 5 s. Timed in this run against the same run ending in
+# a break, the quickest of three each; the sizes are fixed, never read from
+# the app.
+_tl_took = {'run': [], 'run ending in a break': []}
+_tl_kept, _tl_told = {}, []
+_tl_real_status = app.set_status
+try:
+    app.new_note(); _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _tl_told.append(text)
+    for _tl_i in range(3):
+        for _tl_name, _tl_paste in (('run', 'Plan' + ' ' * 30000 + 'end'),
+                                    ('run ending in a break', 'Plan' + ' ' * 30000 + '\nend')):
+            app.title_entry.delete(0, 'end')
+            app.clipboard_clear()
+            app.clipboard_append(_tl_paste)
+            _tl_t0 = time.perf_counter()
+            app.title_entry.event_generate('<<Paste>>')
+            _tl_took[_tl_name].append(time.perf_counter() - _tl_t0)
+            _tl_kept[_tl_name] = app.title_entry.get()
+            _kv_settle(1)
+finally:
+    app.set_status = _tl_real_status
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+_tl_run, _tl_break = min(_tl_took['run']), min(_tl_took['run ending in a break'])
+check(f"a title paste of 30,000 spaces with no break in them takes what the same run "
+      f"ending in a break takes ({_tl_run * 1000:.1f} ms against {_tl_break * 1000:.1f} ms)",
+      _tl_kept == {'run': 'Plan' + ' ' * 196, 'run ending in a break': 'Plan end'}
+      and _tl_run < 4 * _tl_break + 0.3)
+
+# ...reads no more of the clipboard than any paste reads (_cap_paste); and at
+# the cap, a paste whose only overflow is its own trailing space is not
+# called shortened. Words left out still are.
+_tc_kept, _tc_told = {}, {}
+_tc_real_status = app.set_status
+try:
+    app.new_note(); _kv_settle(4)
+    for _tc_name, _tc_was, _tc_paste in (
+            ('past the ceiling', '', 'Plan' + '\n' * 100_000 + 'tail'),
+            ('trailing space', 'x' * 195, 'fresh '),
+            ('words left out', 'x' * 195, 'fresh milk')):
+        _tc_told[_tc_name] = []
+        app.set_status = lambda text, *a, _n=_tc_name, **k: _tc_told[_n].append(text)
+        app.title_entry.delete(0, 'end')
+        app.title_entry.insert(0, _tc_was)
+        app.title_entry.icursor('end')
+        app.clipboard_clear()
+        app.clipboard_append(_tc_paste)
+        app.title_entry.event_generate('<<Paste>>')
+        _kv_settle(1)
+        _tc_kept[_tc_name] = app.title_entry.get()
+finally:
+    app.set_status = _tc_real_status
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+_tc_short = {name: any('shortened' in t for t in told) for name, told in _tc_told.items()}
+check(f"a title paste reads no further than the ceiling every paste keeps, and says "
+      f"it was cut ({_tc_kept.get('past the ceiling')!r}, "
+      f"said {_tc_told.get('past the ceiling')})",
+      _tc_kept.get('past the ceiling') == 'Plan' and _tc_short.get('past the ceiling'))
+check(f"at the title's cap, a paste that loses only its own trailing space is not "
+      f"called shortened, and one that loses words is ({_tc_short})",
+      _tc_kept.get('trailing space') == 'x' * 195 + 'fresh'
+      and _tc_kept.get('words left out') == 'x' * 195 + 'fresh'
+      and _tc_short == {'past the ceiling': True, 'trailing space': False,
+                        'words left out': True})
+
+# A title already past the cap -- a share code's, a backup's -- shortens: every
+# Backspace and Delete was refused as too long, and a paste over a selection
+# deleted it and then found no room, so the selected words went.
+_ol_seen, _ol_told = {}, []
+_ol_real_status = app.set_status
+app._autosave_now = lambda: None            # no note is made of it meanwhile
+try:
+    app.new_note(); _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _ol_told.append(text)
+    app.title_entry.delete(0, 'end')
+    app._insert_title('L' * 250)
+    app.title_entry.delete(249)                       # what Backspace asks
+    _ol_seen['a letter taken off the end'] = len(app.title_entry.get())
+    app.title_entry.selection_range(239, 249)
+    app.title_entry.delete('sel.first', 'sel.last')   # Delete over a selection
+    _ol_seen['ten selected, deleted'] = len(app.title_entry.get())
+    app.title_entry.insert('end', 'z')                # still past the cap: refused
+    _ol_seen['a key, still past the cap'] = len(app.title_entry.get())
+    app.title_entry.selection_range(200, 239)
+    app.title_entry.icursor(239)
+    app.clipboard_clear()
+    app.clipboard_append('abc')
+    _qa_fire(app.title_entry, '<<Paste>>')            # still past the cap without them
+    _kv_settle(2)
+    _ol_seen['a paste over too few'] = (len(app.title_entry.get()),
+                                        app.title_entry.selection_present())
+    app.title_entry.selection_range(190, 239)
+    app.title_entry.icursor(239)
+    _qa_fire(app.title_entry, '<<Paste>>')            # room for ten once they go
+    _kv_settle(2)
+    _ol_seen['a paste over enough'] = app.title_entry.get()[185:]
+finally:
+    app.set_status = _ol_real_status
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+check(f"a title past the cap shortens by Backspace and Delete, and a paste over a "
+      f"selection with no room for it keeps the selection ({_ol_seen}; said {_ol_told})",
+      _ol_seen == {'a letter taken off the end': 249, 'ten selected, deleted': 239,
+                   'a key, still past the cap': 239, 'a paste over too few': (239, True),
+                   'a paste over enough': 'LLLLLabc'}
+      and 'A note title can be up to 200 characters' in _ol_told)
+
+# ...and a middle-click is a paste too -- Tk binds it on Windows as well -- and
+# it went past every rule a paste keeps: the selection's line breaks into the
+# title, a checklist item past its limit refused whole, a hint left in front
+# of the words.
+_mc_seen, _mc_told = {}, []
+_mc_real_status = app.set_status
+_mc_source = tk.Text(app)
+
+
+def _mc_paste(box, primary, x=None):
+    _mc_source.delete('1.0', 'end')
+    _mc_source.insert('1.0', primary)
+    _mc_source.tag_add('sel', '1.0', 'end-1c')
+    app.tk.eval('set ::tk::Priv(mouseMoved) 0')
+    _qa_fire(box, '<<PasteSelection>>', x=box.winfo_width() - 4 if x is None else x, y=4)
+    _kv_settle(2)
+    return box.get()
+
+
+app._autosave_now = lambda: None
+try:
+    app.new_note(); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _mc_told.append(text)
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Shopping ')
+    _mc_seen['title, three lines'] = _mc_paste(app.title_entry, 'milk\neggs\nbread')
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'x' * 195)
+    _mc_got = _mc_paste(app.title_entry, 'fresh milk')     # where the pointer is
+    _mc_seen['title, at its cap'] = (len(_mc_got), _mc_got.replace('x', ''))
+    app.title_entry.delete(0, 'end')
+    app.tk.eval('set ::tk::Priv(mouseMoved) 1')
+    _qa_fire(app.title_entry, '<<PasteSelection>>', x=4, y=4)
+    _kv_settle(2)
+    _mc_seen['title, a drag that scrolled'] = app.title_entry.get()
+    app.tk.eval('set ::tk::Priv(mouseMoved) 0')
+    app.checklist_add_entry.delete(0, 'end')
+    _mc_seen['Add box, past its limit'] = len(_mc_paste(app.checklist_add_entry, 'x' * 2500))
+    app.checklist_add_entry.delete(0, 'end')
+    _mc_seen['Add box, a few words'] = _mc_paste(app.checklist_add_entry, 'eggs')
+    app.checklist_add_entry.delete(0, 'end')
+    for _mc_hint in ('Note title...', 'Search notes...'):
+        _mc_box = next(e for e, h in app._placeholders if h == _mc_hint)
+        app.focus_set()
+        _mc_box.show_hint()
+        _mc_seen[_mc_hint] = _mc_paste(_mc_box, 'Pasted', x=4)
+        _mc_box.delete(0, 'end')
+finally:
+    app.set_status = _mc_real_status
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    _mc_source.destroy()
+    app.title_entry.delete(0, 'end')
+    app.checklist_add_entry.delete(0, 'end')
+    app._clear_search()
+    app._hide_toast()
+    _kv_settle(2)
+check(f"a middle-click into the title or the checklist's Add box keeps the rules a "
+      f"paste keeps, and lands in a hint's place ({_mc_seen}; said {_mc_told})",
+      _mc_seen == {'title, three lines': 'Shopping milk eggs bread',
+                   'title, at its cap': (200, 'fresh'), 'title, a drag that scrolled': '',
+                   'Add box, past its limit': 2000, 'Add box, a few words': 'eggs',
+                   'Note title...': 'Pasted', 'Search notes...': 'Pasted'}
+      and 'Pasted title shortened to 200 characters' in _mc_told
+      and 'Pasted text shortened: a checklist item can be up to 2,000 characters'
+      in _mc_told)
+
+# ...and a limited box's paste over a selection keeps it when nothing fits: a
+# value past its limit, from a backup's template, lost the selection.
+_lb_box = tk.Entry(app)
+_lb_box.insert(0, 'v' * 15)
+app._limit_entry(_lb_box, 10, 'A test value')
+_lb_told = []
+_lb_real_status = app.set_status
+try:
+    app.set_status = lambda text, *a, **k: _lb_told.append(text)
+    _lb_box.selection_range(12, 15)
+    _lb_box.icursor(15)
+    app.clipboard_clear()
+    app.clipboard_append('abc')
+    _qa_fire(_lb_box, '<<Paste>>')
+    _kv_settle(2)
+    _lb_kept = (len(_lb_box.get()), _lb_box.selection_present())
+finally:
+    app.set_status = _lb_real_status
+    _lb_box.destroy()
+    app._hide_toast()
+check(f"a limited box's paste over a selection that leaves no room keeps the "
+      f"selection, and says why ({_lb_kept}; said {_lb_told})",
+      _lb_kept == (15, True) and 'A test value can be up to 10 characters' in _lb_told)
+
+# ...and says "shortened" only when words were left out, as the title does: a
+# paste whose only overflow was its own trailing space was said to be cut.
+_ls_seen = {}
+_ls_real_status = app.set_status
+try:
+    for _ls_paste in ('ab ', 'abc'):
+        _ls_box = tk.Entry(app)
+        _ls_box.insert(0, 'v' * 8)
+        app._limit_entry(_ls_box, 10, 'A test value')
+        _ls_told = []
+        app.set_status = lambda text, *a, **k: _ls_told.append(text)
+        _ls_box.icursor('end')
+        app.clipboard_clear()
+        app.clipboard_append(_ls_paste)
+        _qa_fire(_ls_box, '<<Paste>>')
+        _kv_settle(2)
+        _ls_seen[_ls_paste] = (_ls_box.get(), _ls_told)
+        _ls_box.destroy()
+finally:
+    app.set_status = _ls_real_status
+    app._hide_toast()
+check(f"a limited box says a paste was shortened only when words were left out, not "
+      f"its own trailing space ({_ls_seen})",
+      _ls_seen.get('ab ') == ('v' * 8 + 'ab', [])
+      and _ls_seen.get('abc', ('', []))[0] == 'v' * 8 + 'ab'
+      and 'Pasted text shortened: a test value can be up to 10 characters'
+      in _ls_seen.get('abc', ('', []))[1])
+
+# ...and an edit no key made in the title, the comments or the date -- the menu's
+# Cut -- is saved, and the title's count follows it: only a key's release set
+# either off, and a right-click Cut was saved when the note was left.
+_nk_seen = {}
+app._autosave_now = lambda: None
+try:
+    app.new_note(); _kv_settle(4)
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'x' * 180)
+    app._refresh_title_count()
+    _kv_settle(1)
+    for _nk_name, _nk_box, _nk_select in (
+            ('title', app.title_entry, lambda b: b.selection_range(0, 30)),
+            ('comments', app.comments_text, lambda b: (
+                b.insert('1.0', 'some words'), b.tag_add('sel', '1.0', '1.4'))),
+            ('date', app.date_entry, lambda b: (
+                b.delete(0, 'end'), b.insert(0, '17.10.2026'), b.selection_range(0, 3)))):
+        _nk_select(_nk_box)
+        app._cancel_pending_autosave()
+        _qa_fire(_nk_box, '<<Cut>>')
+        app.update_idletasks()
+        _nk_seen[_nk_name] = getattr(app, '_autosave_job', None) is not None
+    _nk_seen['title count'] = (len(app.title_entry.get()),
+                               bool(app.title_count_lbl.winfo_manager()))
+finally:
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    app.title_entry.delete(0, 'end')
+    app.comments_text.delete('1.0', 'end')
+    app.date_entry.delete(0, 'end')
+    app.new_note(); _kv_settle(2)
+check(f"a right-click Cut in the title, the comments or the date sets off the autosave, "
+      f"and the title's count follows it ({_nk_seen})",
+      _nk_seen == {'title': True, 'comments': True, 'date': True,
+                   'title count': (150, False)})
+
+# ...and the ceiling every paste keeps weighs a line break as one character,
+# as the note keeps it: Windows' clipboard holds CR LF, and 1,500 lines of 65
+# letters -- 98,999 characters in the note -- weighed 100,498, and the body
+# and the comments lost their ends with "Only the first 100,000 characters".
+_cr_seen, _cr_told = {}, []
+_cr_real = (NO.clipboard.read_text, NO.clipboard.read_html, app.show_info)
+_cr_lines = ['%04d ' % i + 'w' * 60 for i in range(1500)]
+try:
+    app.new_note(); _kv_settle(4)
+    # As the app reads Windows' clipboard (CR LF), and Tk's own as Tk
+    # translates it: a paste that fits is Tk's to make.
+    NO.clipboard.read_text = lambda: '\r\n'.join(_cr_lines)
+    NO.clipboard.read_html = lambda: None
+    app.clipboard_clear()
+    app.clipboard_append('\n'.join(_cr_lines))
+    app.show_info = lambda title, *a, **k: _cr_told.append(title)
+    for _cr_name, _cr_box in (('body', app.body_text), ('comments', app.comments_text)):
+        _cr_box.delete('1.0', 'end')
+        _take_focus(_cr_box)
+        _cr_box.event_generate('<<Paste>>')
+        _kv_settle(3)
+        _cr_kept = _cr_box.get('1.0', 'end-1c')
+        _cr_seen[_cr_name] = (len(_cr_kept), _cr_kept.count('\r'),
+                              _cr_kept.endswith(_cr_lines[-1]))
+        _cr_box.delete('1.0', 'end')
+finally:
+    NO.clipboard.read_text, NO.clipboard.read_html, app.show_info = _cr_real
+    _kv_settle(2)
+check(f"a paste of 1,500 lines kept in CR LF fits the ceiling as the note keeps "
+      f"it, whole, with nothing said ({_cr_seen}; said {_cr_told})",
+      _cr_seen == {'body': (98_999, 0, True), 'comments': (98_999, 0, True)}
+      and _cr_told == [])
+_nm_kept = list(app.templates)
+app.templates = [{'name': _nm_long, 'body': 'x'}, {'name': _nm_lines, 'body': 'y'}]
+_nm_picker = _nm_buttons = None
+try:
+    app.show_template_picker()
+    app.update()
+    _nm_pop = app._mini_popup
+    _nm_picker = _nm_pop.winfo_reqwidth()
+    _nm_buttons = [str(b.cget('text')) for b in _tl_widgets(_nm_pop, tk.Button)
+                   if '🧩' in str(b.cget('text'))]
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f"the template picker draws a long name cut, on one line, and stays "
+      f"narrower than the window ({_nm_picker} px; "
+      f"{[len(t) for t in _nm_buttons or []]} characters)",
+      _nm_picker is not None and _nm_picker < app.winfo_width()
+      and len(_nm_buttons) == 2
+      and all('\n' not in t and t.endswith('…') for t in _nm_buttons))
+app.show_settings_page()
+app.toggle_settings_panel('templates')
+_kv_settle(10)
+_nm_rows = [c for c in _tl_widgets(app.settings_page, tk.Label)
+            if str(c.cget('text')).startswith(('Weekly', 'line'))]
+_nm_line_h = app._cal_font(('Segoe UI', 10, 'bold'))[1]
+check(f"...and so does Settings > Templates "
+      f"({[(len(str(r.cget('text'))), r.winfo_reqheight()) for r in _nm_rows]}), "
+      f"each name still whole in the file",
+      len(_nm_rows) == 2
+      and all('\n' not in str(r.cget('text'))
+              and r.winfo_reqheight() < 3 * _nm_line_h for r in _nm_rows)
+      and [t['name'] for t in app.templates] == [_nm_long, _nm_lines])
+app.hide_settings_page()
+app.templates = _nm_kept
+_kv_settle(4)
+# A question is as tall as its message, and quoted a title kept whole: one of
+# 300,000 letters or 3,000 lines passed X's limit. It shows the start and the
+# end, the question kept. The probe's own message passes the limits without
+# passing X's, so a mutant drawing it whole fails here instead of ending.
+from noteorganizer.ui.dialogs import (message_shown as _nm_message_shown,
+                                      MESSAGE_SHOWN_CHARS as _nm_chars)
+_nm_msg = 'Delete “' + 'word ' * 4000 + '”?\n' + 'more\n' * 400 + 'Really delete it?'
+_nm_seen = {}
+
+
+def _nm_read_and_answer():
+    _nm_stack = getattr(app, '_asking_dialogs', None) or []
+    if _nm_stack:
+        _nm_labels = list(_tl_widgets(_nm_stack[-1]['border'], tk.Label))
+        _nm_seen['text'] = max((str(l.cget('text')) for l in _nm_labels), key=len)
+        _nm_stack[-1]['buttons'][0].invoke()
+
+
+app.after(300, _nm_read_and_answer)
+# The class's own question, and its own wait: earlier checks left stubs of
+# both on the app.
+_nm_wait = app.__dict__.pop('wait_variable', None)
+try:
+    NO.NoteOrganizer._themed_dialog(app, 'A long one', _nm_msg,
+                                    buttons=[('No', False), ('Yes', True)])
+finally:
+    if _nm_wait is not None:
+        app.wait_variable = _nm_wait
+_kv_settle(4)
+_nm_text = _nm_seen.get('text', '')
+check(f"a question's message past the limits shows its start and its end, the "
+      f"question kept ({len(_nm_text)} of {len(_nm_msg)} characters, "
+      f"{_nm_text.count(chr(10)) + 1} lines)",
+      len(_nm_text) <= _nm_chars + 3 and _nm_text.count('\n') <= 301
+      and _nm_text.startswith('Delete “word') and _nm_text.endswith('Really delete it?')
+      and len(_nm_message_shown('w' * 300000)) <= _nm_chars + 3)
+app.set_status('Saved “' + 'line\n' * 300 + '”')
+check(f"the status line quotes a name of many lines on one line "
+      f"({app.status_lbl.cget('text')[:30]!r}...)",
+      '\n' not in str(app.status_lbl.cget('text')))
+app.set_status('')
+
+# ---- A ROW'S BUTTONS KEEP THEIR ROOM ----
+# Tk's packer serves widgets in the order they were packed, and a
+# name packed before its row's buttons took the room they needed: in
+# Settings > Templates a 50-letter name pushed the pencil out, 80 the bin
+# too, and the same in Categories (80 letters allowed) and the statistics.
+def _rb_inside(w, row):
+    return (w is not None and w.winfo_ismapped() and w.winfo_width() > 5
+            and w.winfo_x() + w.winfo_width() <= row.winfo_width())
+
+
+# As long as a category may be, in wide letters: an ordinary 64 left the row
+# room enough on Windows' narrower font, and the check passed with the fix out.
+_rb_cat = ('Quarterly ' + 'W' * 80)[:80]
+_rb_kept_tpl = list(app.templates)
+app.templates = [{'name': 'Onboarding checklist for new staff in the north office, '
+                          'with every form they need on day one', 'body': 'x'}]
+NO.CATEGORY_COLORS[_rb_cat] = '#5b8def'
+app.notes = [NO.normalize_note({'id': 961, 'title': 'RbNote', 'body': 'b',
+                                'category': _rb_cat})]
+app.save_notes()
+_rb_seen, _rb_where, _rb_room = {}, None, None
+# The name drawn whole must want more than its row, or the check proves nothing.
+_rb_need = app._cal_font(('Segoe UI', 10, 'bold'))[0].measure(_rb_cat)
+try:
+    app.show_settings_page()
+    # The names drawn as they fit: their first letters always show.
+    for _rb_section, _rb_word in (('templates', 'Onbo'), ('categories', 'Quar')):
+        app.toggle_settings_panel(_rb_section)
+        _kv_settle(10)
+        _rb_panel = getattr(app, 'settings_%s_panel' % _rb_section)
+        for _rb_icon in _tl_widgets(_rb_panel, tk.Widget):
+            _rb_kind = getattr(_rb_icon, '_icon_kind', None)
+            _rb_row = _rb_icon.master
+            _rb_name = ' '.join(str(c.cget('text')) for c in _rb_row.winfo_children()
+                                if isinstance(c, tk.Label))
+            if _rb_kind in ('pencil', 'trash') and _rb_word in _rb_name:
+                _rb_seen[_rb_section, _rb_kind] = _rb_inside(_rb_icon, _rb_row)
+                if _rb_section == 'categories':
+                    _rb_room = _rb_row.winfo_width()
+    app.toggle_settings_panel('statistics')
+    _kv_settle(10)
+    _rb_pill = next((l.master for l in _tl_widgets(app.settings_statistics_panel, tk.Label)
+                     if str(l.cget('text')).startswith('Quar')), None)
+    _rb_count = next((l for l in (_rb_pill.winfo_children() if _rb_pill else ())
+                      if isinstance(l, tk.Label) and str(l.cget('text')).isdigit()), None)
+    _rb_seen['statistics', 'count'] = _rb_inside(_rb_count, _rb_pill)
+    _rb_where = ((_rb_count.winfo_ismapped(), _rb_count.winfo_x(), _rb_count.winfo_width(),
+                  _rb_pill.winfo_width()) if _rb_count is not None else
+                 [str(l.cget('text'))[:14] for l in _tl_widgets(
+                     app.settings_statistics_panel, tk.Label)][:60])
+finally:
+    app.hide_settings_page()
+    app.templates = _rb_kept_tpl
+    NO.CATEGORY_COLORS.pop(_rb_cat, None)
+    app.notes = []
+    app.save_notes()
+    _kv_settle(4)
+check(f"a long name leaves its row's buttons in the row: the template's pencil "
+      f"and bin, the category's, and the statistics' count ({_rb_seen}; {_rb_where}; "
+      f"the category's name {_rb_need}px for a {_rb_room}px row)",
+      len(_rb_seen) == 5 and all(_rb_seen.values())
+      and _rb_room is not None and _rb_need > _rb_room)
+
+# ---- KEYBOARD: a part put away by a click hands the keyboard on ----
+# A click takes no keyboard, so folding the checklist with the caret
+# in its Add box left it there: x and Return added an item nobody saw, and it
+# was saved. The same for the calculator, a Settings section left, the import
+# panel closed. One watcher hands the keyboard on from any part put away.
+def _pa_holder():
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+def _pa_click(button):
+    """A click on a Tk button: the press the app counts, then its command."""
+    _qa_fire(button, '<ButtonPress-1>')
+    button.invoke()
+    _kv_settle(6)
+
+
+_pa_seen = {}
+app.notes = [NO.normalize_note({'id': 971, 'title': 'PaNote', 'body': 'milk',
+                                'checklist': [{'text': 'eggs', 'done': False}]})]
+app.save_notes()
+app.refresh_note_list()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+if not app._checklist_open:
+    app.toggle_checklist_section()
+_kv_settle(4)
+_pa_took = _take_focus(app.checklist_add_entry)
+_pa_click(app.checklist_btn)                       # the bar folds the list
+_pa_h = _pa_holder()
+_pa_seen['checklist'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+for _pa_key in ('<KeyPress-x>', '<KeyPress-Return>'):
+    app.event_generate(_pa_key)                    # Tk sends it where the keyboard is
+    _kv_settle(2)
+app._flush_autosave()
+_pa_items = [i['text'] for i in (app.find_note(971) or {}).get('checklist', [])]
+if not app._calculator_open:
+    app.toggle_calculator_section()
+_kv_settle(4)
+_pa_took = _take_focus(app.calculator_display)
+_pa_click(app.calculator_btn)                      # the calculator folds
+_pa_h = _pa_holder()
+_pa_seen['calculator'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.toggle_import_panel()
+_kv_settle(4)
+_pa_took = _take_focus(app.import_box)
+app.toggle_import_panel()                          # its button, pressed again
+_kv_settle(6)
+_pa_h = _pa_holder()
+_pa_seen['import'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.show_settings_page()
+app.toggle_settings_panel('categories')
+_kv_settle(10)
+_pa_new = next((e for e in _tl_widgets(app.settings_categories_panel, tk.Entry)), None)
+_pa_took = _pa_new is not None and _take_focus(_pa_new)
+if _pa_new is not None:
+    _pa_new.insert(0, 'Zed')
+_pa_click(app._settings_nav_buttons['about'])      # another section
+_pa_h = _pa_holder()
+_pa_seen['settings'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.event_generate('<KeyPress-Return>')
+_kv_settle(4)
+_pa_zed = 'Zed' in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.pop('Zed', None)
+app.hide_settings_page()
+_kv_settle(4)
+check(f"a click that puts away the part holding the keyboard hands it to "
+      f"something in sight: the checklist, the calculator, the import panel, a "
+      f"Settings section ({_pa_seen})",
+      len(_pa_seen) == 4 and all(a and b for a, b in _pa_seen.values()))
+check(f"...so keys typed after it change nothing saved (checklist {_pa_items}, "
+      f"a category added: {_pa_zed})", _pa_items == ['eggs'] and not _pa_zed)
+# Settings from the find box comes back to the note: the find bar put away
+# first parked the keyboard on the window, and nothing was given back.
+app._open_find()
+_kv_settle(4)
+_pa_in_find = _take_focus(app._find_entry)
+find_btn_qa6(app.sidebar, '⚙ Settings').invoke()
+_kv_settle(6)
+find_btn_qa6(app.settings_page, 'Back to Notes').invoke()
+_kv_settle(6)
+check(f"Settings opened from the find box gives the keyboard back to the note "
+      f"({_pa_in_find}, {_pa_holder()})", _pa_in_find and _pa_holder() is app.body_text)
+# A tab left with the keyboard on the note list, a Canvas: only a box was
+# moved off, and Alt+Up reordered notes behind the Calendar.
+_pa_on_list = _take_focus(app.canvas)
+app.notebook.select(app.TAB_CALENDAR)
+_kv_settle(8)
+_pa_h = _pa_holder()
+check(f"a tab left with the keyboard on the note list takes it off the list "
+      f"({_pa_on_list}, {_pa_h})",
+      _pa_on_list and _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.notebook.select(app.TAB_NOTES)
+_kv_settle(4)
+# A toolbar re-dealt by a resize read as put away -- pack maps a
+# button laid out again once its row's new size settles -- and the keyboard
+# went from B into the note. The case is the watcher looking at B unmapped.
+_rb_bold = app._fmt_buttons['bold']
+_rb_looked, _rb_rows = [], []
+_rb_real_off = app._keyboard_off_part
+app._keyboard_off_part = lambda held: (_rb_looked.append(
+    (held is _rb_bold, bool(held.winfo_viewable()))), _rb_real_off(held))[1]
+try:
+    _rb_took = _take_focus(_rb_bold)
+    _rb_need = sum(w.winfo_reqwidth() + p[0] + p[1]
+                   for w, p, *_r in app._fmt_bar_items)
+    for _rb_width in (_rb_need + 50, _rb_need // 2, _rb_need + 50):
+        app._reflow_format_bar(_rb_width)              # one row, two, one again
+        _rb_rows.append(sum(app._fmt_rows_used))
+        _kv_settle(6)
+    _rb_h = _pa_holder()
+finally:
+    del app._keyboard_off_part
+    app._reflow_format_bar()
+    _kv_settle(4)
+check(f"a toolbar re-dealt by a resize keeps the keyboard on B (rows {_rb_rows}; "
+      f"looked at B unmapped: {(True, False) in _rb_looked}; on {_rb_h})",
+      _rb_took and len(_rb_rows) == 3 and _rb_rows[0] == _rb_rows[2] == 1
+      and _rb_rows[1] > 1 and (True, False) in _rb_looked
+      and _rb_h is _rb_bold)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
+# ---- KEYBOARD: a table cell's menu ----
+# Every row, column and merge command of a table lived in a
+# right-click alone, and its two palettes closed at the first Tab with the
+# keyboard on nothing. Shift+F10 in a cell opens the cell's menu there, a
+# palette it opens takes the keyboard and keeps it, and the keyboard comes
+# back into the cell once they are gone.
+def _tm_labels(menu):
+    out = []
+    for i in range((menu.index('end') or -1) + 1):
+        if menu.type(i) in ('command', 'cascade'):
+            out.append(str(menu.entrycget(i, 'label')))
+        if menu.type(i) == 'cascade':
+            out += _tm_labels(menu.nametowidget(menu.entrycget(i, 'menu')))
+    return out
+
+
+app.notes = [NO.normalize_note({'id': 981, 'title': 'TmNote',
+                                'body': '| Item | Qty |\n| --- | --- |\n| cinnamon | 1 |'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(8)
+_tm_grid = app._grid_at_line(1)
+_tm_posted, _tm_in_palette, _tm_back, _tm_found = [], [], False, []
+_tm_real_popup = tk.Menu.tk_popup
+tk.Menu.tk_popup = lambda _m, *a, **k: _tm_posted.append(_m)
+try:
+    if _tm_grid is not None:
+        app._open_cell_editor(_tm_grid, 1, 0)
+        _kv_settle(4)
+        _take_focus(app._cell_editor['entry'])
+        app.event_generate('<Shift-F10>')           # to the cell, where the keyboard is
+        _tm_menu = _tm_posted[-1] if _tm_posted else None
+        _tm_found = _tm_labels(_tm_menu) if _tm_menu is not None else []
+        if _tm_menu is not None:
+            _tm_menu.invoke(next(i for i in range(_tm_menu.index('end') + 1)
+                                 if _tm_menu.type(i) == 'command' and str(
+                                     _tm_menu.entrycget(i, 'label')).startswith('Highlight')))
+        _kv_settle(4)
+        _tm_pop = app._mini_popup
+        for _tm_key in ('<Tab>', '<Tab>', '<Tab>'):
+            try:                                    # gone, it holds nothing
+                app.nametowidget(str(app.tk.call('focus', '-lastfor', _tm_pop))
+                                 ).event_generate(_tm_key)
+                _kv_settle(2)
+                _tm_in_palette.append(
+                    app._mini_popup is _tm_pop and str(app.tk.call(
+                        'focus', '-lastfor', _tm_pop)).startswith(str(_tm_pop) + '.'))
+            except (tk.TclError, KeyError, AttributeError):
+                _tm_in_palette.append(False)
+        if app._mini_popup is not None:
+            app.event_generate('<Escape>')
+        _kv_settle(20)
+        _tm_editor = getattr(app, '_cell_editor', None)
+        _tm_back = (_tm_editor is not None and _pa_holder() is _tm_editor['entry']
+                    and (_tm_editor['r'], _tm_editor['c']) == (1, 0))
+finally:
+    tk.Menu.tk_popup = _tm_real_popup
+    app._dismiss_mini_popup()
+    app._close_cell_editor()
+    app.update()
+check(f"Shift+F10 in a table cell opens the cell's menu, rows, columns and "
+      f"merges in it ({len(_tm_found)} entries)",
+      {'Delete row', 'Insert column right', 'Delete column',
+       'Merge with cell above'} <= set(_tm_found))
+check(f"...a palette it opens takes the keyboard and keeps it through Tab "
+      f"({_tm_in_palette})", len(_tm_in_palette) == 3 and all(_tm_in_palette))
+check(f"...and the keyboard comes back into the cell once they are gone "
+      f"({_pa_holder()})", _tm_back)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
+# ---- KEYBOARD: Tab and Enter in a table keep it in the table ----
+# Tab at the last cell of a table with a separator row (a column
+# resized or hidden, a markdown table pasted) added a row and opened no editor:
+# the rows were counted with the separator. The keyboard fell to nothing.
+def _tt_open(nid, body):
+    app.notes = [NO.normalize_note({'id': nid, 'title': f'TtNote{nid}', 'body': body})]
+    app.save_notes()
+    app.refresh_note_list()
+    app.open_note_in_tab(app.notes[0])
+    _kv_settle(8)
+    return app._grid_at_line(1)
+
+
+def _tt_press(grid, r, c, key):
+    app._open_cell_editor(grid, r, c, select=False)
+    _kv_settle(4)
+    _take_focus(app._cell_editor['entry'])
+    app._cell_editor['entry'].event_generate(key)
+    _kv_settle(4)
+
+
+_tt_sep = None
+_tt_grid = _tt_open(991, '| Name | Qty |\n|---|---|\n| Milk | 2 |\n| Eggs | 12 |\nafter')
+try:
+    if _tt_grid is not None:
+        _tt_rows = (_tt_grid['nrows'], _tt_grid['data_rows'])
+        _tt_press(_tt_grid, 2, 1, '<Tab>')
+        _tt_ed = app._cell_editor
+        _tt_sep = (_tt_rows, _tt_ed is not None and (_tt_ed['r'], _tt_ed['c']),
+                   _tt_ed is not None and _pa_holder() is _tt_ed['entry'])
+finally:
+    app._close_cell_editor()
+    app.update()
+check(f"Tab at the last cell of a table with a separator row opens the editor in "
+      f"the new row ((text rows, data rows), cell, holds the keyboard: {_tt_sep})",
+      _tt_sep == ((4, 3), (3, 0), True))
+# And Enter, or Tab at the last cell, taking a table past what is drawn kept
+# it as text with the keyboard on nothing: the keys typed next were lost.
+# The limit is set to the table's own height, so one line more passes it.
+_tt_flip = {}
+for _tt_id, _tt_key, _tt_line in ((992, '<Return>', 3), (993, '<Tab>', 4)):
+    _tt_grid = _tt_open(_tt_id, '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter')
+    try:
+        if _tt_grid is not None and _tt_grid['nrows'] == 3:  # drawn, no separator
+            app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+            _tt_press(_tt_grid, 2, 1, _tt_key)
+            _tt_gone = app._grid_at_line(1) is None
+            _tt_held = _pa_holder() is app.body_text
+            app.event_generate('<KeyPress-x>')         # where the keyboard is
+            _kv_settle(2)
+            _tt_flip[_tt_key] = (_tt_gone, _tt_held, NO.core_tables.split_row(
+                app.body_text.get(f'{_tt_line}.0', f'{_tt_line}.end')))
+    finally:
+        app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+        app._close_cell_editor()
+        app.update()
+check(f"Enter, and Tab at the last cell, that take a table past what is drawn put "
+      f"the keyboard in its text, in the cell ((kept as text, keyboard in the "
+      f"note, the row typed into): {_tt_flip})",
+      _tt_flip == {'<Return>': (True, True, ['Eggs', '12<br>x']),
+                   '<Tab>': (True, True, ['x', ''])})
+# The words saying why such a table shows as its text stand through the
+# autosave its edit sets off: "Auto-saved" wrote over them, unread.
+_tt_said = None
+_tt_grid = _tt_open(998, '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter')
+try:
+    if _tt_grid is not None and _tt_grid['nrows'] == 3:
+        app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+        _tt_press(_tt_grid, 2, 1, '<Tab>')
+        app._autosave_now()
+        _kv_settle(2)
+        _tt_said = app.status_lbl.cget('text')
+finally:
+    app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+    app._close_cell_editor()
+    app.update()
+check(f"the words saying a table is shown as its text stand through the autosave after it "
+      f"({_tt_said!r})",
+      bool(_tt_said) and _tt_said.startswith('A table this large is shown as its text'))
+# ...and on one day of a repeating note, whose save says "Auto-saved <day> only".
+_tt_said = None
+app.notes = [NO.normalize_note({'id': 997, 'title': 'TtDay', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'},
+                                'body': '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0], occurrence_date='2026-11-09')
+_kv_settle(8)
+_tt_grid = app._grid_at_line(1)
+try:
+    if (_tt_grid is not None and _tt_grid['nrows'] == 3
+            and app.current_occurrence_date == '2026-11-09'):
+        app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+        _tt_press(_tt_grid, 2, 1, '<Tab>')
+        app._autosave_now()
+        _kv_settle(2)
+        _tt_said = (app.status_lbl.cget('text'),
+                    '2026-11-09' in (app.find_note(997).get('overrides') or {}))
+finally:
+    app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+    app._close_cell_editor()
+    app.update()
+check(f"on one day of a repeating note, the words saying a table is shown as its text stand "
+      f"through the day's autosave ({_tt_said!r})",
+      bool(_tt_said) and _tt_said[1]
+      and _tt_said[0].startswith('A table this large is shown as its text'))
+
+# Escape in a cell, and Ctrl+V of copied cells, closed the editor
+# holding the keyboard and left it on nothing -- what was typed next went
+# nowhere, and Tab began again at the tab strip. Escape leaves it in the
+# note's text under the table, where the caret goes from a drawn table's
+# lines; a paste of cells brings it back to the cell, as the same paste from
+# the cell's menu does, or into the table's text once the paste takes the
+# table past what is drawn. And Enter mid-cell taking the table past it puts
+# the caret after the break it made, not at the cell's end.
+_tw_seen = {}
+_tw_cases = (
+    ('Escape', 994, '| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter',
+     '<Escape>', None, None),
+    ('Ctrl+V of cells', 995, '| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter',
+     '<Control-v>', 'p\tq', None),
+    ('Ctrl+V of cells past the drawn limit', 996,
+     '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter', '<Control-v>',
+     'x\ty\nz\tw', None),
+    ('Enter mid-cell past the drawn limit', 997,
+     '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter', '<Return>', None, '1.2'))
+for _tw_name, _tw_id, _tw_body, _tw_key, _tw_clip, _tw_caret in _tw_cases:
+    _tw_grid = _tt_open(_tw_id, _tw_body)
+    try:
+        if _tw_grid is None:
+            continue
+        if 'limit' in _tw_name:
+            app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * _tw_grid['nrows']
+        if _tw_clip is not None:
+            app.clipboard_clear()
+            app.clipboard_append(_tw_clip)
+        app._open_cell_editor(_tw_grid, 2, 0, select=False)
+        _kv_settle(4)
+        _tw_entry = app._cell_editor['entry']
+        _take_focus(_tw_entry)
+        if _tw_caret is not None:
+            _tw_entry.mark_set('insert', _tw_caret)
+        _tw_entry.event_generate(_tw_key)
+        _kv_settle(4)
+        _tw_ed = app._cell_editor
+        _tw_held = _pa_holder()
+        _tw_where = ('the cell' if _tw_ed is not None and _tw_held is _tw_ed['entry']
+                     and (_tw_ed['r'], _tw_ed['c']) == (2, 0)
+                     else 'the note' if _tw_held is app.body_text else str(_tw_held))
+        app.event_generate('<KeyPress-x>')             # where the keyboard is
+        _kv_settle(2)
+        if _tw_ed is not None and app._cell_editor is _tw_ed:
+            _tw_typed = _tw_ed['entry'].get('1.0', 'end-1c')
+        else:
+            _tw_typed = tuple(app.body_text.get(f'{n}.0', f'{n}.end') for n in (3, 5))
+        _tw_seen[_tw_name] = (_tw_where, _tw_typed)
+    finally:
+        app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+        app._close_cell_editor()
+        app.update()
+
+
+def _tw_cells(name):
+    """Where the keyboard was, and the cells of line 3 and line 5 after."""
+    where, typed = _tw_seen.get(name, (None, ('', '')))
+    if isinstance(typed, str):
+        return where, typed
+    return where, NO.core_tables.split_row(typed[0]), typed[1]
+
+
+check(f"every way out of a table cell leaves the keyboard somewhere: Escape under "
+      f"the table, a paste of cells back in the cell or in the table's text, "
+      f"Enter mid-cell after its break ((where, what the next key typed): "
+      f"{_tw_seen})",
+      _tw_cells('Escape') == ('the note', ['1', '2'], 'xafter')
+      and _tw_cells('Ctrl+V of cells') == ('the cell', 'px')
+      and _tw_cells('Ctrl+V of cells past the drawn limit')[:2] == ('the note',
+                                                                      ['xx', 'y'])
+      and _tw_cells('Enter mid-cell past the drawn limit')[:2] == (
+          'the note', ['Eg<br>xgs', '12']))
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
+# ---- A POPUP THAT GROWS STAYS INSIDE THE WINDOW ----
+# The template editor grew with its checklist and never scrolled,
+# placed once for the height it opened at: 25 items, or one long one, put
+# Save, Category and the Add box below the screen. The picker did the same
+# with as many templates. What grows scrolls, and a popup that grows is
+# placed again.
+def _gp_inside(w):
+    bottom = app.winfo_rooty() + app.winfo_height()
+    return (w is not None and w.winfo_ismapped()
+            and w.winfo_rooty() + w.winfo_height() <= bottom + 1
+            and w.winfo_rooty() >= app.winfo_rooty() - 1)
+
+
+app.geometry('900x600')
+_kv_settle(10)
+_gp_seen = {}
+try:
+    # Opened small, so it is placed for a short editor, then grown by
+    # the Add box -- 24 items and one long one -- past the window's height.
+    app._edit_template({'name': 'Packing', 'checklist': [{'text': 'socks'}]},
+                       lambda: None)
+    _kv_settle(10)
+    _gp_pop = app._mini_popup
+    _gp_add = list(_tl_entries(_gp_pop))[-1]       # the checklist's Add box
+    _gp_seen['typing in its Add box'] = _take_focus(_gp_add)
+    for _gp_i in range(25):
+        _gp_add.insert(0, 'w ' * 900 if _gp_i == 24 else 'item %d' % _gp_i)
+        app.event_generate('<Return>')             # Tk sends it to the box
+        app.update()
+    _kv_settle(10)
+    _gp_seen['editor'] = _gp_inside(_gp_pop)
+    _gp_seen['its Save'] = _gp_inside(find_btn_qa6(_gp_pop, 'Save'))
+    app._bring_into_sight(_gp_add)
+    _kv_settle(4)
+    _gp_seen['its Add box, brought into sight'] = _gp_inside(_gp_add)
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+_gp_kept = list(app.templates)
+app.templates = [{'name': 'Template %d' % _gp_i, 'body': 'x'} for _gp_i in range(40)]
+try:
+    app.show_template_picker()
+    _kv_settle(10)
+    _gp_pick = app._mini_popup
+    _gp_last = [b for b in _tl_widgets(_gp_pick, tk.Button)
+                if 'Template 39' in str(b.cget('text'))]
+    _gp_seen['picker'] = _gp_inside(_gp_pick)
+    if _gp_last:
+        app._bring_into_sight(_gp_last[0])
+        _kv_settle(4)
+    _gp_seen['its last template, brought into sight'] = bool(_gp_last) and _gp_inside(_gp_last[0])
+finally:
+    app._dismiss_mini_popup()
+    app.templates = _gp_kept
+    app.geometry('1100x750')
+    _kv_settle(6)
+check(f"the template editor grown to 26 items, and the picker with 40 "
+      f"templates, stay inside a 900x600 window, what they hold in reach "
+      f"({_gp_seen})", len(_gp_seen) == 6 and all(_gp_seen.values()))
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
+# ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
+# The look after Space waited 100 ms for every
+# Tk button, though a tick box runs its command at once. A template's tick
+# box redraws its list, the keyboard fell to the editor's own window, and a
+# Tab inside those 100 ms went to the header's ✕, whose next Space closed the
+# editor without a question.
+def _cb_boxes(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Checkbutton):
+            yield c
+        yield from _cb_boxes(c)
+
+
+_cb_after = None
+_cb_on_x = None
+try:
+    app._edit_template({'name': 'CbTemplate', 'title': '', 'body': '',
+                        'category': 'General',
+                        'checklist': [{'text': 'one', 'done': False},
+                                      {'text': 'two', 'done': False}]},
+                       lambda: None)
+    app.update()
+    _cb_pop = app._mini_popup
+    _cb_first = next(_cb_boxes(_cb_pop), None) if _cb_pop is not None else None
+    if _cb_first is not None and _take_focus(_cb_first):
+        _cb_first.event_generate('<space>')
+        app.update()                    # what a person's next key waits for
+        time.sleep(0.04)
+        try:
+            _cb_now = app.nametowidget(str(app.tk.call('focus', '-lastfor', _cb_pop)))
+        except (KeyError, tk.TclError):
+            _cb_now = _cb_pop
+        _cb_now.event_generate('<Tab>')
+        _kv_settle(10)
+        try:
+            _cb_after = app.nametowidget(str(app.tk.call('focus', '-lastfor', _cb_pop)))
+        except (KeyError, tk.TclError):
+            _cb_after = None
+        _cb_on_x = (isinstance(_cb_after, tk.Button)
+                    and str(_cb_after.cget('text')) == '✕')
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f'Space on a template\'s tick box, then Tab 40 ms later, goes on from '
+      f'the box, not to the editor\'s ✕ ({_cb_after})',
+      _cb_after is not None and _cb_on_x is False
+      and not isinstance(_cb_after, tk.Toplevel))
+
+# ---- THE TEMPLATE PREVIEW IS DRAWN AGAIN ONLY WHEN ITS TABLES CHANGE ----
+# Every key in the template editor redrew one canvas item per line
+# of every cell -- 0.16 s a key for one paste of line breaks -- though the
+# tables are out of the box's sight and typing never changes them.
+_pv_ids = []
+try:
+    app._edit_template({'name': 'Prev', 'body': '| a | b |\n| --- | --- |\n| '
+                        + '<br>'.join(['x'] * 200) + ' | y |'}, lambda: None)
+    _kv_settle(6)
+    _pv_pop = app._mini_popup
+    _pv_body = [t for t in _tl_widgets(_pv_pop, tk.Text) if int(t.cget('height')) >= 4][0]
+    _pv_cv = [c for c in _tl_widgets(_pv_pop, tk.Canvas) if c.find_all()
+              and any(c.type(i) != 'window' for i in c.find_all())][0]
+    for _pv_change in (False, False, True):
+        if _pv_change:
+            _pv_body.insert('3.2', 'w')                # inside the table's cell
+        app._draw_template_table_preview(_pv_cv, _pv_body)
+        _pv_ids.append(_pv_cv.find_all())
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f"the template preview is drawn again only when its tables change "
+      f"({[len(i) for i in _pv_ids]} items; kept: {len(_pv_ids) == 3 and _pv_ids[0] == _pv_ids[1]}, "
+      f"redrawn: {len(_pv_ids) == 3 and _pv_ids[1] != _pv_ids[2]})",
+      len(_pv_ids) == 3 and len(_pv_ids[0]) > 200 and _pv_ids[0] == _pv_ids[1]
+      and _pv_ids[1] != _pv_ids[2])
+
+# ---- A PASTE OVER A SELECTION IN A LIMITED BOX REPLACES IT, SHORTENED ----
+# Off X11, Tk's own paste deletes the selection and inserts as two
+# edits; the delete passed the limit's check, the insert did not, and what
+# was typed was gone. Windows' paste is run here on every system. A paste
+# past the limit is shortened to the room the selection leaves, as the
+# title's is.
+_wp_real_bind = str(app.tk.call('bind', 'Entry', '<<Paste>>'))
+_wp_real_read = NO.clipboard.read_text
+_wp_kept = None
+app.tk.call('bind', 'Entry', '<<Paste>>',
+            'catch {%W delete sel.first sel.last}\n'
+            '%W insert insert [::tk::GetSelection %W CLIPBOARD]\n'
+            'tk::EntrySeeInsert %W')
+try:
+    app._edit_template(None, lambda: None)
+    _kv_settle(6)
+    _wp_box = list(_tl_entries(app._mini_popup))[-1]       # the checklist's Add box
+    _wp_box.insert(0, 'y' * 1900)
+    _wp_box.selection_range(1800, 'end')                   # the last 100 chosen
+    app.clipboard_clear()
+    app.clipboard_append('z' * 2500)
+    NO.clipboard.read_text = lambda: 'z' * 2500
+    _wp_box.event_generate('<<Paste>>')
+    app.update()
+    _wp_kept = _wp_box.get()
+finally:
+    NO.clipboard.read_text = _wp_real_read
+    app.tk.call('bind', 'Entry', '<<Paste>>', _wp_real_bind)
+    app.clipboard_clear()
+    app._dismiss_mini_popup()
+    app.update()
+check(f"a paste past a box's limit over its selection replaces it, shortened to "
+      f"the room left ({_wp_kept.count('y') if _wp_kept is not None else None} "
+      f"typed and {_wp_kept.count('z') if _wp_kept is not None else None} pasted)",
+      _wp_kept == 'y' * 1800 + 'z' * 200)
+
+# ---- A checklist item left in an Add box goes into the template saved ----
+# A twin of a phone fix: the template editor's Save, its question on closing
+# and its quiet save read the
+# checklist without the item typed in its Add box and not yet added, so a
+# "passport" typed there and saved was lost with the editor; Save as template
+# read a note's checklist the same way. The note's box keeps its item.
+_pa_seen = {}
+_pa_real_ask = app.ask_yes_no_cancel
+_pa_kept = list(app.templates)
+try:
+    app.templates = []
+    app._edit_template(None, lambda: None)
+    _kv_settle(6)
+    _pa_pop = app._mini_popup
+    _pa_boxes = list(_tl_entries(_pa_pop))
+    _pa_boxes[-1].insert(0, 'passport')                 # typed, never added
+    _pa_asked = []
+    app.ask_yes_no_cancel = lambda *a, **k: (_pa_asked.append(a[0]), None)[1]
+    _pa_seen['closing asks'] = (_pa_pop._confirm_dismiss() is False
+                                and _pa_asked == ['Save changes?'])
+    app.ask_yes_no_cancel = _pa_real_ask
+    _pa_boxes[0].delete(0, 'end')                       # "Untitled template"
+    _pa_boxes[0].insert(0, 'PendTpl')
+    find_btn_qa6(_pa_pop, 'Save').invoke()
+    app.update()
+    _pa_saved = [t for t in app.templates if t.get('name') == 'PendTpl']
+    _pa_seen['Save keeps it'] = (len(_pa_saved) == 1 and [
+        i.get('text') for i in _pa_saved[0].get('checklist', [])] == ['passport'])
+finally:
+    app.ask_yes_no_cancel = _pa_real_ask
+    app._dismiss_mini_popup()
+    app.update()
+app.notes = [NO.normalize_note({'id': 952, 'title': 'PaNote', 'body': 'b',
+                                'checklist': [{'text': 'socks', 'done': False}]})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+try:
+    app.checklist_add_var.set('towel')                  # typed, never added
+    app.save_current_as_template()
+    app.update()
+    _pa_name = next(_tl_entries(app._mini_popup), None)
+    if _pa_name is not None:
+        _pa_name.delete(0, 'end')
+        _pa_name.insert(0, 'FromNote')
+        find_btn_qa6(app._mini_popup, 'Save').invoke()
+        app.update()
+    _pa_from = [t for t in app.templates if t.get('name') == 'FromNote']
+    _pa_seen['Save as template keeps it'] = (len(_pa_from) == 1 and [
+        i.get('text') for i in _pa_from[0].get('checklist', [])] == ['socks', 'towel'])
+    _pa_seen["the note's box keeps it"] = app.checklist_add_var.get() == 'towel'
+finally:
+    app.checklist_add_var.set('')
+    app._dismiss_mini_popup()
+    app.templates = _pa_kept
+    app.update()
+check(f"an item typed in a checklist's Add box and not added goes into the "
+      f"template saved, and closing the editor asks about it ({_pa_seen})",
+      len(_pa_seen) == 4 and all(_pa_seen.values()))
+
+# ...and a template's list at 1,000 items: its Add, and words waiting in the
+# box, were cut by normalize_template at Save, unsaid, and the editor closed
+# without asking. The Add and Save refuse them and say why; closing
+# asks; Save as template from a full note says so too.
+_cfp_seen, _cfp_said = {}, []
+_cfp_real = (app.show_info, app.ask_yes_no_cancel)
+_cfp_kept = list(app.templates)
+app.show_info = lambda *a, **k: _cfp_said.append(a[0] if a else '')
+_cfp_full = [{'text': 'row %d' % i, 'done': False} for i in range(1000)]
+try:
+    app.templates = [NO.normalize_template({'name': 'Full', 'body': 'b',
+                                            'checklist': _cfp_full})]
+    app._edit_template(app.templates[0], lambda: None)
+    _kv_settle(6)
+    _cfp_pop = app._mini_popup
+    _cfp_boxes = list(_tl_entries(_cfp_pop))
+    _cfp_boxes[-1].insert(0, 'passport')
+    find_btn_qa6(_cfp_pop, '+ Add').invoke(); app.update()
+    _cfp_seen['Add refused, words kept'] = (_cfp_boxes[-1].get() == 'passport'
+                                            and _cfp_said == ['Checklist full'])
+    _cfp_asked = []
+    app.ask_yes_no_cancel = lambda *a, **k: (_cfp_asked.append(a[0]), None)[1]
+    _cfp_seen['closing asks'] = (_cfp_pop._confirm_dismiss() is False
+                                 and _cfp_asked == ['Save changes?'])
+    find_btn_qa6(_cfp_pop, 'Save').invoke(); app.update()
+    _cfp_seen['Save refused, said'] = (_cfp_said == ['Checklist full'] * 2
+                                       and app._mini_popup is _cfp_pop)
+finally:
+    app.show_info, app.ask_yes_no_cancel = _cfp_real[0], _cfp_real[1]
+    app._dismiss_mini_popup()
+    app.update()
+app.show_info = lambda *a, **k: _cfp_said.append(a[0] if a else '')
+app.notes = [NO.normalize_note({'id': 953, 'title': 'FullNote', 'body': 'b',
+                                'checklist': _cfp_full})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+try:
+    app.checklist_add_var.set('towel')
+    app.save_current_as_template()
+    app.update()
+    _cfp_name = next(_tl_entries(app._mini_popup), None)
+    if _cfp_name is not None:
+        _cfp_name.delete(0, 'end')
+        _cfp_name.insert(0, 'FromFull')
+        find_btn_qa6(app._mini_popup, 'Save').invoke()
+        app.update()
+    _cfp_from = [t for t in app.templates if t.get('name') == 'FromFull']
+    _cfp_seen['Save as template says so'] = (
+        len(_cfp_from) == 1 and len(_cfp_from[0].get('checklist', [])) == 1000
+        and _cfp_said == ['Checklist full'] * 3)
+finally:
+    app.show_info = _cfp_real[0]
+    app.checklist_add_var.set('')
+    app._dismiss_mini_popup()
+    app.templates = _cfp_kept
+    app.update()
+check(f"a template's list at 1,000 items refuses more at its Add and Save, "
+      f"says why, and closing asks ({_cfp_seen}, {_cfp_said})",
+      len(_cfp_seen) == 4 and all(_cfp_seen.values()))
+
+# An earlier fix taught Enter held down to press once on a drawn control,
+# the preview's buttons and a question's answers -- not the note list, the
+# calendar or the boxes that act on Enter. A group header folded and opened
+# at every repeat, writing settings.json each time; and a press nobody asked
+# about left the next control blind to the key still held. Every Enter that
+# acts asks (_enter_repeats), in both shapes a held key takes.
+_kr8_seen, _kr8_counts = {}, []
+_kr8_keys_kept = _kh_support.REAL_KEYS
+_kr8_names = ('_toggle_group_collapsed', '_toggle_note_selected', 'open_day_popup',
+              'show_info', '_settle_date_fields')
+_kr8_real = {n: getattr(app, n) for n in _kr8_names}
+_kr8_had = {n: app.__dict__[n] for n in _kr8_names if n in app.__dict__}
+_kr8_kept_notes, _kr8_kept_templates = list(app.notes), list(app.templates)
+_kr8_t = [300_000]
+
+
+def _kr8_counting(name, then=None):
+    def counted(*a, **k):
+        _kr8_counts.append(name)
+        return then(*a, **k) if then is not None else None
+    return counted
+
+
+def _kr8_key(kind, when):
+    # To the widget holding the keyboard, in whichever window: an inline
+    # rename is a window of its own, which `focus -lastfor` does not see.
+    try:
+        holder = app.focus_get()
+    except (KeyError, tk.TclError):
+        holder = None
+    (holder or _ka_holder() or app).event_generate(f'<Key{kind}-Return>', time=when)
+    _kv_settle(2)
+
+
+def _kr8_hold(widget, ready=lambda: None):
+    """Enter held on *widget* in both shapes: how often each acted."""
+    seen = []
+    for shape in ('presses alone', 'release and press'):
+        _take_focus(widget)
+        ready()
+        _kv_settle(2)
+        app._cancel_pending_autosave()
+        del _kr8_counts[:]
+        t0 = _kr8_t[0] = _kr8_t[0] + 10_000
+        _kr8_key('Press', t0)
+        for i in range(10):
+            if shape == 'release and press':
+                _kr8_key('Release', t0 + 500 + 33 * i)
+            _kr8_key('Press', t0 + 500 + 33 * i)
+        _kr8_key('Release', t0 + 900)
+        seen.append(len(_kr8_counts))
+    return seen
+
+
+_kh_support.REAL_KEYS = [('the held-Enter check', 'its own keys')]
+try:
+    app.show_info = _kr8_counting('show_info')          # no modal waits here
+    app.open_day_popup = _kr8_counting('open_day_popup')
+    app._toggle_group_collapsed = _kr8_counting(
+        '_toggle_group_collapsed', _kr8_real['_toggle_group_collapsed'])
+    app._toggle_note_selected = _kr8_counting(
+        '_toggle_note_selected', _kr8_real['_toggle_note_selected'])
+    app._settle_date_fields = _kr8_counting(
+        '_settle_date_fields', _kr8_real['_settle_date_fields'])
+    app.new_note(); _kv_settle(2)
+    _kr8_a, _kr8_b = (NO.normalize_note({'id': 4901 + i, 'title': 'Held %d' % i,
+                                         'body': 'b', 'category': 'General'})
+                      for i in range(2))
+    app.notes = [_kr8_a, _kr8_b]; app.save_notes()
+    app.notebook.select(app.TAB_NOTES)
+    app.group_by_category.set(True); app._on_toggle_group_by_category()
+    app.collapsed_groups.clear(); app.refresh_note_list(); _kv_settle(4)
+    _kr8_seen['a group header'] = _kr8_hold(
+        app.canvas, lambda: app._set_ring_row(('header', 'General')))
+    app.collapsed_groups.clear(); app.refresh_note_list(); _kv_settle(4)
+    app._toggle_selection_mode(); _kv_settle(2)
+    _kr8_seen['a note, in selection mode'] = _kr8_hold(
+        app.canvas, lambda: app._set_ring_row(('note', 4901)))
+    app._toggle_selection_mode(); _kv_settle(2)
+    app.group_by_category.set(False); app._on_toggle_group_by_category()
+    app.notebook.select(app.TAB_CALENDAR)
+    app.render_calendar(); _kv_settle(6)
+    _kr8_seen['a calendar day'] = _kr8_hold(app.cal_canvas)
+    app.notebook.select(app.TAB_NOTES); _kv_settle(2)
+    _kr8_full = NO.normalize_note({'id': 4903, 'title': 'Full', 'body': 'b', 'checklist': [
+        {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
+    app.notes = [_kr8_full]; app.save_notes()
+    app.open_note_in_tab(_kr8_full); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section(); _kv_settle(4)
+    app.checklist_add_var.set('one more')
+    _kr8_seen["a full list's Add box"] = _kr8_hold(app.checklist_add_entry)
+    app.checklist_add_var.set('')
+    _kr8_seen['the date field'] = _kr8_hold(app.date_entry)
+    app.templates = [NO.normalize_template({'name': 'Full', 'body': 'b', 'checklist': [
+        {'text': 'row %d' % i, 'done': False} for i in range(1000)]})]
+    app._edit_template(app.templates[0], lambda: None)
+    _kv_settle(6)
+    _kr8_tpl_box = (list(_tl_entries(app._mini_popup)) or [None])[-1]
+    if _kr8_tpl_box is not None:
+        _kr8_tpl_box.insert(0, 'passport')
+        _kr8_seen["a full template's Add box"] = _kr8_hold(_kr8_tpl_box)
+    app._dismiss_mini_popup()
+    _kv_settle(2)
+    # A name refused keeps the box open, so every repeat would reach it.
+    app._show_inline_rename(app.title_entry, 'Name',
+                            _kr8_counting('an inline rename', lambda text: False))
+    _kv_settle(4)
+    _kr8_box = next(_tl_entries(app._mini_popup), None)
+    _kr8_seen['an inline rename'] = _kr8_hold(_kr8_box) if _kr8_box else None
+finally:
+    for _kr8_n in _kr8_names:
+        app.__dict__.pop(_kr8_n, None)
+    app.__dict__.update(_kr8_had)
+    app._dismiss_mini_popup()
+    app.checklist_add_var.set('')
+    if app.selection_mode:
+        app._toggle_selection_mode()
+    app.group_by_category.set(False); app._on_toggle_group_by_category()
+    app.collapsed_groups.clear()
+    app.new_note(); _kv_settle(2)
+    app.notes = _kr8_kept_notes; app.save_notes()
+    app.templates = _kr8_kept_templates
+    app.notebook.select(app.TAB_NOTES)
+    app.refresh_note_list(); _kv_settle(4)
+    _kh_support.REAL_KEYS = _kr8_keys_kept
+check(f"Enter held on the note list, the calendar and every box that acts on it "
+      f"presses once ((presses alone, release and press): {_kr8_seen})",
+      _kr8_seen == {k: [1, 1] for k in (
+          'a group header', 'a note, in selection mode', 'a calendar day',
+          "a full list's Add box", 'the date field', "a full template's Add box",
+          'an inline rename')})
+
+# ---- THE TRASH BANNER'S OFFER, TAKEN DOWN WHEN ITS NOTE LEAVES THE TRASH ----
+# "Note moved to Trash" with its Undo stayed up over Settings -> Recently
+# deleted after that very note was restored there (the review panel).
+_wt_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.notes = [NO.normalize_note({'id': 1, 'title': 'Back soon', 'body': 'a'}),
+                 NO.normalize_note({'id': 2, 'title': 'Stays gone', 'body': 'b'}),
+                 NO.normalize_note({'id': 3, 'title': 'Undone', 'body': 'c'}),
+                 NO.normalize_note({'id': 4, 'title': 'Emptied', 'body': 'e'})]
+    app.trash = [{'id': 903, 'title': 'Older', 'body': 'd', 'category': 'General',
+                  'deleted_at': NO.now_stamp()}]
+    app.save_notes(); NO.save_trash(app.trash); app.refresh_note_list(); app.update()
+    def _wt_words():
+        """What the banner says, while it is up."""
+        return (str(app.toast_lbl.cget('text'))
+                if app._is_placed(app.toast_frame) else None)
+
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Back soon'), None)
+    app.update()
+    _wt_offer = app._toast_action
+    app._restore_from_trash(next(e for e in app.trash if e.get('title') == 'Back soon'))
+    app.update()
+    # Another banner may follow (an arrival a filter hides says so): the offer
+    # is what must be gone.
+    check(f'restoring the note a banner offers to put back takes the offer down '
+          f'({_wt_words()!r})',
+          _wt_offer is not None and app._toast_action is not _wt_offer
+          and 'moved to Trash' not in (_wt_words() or ''))
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Stays gone'), None)
+    app.update()
+    _wt_offer2 = app._toast_action
+    app._restore_from_trash(next(e for e in app.trash if e.get('title') == 'Older'))
+    app.update()
+    check(f'...while restoring another entry leaves it up ({_wt_words()!r})',
+          _wt_offer2 is not None and app._toast_action is _wt_offer2)
+    app.toggle_settings_panel('trash'); app.update()
+    _wt_row = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                    and str(w.cget('text')) == 'Delete'), None)
+    if _wt_row is not None:
+        _wt_row.invoke(); app.update()
+    check(f"...and a row's own Delete, for good, takes it down ({_wt_words()!r})",
+          _wt_row is not None and not app.trash and app._toast_action is not _wt_offer2
+          and 'moved to Trash' not in (_wt_words() or ''))
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Emptied'), None)
+    app.update()
+    _wt_offer3 = app._toast_action
+    app.toggle_settings_panel('trash'); app.update()
+    _wt_empty = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                      and 'Empty trash' in str(w.cget('text'))), None)
+    if _wt_empty is not None:
+        _wt_empty.invoke(); app.update()
+    check(f'...and emptying the Trash takes it down ({_wt_words()!r})',
+          _wt_empty is not None and not app.trash and _wt_offer3 is not None
+          and app._toast_action is not _wt_offer3
+          and 'moved to Trash' not in (_wt_words() or ''))
+    app._delete_note(next(n for n in app.notes if n.get('title') == 'Undone'), None)
+    app.update()
+    app._run_toast_action(); app.update()
+    check("...and the banner's own Undo still puts its note back",
+          any(n.get('title') == 'Undone' for n in app.notes)
+          and not any(e.get('title') == 'Undone' for e in app.trash))
+finally:
+    app.ask_yes_no = _wt_ask
+app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
+
+# ---- THE TRASH BANNER'S UNDO OPENS ONLY THE NOTE THAT WAS OPEN ----
+# A note deleted from the list, and put back by the banner's Undo, was
+# opened in the editor, over the note being written (the review panel, on
+# the phone; the desktop did the same). Only the note open when it went
+# comes back open.
+_uo_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.notes = [NO.normalize_note({'id': 1, 'title': 'Writing this', 'body': 'a'}),
+                 NO.normalize_note({'id': 2, 'title': 'From the list', 'body': 'b'}),
+                 NO.normalize_note({'id': 3, 'title': 'Ticked', 'body': 'c'})]
+    app.trash = []
+    app.save_notes(); NO.save_trash(app.trash); app.refresh_note_list(); app.update()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._context_delete_note(app.find_note(2)); app.update()
+    app._run_toast_action(); app.update()
+    _uo_list = (app.title_entry.get(), [n.get('title') for n in app.notes])
+    app.selected_note_ids = {3}
+    app._bulk_move_to_trash(); app.update()
+    app._run_toast_action(); app.update()
+    _uo_bulk = (app.title_entry.get(), [n.get('title') for n in app.notes])
+    app.open_note_in_tab(next(n for n in app.notes if n.get('title') == 'Writing this'))
+    app.update()
+    app.delete_current_note(); app.update()
+    app._run_toast_action(); app.update()
+    _uo_open = (app.title_entry.get(),
+                (app.find_note(app.selected_note_id) or {}).get('title'))
+finally:
+    app.ask_yes_no = _uo_ask
+check(f"the Undo of a note deleted from the list puts it back and leaves the "
+      f"editor on the note being written ({_uo_list})",
+      _uo_list[0] == 'Writing this' and 'From the list' in _uo_list[1])
+check(f'...as does the Undo of one ticked note sent to the Trash ({_uo_bulk})',
+      _uo_bulk[0] == 'Writing this' and 'Ticked' in _uo_bulk[1])
+check(f"...while the note open when it went comes back open ({_uo_open})",
+      _uo_open == ('Writing this', 'Writing this'))
+app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list(); app.update()
+
+# ---- THE FIND BAR'S OWN ROOM AT THE TOP OF THE PAGE ----
+# Ctrl+F's bar floats in the editor's top-right corner, where the header
+# keeps its controls: it covered half the category button (the review panel,
+# 22 November), and on a day of a series "Edit the whole series". While it is
+# open the page starts below it, at any width, no lower than it needs; a row
+# that comes above the title while it is open does too; closing it gives the
+# page its top back.
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Plain', 'body': 'find me',
+                                'date': '2026-11-02'}),
+             NO.normalize_note({'id': 2, 'title': 'Weekly', 'body': 'find me',
+                                'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'}}),
+             NO.normalize_note({'id': 3, 'title': 'From the Calendar',
+                                'body': 'find me', 'date': '2026-11-16'})]
+app.save_notes(); app.refresh_note_list(); app.update()
+
+
+def _fr_page(w):
+    """*w*'s box in the page's own coordinates, which a scroll does not move."""
+    x = w.winfo_rootx() - app.editor.winfo_rootx()
+    y = w.winfo_rooty() - app.editor.winfo_rooty()
+    return (x, y, x + w.winfo_width(), y + w.winfo_height())
+
+
+def _fr_bar():
+    """The bar's box, carried into the page's coordinates through the canvas
+    it floats over (both its own place and the canvas's are read live)."""
+    c, b = app.editor_canvas, app._find_bar
+    page = c.bbox(app._editor_window)
+    x = c.canvasx(b.winfo_rootx() - c.winfo_rootx()) - page[0]
+    y = c.canvasy(b.winfo_rooty() - c.winfo_rooty()) - page[1]
+    return (x, y, x + b.winfo_width(), y + b.winfo_height())
+
+
+def _fr_covered(watched):
+    """The watched controls the open bar meets, and how far below the bar
+    the page's first row starts."""
+    bar = _fr_bar()
+    boxes = {name: _fr_page(w) for name, w in watched.items() if w.winfo_ismapped()}
+    met = sorted(name for name, r in boxes.items()
+                 if r[0] < bar[2] and bar[0] < r[2] and r[1] < bar[3] and bar[1] < r[3])
+    first = next((w for w in app.editor.pack_slaves()
+                  if w is not app._find_room and w.winfo_ismapped()), None)
+    gap = _fr_page(first)[1] - bar[3] if first is not None else None
+    return met, gap
+
+
+_fr_geo = app.geometry()
+_fr_seen = {}
+_fr_back = {}
+for _fr_size in ('1100x850', '900x600'):
+    app.geometry(_fr_size); app.update()
+    for _fr_id, _fr_day, _fr_name in ((1, None, 'a note'), (2, None, 'a series'),
+                                      (2, '2026-11-16', 'a day of a series')):
+        app.open_note_in_tab(app.find_note(_fr_id), occurrence_date=_fr_day)
+        app.update()
+        app.editor_canvas.yview_moveto(0.0); app.update()
+        _fr_top = _fr_page(app.editor_top_row)[1]
+        app._open_find(); app.update()
+        app.editor_canvas.yview_moveto(0.0); app.update()
+        _fr_seen[(_fr_size, _fr_name)] = _fr_covered({
+            'the category': app.category_menu, 'the title': app.title_entry,
+            'the series line': app.occurrence_banner,
+            'Edit the whole series': app.day_series_btn,
+            "the day's words": app.day_strip_lbl})
+        app._close_find(); app.update()
+        _fr_back[(_fr_size, _fr_name)] = (_fr_page(app.editor_top_row)[1] - _fr_top,
+                                          app._find_room.winfo_manager())
+app.geometry(_fr_geo); app.update()
+check(f'the open find bar covers none of the controls at the top of a note, a series '
+      f'or a day of one, at either width ({_fr_seen})',
+      len(_fr_seen) == 6 and all(not met and gap is not None and gap >= 0
+                                 for met, gap in _fr_seen.values()))
+check(f'...and moves the page down no further than it needs ({_fr_seen})',
+      all(gap is not None and gap <= 2 * app.FIND_BAR_TOP
+          for _met, gap in _fr_seen.values()))
+check(f'...and closing it gives the page its top back ({_fr_back})',
+      len(_fr_back) == 6 and all(v == (0, '') for v in _fr_back.values()))
+# A repeat chosen while the bar is open brings the series' line above the
+# title, under it; the room grows for the line.
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._open_find(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed()
+app.save_current_note(auto=False); app.update()
+app.editor_canvas.yview_moveto(0.0); app.update()
+_fr_rep = (app._find_open, NO.is_recurring(app.find_note(1)),
+           app._is_placed(app.occurrence_banner),
+           _fr_covered({'the series line': app.occurrence_banner,
+                        'the category': app.category_menu}))
+app._close_find(); app.update()
+check(f'...and a repeat chosen while it is open puts the series line below it too '
+      f'({_fr_rep})',
+      _fr_rep[:3] == (True, True, True)
+      and not _fr_rep[3][0] and _fr_rep[3][1] is not None and _fr_rep[3][1] >= 0)
+# The way back to the Calendar, shown above everything while the bar is open
+# (a note read back behind the editor keeps it), comes below the bar as well:
+# over a plain note, whose title row stands lower than the line it brings.
+app.open_note_in_tab(app.find_note(3)); app.update()
+app._open_find(); app.update()
+app._pending_calendar_return = {'year': 2026, 'month': 11, 'date_str': '2026-11-16'}
+app._update_calendar_return_button(); app.update()
+app.editor_canvas.yview_moveto(0.0); app.update()
+_fr_cal = (app._find_open, app._is_placed(app.calendar_return_btn),
+           _fr_covered({'Back to Calendar': app.calendar_return_btn}))
+app._pending_calendar_return = None
+app._update_calendar_return_button()
+app._close_find(); app.update()
+check(f'...and so does the way back to the Calendar, shown while it is open ({_fr_cal})',
+      _fr_cal[:2] == (True, True)
+      and not _fr_cal[2][0] and _fr_cal[2][1] is not None and _fr_cal[2][1] >= 0)
+app.notes = []; app.save_notes(); app.refresh_note_list(); app.update()
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

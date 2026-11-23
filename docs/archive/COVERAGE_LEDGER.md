@@ -1,5 +1,8 @@
 # Coverage ledger — every confession gets a verdict
 
+*Archived on 15 October 2026: kept as history and no longer updated; each verdict is as of that
+date.*
+
 The agent protocol makes every report end with what was NOT covered. This
 ledger is where those confessions stop scrolling past: each one lands here
 and receives exactly one verdict — **COVER** (work queued, with the how),

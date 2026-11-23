@@ -12,7 +12,9 @@ day-to-day tracking.
 Code), so a first person ("one of my own renames") is the agent. **The owner** or **she** is
 Alexandra; a **field test** or **field report** is her, testing the packaged `.exe`; and
 *reviewers*, *agents* or *waves* are Claude subagents unless a person is named. How the work is
-divided and checked is in [How Note Organizer is built with an AI agent](AI_WORKFLOW.md).
+divided and checked is in [How Note Organizer is built with an AI agent](AI_WORKFLOW.md). A few
+words carry a sense of their own here (a banner's *word*, a *road*, a *round*, *the lows*, a
+*mutant*): [the house words](../CLAUDE.md#house-words).
 
 ## Start here: five stories
 
@@ -181,6 +183,63 @@ is in the table below as well.
 | [The Trash that counted on the wall clock](#the-trash-that-counted-on-the-wall-clock) | An age is the distance between two moments, not between two clock readings; a rule that deletes must count the moments. | 0.97.405 |
 | [The flicker that was a word count](#the-flicker-that-was-a-word-count) | A label whose text can come and go sizes its row by what it says; give it the height of its tallest state. | 0.97.405 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
+| [A year read as a list number](#a-year-read-as-a-list-number) | A renderer of one's own agrees with the reader's other one until a line begins with something the two read differently: hold it to the cases where they can part. | the website |
+| [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | 0.102.556 |
+| [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | 0.102.556 |
+| [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | 0.102.556 |
+| [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | 0.102.556 |
+| [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | 0.102.556 |
+| [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | 0.102.556 |
+| [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | 0.102.556 |
+| [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | 0.102.556 |
+| [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | 0.102.556 |
+| [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | 0.102.556 |
+| [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | 0.102.556 |
+| [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | 0.102.556 |
+| [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | 0.102.556 |
+| [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | 0.102.556 |
+| [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | 0.102.556 |
+| [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | 0.102.556 |
+| [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | 0.102.556 |
+| [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | 0.102.556 |
+| [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | 0.102.556 |
+| [Round six: a restore on a run that saves nothing, and ceilings kept at the load](#round-six-a-restore-on-a-run-that-saves-nothing-and-ceilings-kept-at-the-load) | "A failed write leaves a duplicate at worst" promises a next write; a ceiling kept at the load is one the editor crosses; and two apps keep one thing in one place. | 0.102.556 |
+| [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | 0.102.556 |
+| [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. A rule only asked lasts until it is forgotten. | 0.102.556 |
+| [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | 0.102.556 |
+| [Round seven: a list's pieces measured once, and Enter held down](#round-seven-a-lists-pieces-measured-once-and-enter-held-down) | A measure taken once is a measure of that moment: what can change after it tells what read it, or is read again; and a key held down is many presses. | 0.102.556 |
+| [Round eight: a day reset that came back, and what one copy keeps](#round-eight-a-day-reset-that-came-back-and-what-one-copy-keeps) | A move into the note happens once: what a copy has given back, it holds no more; and of two texts competing for one slot, the one whose loss is larger stays. | 0.102.556 |
+| [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | 0.102.556 |
+| [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | 0.102.556 |
+| [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | 0.102.556 |
+| [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | 0.102.556 |
+| [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | 0.102.556 |
+| [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | 0.102.556 |
+| [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | 0.102.556 |
+| [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | 0.102.556 |
+| [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | 0.102.556 |
+| [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | 0.102.556 |
+| [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | 0.102.556 |
+| [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | 0.102.556 |
+| [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | 0.102.556 |
+| [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | 0.102.556 |
+| [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | 0.102.556 |
+| [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | 0.102.556 |
+| [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | 0.102.556 |
+| [The lows wave's last rounds: a paste meeting a list, one road at a time](#the-lows-waves-last-rounds-a-paste-meeting-a-list-one-road-at-a-time) | When each fix of a rule leaves the case beside it, write the rule down and test its whole matrix on both apps at once; a fix by road is a fix of one cell. | 0.102.556 |
+| [Wave 3: a promise about Enter, kept by one copy of the question](#wave-3-a-promise-about-enter-kept-by-one-copy-of-the-question) | A promise in the person's documents is a rule every copy of the code must keep; find the copies before trusting the one that was fixed. | 0.102.556 |
+| [Wave 2: the timers that ran inside a question](#wave-2-the-timers-that-ran-inside-a-question) | A question that waits is a window in which every timer runs: read what it decides about after it is answered, never before. | 0.102.556 |
+| [The comments that told every story twice](#the-comments-that-told-every-story-twice) | A comment says why; the story of how goes where stories are kept, with a pointer left behind. | 0.102.556 |
+| [Wave 2's lows: three checks that could not tell](#wave-2s-lows-three-checks-that-could-not-tell) | Before trusting a check, build the world without the fix, not a gentler one. | 0.102.556 |
+| [Wave 2's lows: Ctrl+Z read from a guess, then from the event](#wave-2s-lows-ctrlz-read-from-a-guess-then-from-the-event) | Record an event where it happens, for that event only, rather than inferring it from a state with other causes. | 0.102.556 |
+| [Wave 2's lows: a tab turned behind Settings](#wave-2s-lows-a-tab-turned-behind-settings) | When the same loss comes back by another road, fix the place every road passes, not the road. | 0.102.556 |
+| [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | 0.102.556 |
+| [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.102.556 |
+| [Wave 5: the desktop findings the phone's port had kept](#wave-5-the-desktop-findings-the-phones-port-had-kept) | A finding written down in one repository is invisible to the other's audit: before a release, read what the other app's logs still hold open about this one. | 0.102.556 |
+| [Wave 5: what a full reading found](#wave-5-what-a-full-reading-found) | A fix found on one road is a list of roads: the same shape waited on the next road, five times. | 0.102.556 |
+| [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | 0.102.556 |
+| [Ctrl+T and the tags Tk shares](#ctrlt-and-the-tags-tk-shares) | Measure the road the code takes, not one beside it; and a fix of a round's lows is code too, each line needing its own check. | 0.102.556 |
+| [The panel's fifth meeting: what using the apps found](#the-panels-fifth-meeting-what-using-the-apps-found) | A reader of the code finds what it says; a person using the app finds where it is said: a result out of sight, an offer older than its subject, words that keep back what happened. | 0.102.556 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -1957,6 +2016,3396 @@ became two hours.
 **Takeaway:** an age is the distance between two moments, not between two clock readings; the
 two part by an hour twice a year, and a rule that deletes must count the moments.
 
+### A file with two names
+
+*(2026-10-27 · found by the final audit's break-it round, on Windows)*
+
+**Symptom:** a backup whose Trash held one entry, its file named `202610~1.JPG`, deleted a
+note's own photo at the next start. A note whose file was `evil.exe::$DATA` opened the program
+without the "Potentially unsafe file" question.
+
+**Root cause:** NTFS answers more than one string for the same file. It gives every long name
+an 8.3 short name — for the app's timestamped names, predictable from the year and month — and
+reads a `::$DATA` suffix as the file's own data. Every check before a delete or an open compares
+names: the import's list of files it owns, the spare list a delete leaves alone, the extension
+that decides the warning. `_attachment_path_within` resolved the name with `realpath`, which
+follows the alias to the long file. So the file deleted or opened was not the name checked.
+
+**Fix:** the resolver refuses a name that reaches a file under another name: what `realpath`
+returns must be, letter for letter, the name joined to the folder. Every delete and every open
+goes through it, so the purge, Delete forever, Empty trash and the warning all see the same file.
+The warning also reads its extension from the resolved path. `test_data_safety` makes a real
+short name and a `::$DATA` suffix on Windows and a symlink on Linux, and holds that each is
+refused while the file's own name still opens; mutant TN01 takes the check away. "Except case"
+was first allowed on purpose, and round two found the capitals were an alias too
+([Round two](#round-two-each-fixs-next-door)).
+
+**Round three** *(2026-10-28)*: a name can reach a part of the file as well as the file. On NTFS
+`x.docx:Zone.Identifier` is the stream holding the file's Mark of the Web, and `realpath` hands it
+back unchanged, so it passed the letter-for-letter test. A backup's Trash entry naming it was
+purged at the next start, and the mark the import had just written went with it. The resolver now
+refuses any name holding a colon, which no Windows file name has, on every system; a file attached
+on Linux, where one can, is stored without it. `test_data_safety` writes the stream and purges by
+five spellings of it; qa7 attaches a file named with a colon; mutants RT01, RT02.
+
+**Takeaway:** when a check and the action after it each name the file, they must name it the
+same way. Resolve once, and compare what was resolved.
+
+### A delete that trusted the Trash
+
+*(2026-10-27 · found by the final audit's break-it round, on a disk filled on purpose)*
+
+**Symptom:** on a disk with room for the notes file but not for the Trash, Delete took the note
+out of both. The status line said "recoverable for 30 days"; after a restart the note was in
+neither file.
+
+**Root cause:** every delete wrote the Trash first, the right order, and then removed the note and
+wrote the notes file — without asking whether the first write worked. `move_notes_to_trash`
+dropped `save_trash`'s answer. The smaller notes file then saved fine, and the Trash held the
+note only in memory, where nothing writes it at close. The restore direction had been fixed for
+the same class long before ("a duplicate at worst, never a note in neither file"); this direction
+had the order and not the check.
+
+**Fix:** `move_notes_to_trash` returns the write's result and, when it failed, takes back what it
+appended. The app's wrapper says "Nothing was deleted" and returns None, and all five delete
+routes — a note, the selection, a category with its notes, the Duplicates panel, a series day
+sent to the Trash — stop there with everything as it was. `test_data_safety` and qa3 make
+`trash.json` unwritable; mutants TF01 and TF02.
+
+**Takeaway:** an order that is safe only if the first step worked needs the first step's answer.
+A write whose result nobody reads is a write nobody checked.
+
+### The number too big to start
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** three files that stopped the app at every start, for as long as they were there: a
+`notes_data.json` whose repeat interval was `1e999`; a leftover notebook in the folder above the
+app's, nested 990 lists deep; a `trash.json` whose entry said `"attachments": 7`.
+
+**Root cause:** the start-up readers expected the errors JSON usually gives and not these. Python
+reads `1e999` as infinity, and `int()` of infinity raises `OverflowError`, which the repeat rule's
+clamps did not catch. The stale-copy purge signs raw notes by recursion, and 990 levels plus its
+own frames overflowed the stack. The Trash comes in as the file held it, and the purge's list of
+files to spare iterated whatever `attachments` was. None of the three was inside a guard.
+
+**Fix:** the clamps catch `OverflowError` and fall back to their defaults. The purge's judgement
+— the one place that signs raw notes — keeps a folder it cannot judge. `attachments_of` reads a
+note's or entry's files as dicts with a string name, and every reader of a Trash entry's files
+goes through it. A probe gave every field of a note, a Trash entry and the settings infinity,
+minus infinity, NaN and deep nesting; nothing on the start-up path raises now.
+`test_data_safety` holds each; mutants AT01, NF01, NF02.
+
+**Takeaway:** a value from a file is any value its format can carry, infinity and depth
+included. Code that runs before the window exists must take the safe answer — keep, skip,
+default — for whatever it cannot read.
+
+### The close that outran a failed save
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** with the disk full, closing the window showed "Couldn't save your notes … recent
+changes may be lost when you close the app" — and then closed, losing them. The message also
+said to move the app to Documents, advice from when the notebook lived beside it.
+
+**Root cause:** the close saves whatever is unsaved on its way out, and stops only for the one
+question that means "take me back" (a date it could not store). A save that failed to write
+showed its error and returned; the close went on to `destroy()`. The words were in the widgets
+and in memory, and nowhere else.
+
+**Fix:** `save_notes` remembers whether its last write failed. The close tries once more — the
+disk may have room by then — and if that fails too, asks "Close without saving?", No being the
+answer Enter and Escape give. The error says what usually causes it (a full disk, a program
+holding the file) and that the changes are still on screen. qa3 fills the way with a folder
+where the write's temporary file goes; mutants CS01 and CS02.
+
+**Takeaway:** a warning that something will be lost is a promise to stop before losing it. If the
+next step is the loss, the warning has to be a question.
+
+### The preview that kept every frame
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** a 33 KB GIF ran the app out of memory as its preview played; a 1.2 MB one grew it by
+1.8 GB. A 439 KB PNG of 12000×12000 peaked at 1.7 GB on its way to a preview the size of a
+window.
+
+**Root cause:** the preview decodes an animation one frame per tick and keeps each, so its next
+loop plays from memory. The 64 MB limit applied only to what is remembered after the first loop;
+during it, nothing was counted. Small animations were enlarged up to eight times first, and the
+list stayed referenced after the preview closed. A still image was converted to RGBA and copied
+at full size before it was shrunk — `draft()` shrinks only a JPEG.
+
+**Fix:** frames stop being kept once they pass the same 64 MB, and the animation plays the part
+it has. An animation is never enlarged. Closing the preview lets its frames go. A still is shrunk
+before it is converted, and an image past 50 megapixels (a JPEG is decoded small and passes) is
+offered to the program the computer opens images with instead. qa7 plays each; mutants GF01–GF04.
+
+**A frame later** *(2026-10-28 · found by the final audit's second round)*: the 50-megapixel
+budget asked the first frame only. A 923 KB TIFF named `.png`, its first page 16×16 and its second
+13,000×13,000, showed at once; then the animation reached page two and took 46 seconds and 2 GB.
+Seeking to a frame reads its size without decoding it, so every frame is now judged before it is
+decoded, and the animation stops at the first one past the budget. The preview also lets Pillow
+use only the decoders of the pictures it shows: Pillow knows a file by its contents, so a `.png`
+could be a TIFF, an icon set, or an EPS that Pillow hands to Ghostscript. Nothing else in the app
+decodes an outside image. qa7 plays a JPEG holding a small and a large picture, and previews an
+icon set named `.png`; mutants AX16, AX17.
+
+**Every frame, together** *(2026-10-28 · the third round)*: each frame passed, and the frames
+together had no limit. Pillow composites every frame onto the whole canvas, so a 105 KB GIF of
+3,000 one-pixel frames on a 50,000×999 canvas cost a 50-megapixel decode on every 10 ms tick. Shown
+as a strip fifteen pixels tall, its frames never filled the 64 MB, and the app stayed 98% busy for
+as long as the preview was open. The canvas pixels decoded are now counted across the animation,
+up to four times the still budget (a 4K animation still plays two dozen frames), and the frames
+kept stop at 1,000; the GIF now decodes four frames and lets the file go. qa7 plays an animation
+under each limit; mutants RT03, RT04. The same round found the decoders' limit a dead end: a
+scanner's TIFF saved as `.jpg` was called "couldn't be read as an image", true of the preview and
+not of the file, with no way to open it. It is offered to the program the computer opens its kind
+with, as a picture too large is; mutant RT18.
+
+**Takeaway:** a limit has to hold while the thing it limits is being built, not only once it is
+finished — and for every part of it, not the first.
+
+### The table drawn whole
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** a note holding a 300×300 table — 2.9 KB as a share code — froze the app for about
+40 seconds each time it opened. A 1,000-row table killed the app on Linux outright: "X Error …
+BadAlloc … X_CreatePixmap", no traceback.
+
+**Root cause:** a table is drawn as a grid of real cells, every cell at once, on one canvas as tall
+as the table. Nothing limited either. 90,000 cells meant 90,000 rounds of measuring and drawing;
+1,000 rows at 34 pixels passed the 32,767 pixels a window may be, and the canvas could not be
+made. On Windows the result is unmeasured, which is reason enough not to find out on someone's
+notes.
+
+**Fix:** a table past 400 rows or 3,000 cells stays as its text — the pipe rows it is stored as,
+searchable and editable like any line — and the status line says why. The note's data does not
+change; 400 rows stay under the canvas limit at 225%. qa1 draws a 40×5 table and keeps a 401-row
+and a 3,100-cell one as text; mutants TD01 and TD02. The phone's app draws the same way and got
+the same kind of limit.
+
+**Takeaway:** anything drawn whole needs a size past which it is not drawn. Outside content
+chooses the size.
+
+### The Trash restored under a window it never had
+
+*(2026-10-27 · found by the final audit's break-it round, on the phone's app; the desktop had the
+same gap)*
+
+**Symptom:** a backup restored onto a new phone brought its Trash, kept for a year, and the next
+start deleted every entry older than 30 days for good, attached files included.
+
+**Root cause:** the import kept each Trash entry with the moment it was deleted, and took from the
+backup's settings its categories and calendar decorations — but not the Trash's window. A new
+notebook has none chosen, so the start-up purge went by the default 30 days: a window nobody
+chose for those entries, the class of "The Trash that forgot its window".
+
+**Fix:** when the notebook receiving the backup has never chosen a window, it takes the backup's,
+if it is a whole number of days from 1 to 365. A window chosen on this device stays; a window that
+could not be read stays unknown, so nothing is purged. qa3 imports a backup with a 365-day window
+into a notebook without one and into one that chose 30; mutants TW18 and TW19. The phone's app
+follows the same rule. Round two found the window taken when it was shorter too, which emptied
+this notebook's own Trash; it is now taken only when longer than the default
+([Round two](#round-two-each-fixs-next-door)).
+
+**Takeaway:** a setting that decides what is deleted travels with the things it decides about.
+
+### An old folder judged by one file
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** two start-up routes acted on an older notebook's folder after reading only its
+`notes_data.json`. The first start passed over an old notebook whose notes file was empty (every
+note in the Trash) or unreadable — its Trash and templates with it — and a welcome note then
+ended every later attempt. The cleanup of a leftover folder deleted its `notes_data_backup_*`
+files unread, once the notes file beside them was covered, so a note that lived only in a backup
+was gone.
+
+**Root cause:** both asked "how many notes does `notes_data.json` hold?" and took the answer for
+the whole folder. Zero meant "nothing here" to the adoption, though zero is also "all in the
+Trash" and "cannot be read"; covered meant "all of it" to the cleanup, though a backup is a
+notebook of its own.
+
+**Fix:** the old app's own store (AppData, the profile folder) is adopted whatever its notes file
+holds; an unreadable one comes in to be kept aside and announced as anywhere else, and its Trash
+and templates come without waiting on a settings file that may be the one that cannot be read. A
+backup in a leftover folder goes only when every note in it is the app's already.
+`test_data_safety`; mutants MG03, MG04, PB01.
+
+**Takeaway:** a folder holds more than its main file. Before acting on a folder, read every file
+the action touches.
+
+### The plain paste with no ceiling
+
+*(2026-10-27 · found by the final audit's break-it round; the ceiling is the owner's choice)*
+
+**Symptom:** pasting a long text with Ctrl+Shift+V froze the app: 600 KB took ten seconds, a
+megabyte twenty-seven — and then every key typed after it took as long again.
+
+**Root cause:** the formatted paste stops at 100,000 characters, so one paste cannot make a
+note nobody can edit; its message then offered Ctrl+Shift+V, "which has no limit", for the rest.
+A probe showed what the limit protects against. Text copied from a PDF has its lines rejoined
+into paragraphs, and lines of one length — the probe's — became one line of 600,000 characters.
+Tk lays out a wrapped line whole wherever the view or the caret moves on it, so each step paid
+for the whole line.
+
+**Fix:** Ctrl+Shift+V keeps the same 100,000 characters and says so with the same message, which
+now suggests pasting the rest into a note of its own rather than a way round. The user guide
+says the same. qa1 pastes past the ceiling both ways; mutant PL01.
+
+**Takeaway:** a limit with a way round is not a limit. If something is worth protecting against,
+protect every door to it.
+
+### Round two: each fix's next door
+
+*(2026-10-28 · found by the final audit's second break-it round, which attacked every fix of the
+first by name)*
+
+**Symptom:** eight of round one's fixes held for the case reported and not for the case beside
+it, and the rounds found four new data routes as well:
+
+- **A repeat ended another way.** A share code whose copy no longer repeated, answered Update,
+  kept the series' own days in the note, out of sight, with a rescue copy that had no room for
+  them. The next small edit's save dropped them with no copy anywhere, after a dialog promising
+  Restore previous would undo the update. A Restore previous of a version that did not repeat
+  did the same.
+- **Export after a failed save.** The failed save's message sends the person to Settings →
+  Backup → Export, and the backup was packed from the file on disk. It said "Export complete"
+  without the very changes it was made to rescue.
+- **The Trash window, shortened.** The import adopted a backup's Trash window whenever this
+  notebook had never chosen one, shorter windows too. A backup from a seven-day notebook emptied
+  this notebook's own Trash at the next start.
+- **Signing out.** The end of a Windows session saved by its own copy of the close's list. The
+  copy had drifted: a date typed short stayed unsettled, so unsaved, and a write that had failed
+  was never tried again. And the end of a session is only a question the person can still cancel.
+  The app stopped its backup work outright, behind a progress bar that never moved again.
+- **The rest.** A Trash entry's title of 7 kept Recently deleted from opening. A first start that
+  could not copy one file said "Imported" all the same. An old notebook whose settings could not
+  be read lost its Trash to the default window. A name in other capitals reached a kept note's
+  file. Three writers renamed files into place before their bytes were on the disk. The template
+  editor moved a template's bold onto other words, and the day's reminder broke on the Settings
+  page.
+
+**Root cause:** each first fix named the route it was reported on — the update from a share code
+"turns off a repeat in the editor", the purge "compares names" — and its sibling took another
+route to the same behaviour.
+
+**Fix:**
+- Whatever ends a repeat keeps the series' days in the rescue copy (`days_to_rescue`), and the
+  save that clears a one-off note's days keeps days no copy holds. Moving them there was itself a
+  loss, which round three made a copy
+  ([Round three](#round-three-one-rescue-copy-and-files-another-program-holds)).
+- The export packs what the app holds.
+- A backup's window is taken only when it is longer.
+- The close and the end of a session run one list of saves (`_save_on_the_way_out`). The session
+  asks nothing, lets an export finish and says on screen that an import was stopped.
+- Trash rows read a shaped copy. Files that cannot be copied are tried again, then named. An
+  unreadable old settings file travels as it is. An attachment resolves only to a file of exactly
+  its name. Every rename into place waits for the disk, which `test_data_safety` now reads in the
+  source. The template editor keeps styles as tags. The reminder bar goes above whichever page
+  shows.
+- Mutants DR01–DR24.
+
+**Takeaway:** a fix is for the behaviour, not the route it was reported on. Before calling it
+done, name the behaviour and ask every other road that reaches it.
+
+### The photo that was a remote connection
+
+*(2026-10-28 · found by the final audit's second round, with a crafted backup)*
+
+**Symptom:** a backup's note listed "🖼 Holiday photo.jpg", with the picture icon and without the
+"Opens in your default app" hint. Clicked, it handed Windows an `.rdp` file — a remote-desktop
+connection, not a photo — and asked nothing. So did a `.pyw` (which the Python launcher runs), a
+`.theme`, an Excel add-in, a Word document with macros and a Windows update package. A label
+holding a right-to-left override showed its letters in another order. And a backup downloaded
+from the internet gave up Windows' mark of where it came from: none of the files the import took
+out of it carried one.
+
+**Root cause:** the app trusted two things it had no reason to. The first was the label. An
+attachment record has two names: `stored_as` is the file on disk, and the open, its warning and
+the alias guard had all learned to judge that one ("A file with two names"). `filename` is a
+label, and the row took its text, its icon and the choice of hint from it, and the warning quoted
+it. The app never writes a pair that disagrees — it stores "stamp_" plus the original name — so
+nothing checked that the two agree, and a backup can write any label over any file.
+
+The second was its own list. The question before opening was asked only for the kinds on a list of
+dangerous ones, and a list of dangerous kinds is never complete: Windows has hundreds of file
+associations, every installed program adds more, and it had already been extended once, for the
+shortcuts and disk images it missed. Everything else went straight to `os.startfile`.
+
+The mark was lost rather than trusted. A browser leaves a `Zone.Identifier` stream on what it
+downloads — the "Mark of the Web" — and SmartScreen, Office's Protected View and its block on
+macros from the internet all go by it. A zip keeps it on the zip alone: `zipfile` writes plain
+files, and the import copied only their contents, so its files lost the last defences Windows
+would have added after the app's own.
+
+**Fix:** `normalize_note` makes the label end in the type of the file that opens ("Holiday
+photo.rdp") and takes out the characters that reorder or hide text: the controls, and the bidi
+marks, overrides and isolates. The row, the remove question, the warning and the note list's hover
+card read the name through the same `attachment_display_name`, so a record that never passed
+`normalize_note` shows the same. The icon and the hint come from the stored file, as the click
+does. A record the app made itself shows exactly as before.
+
+And the list is turned round. `how_to_open` names the short list of kinds whose usual app only
+shows what is in them — pictures, PDF, plain text and CSV, Word, Excel and PowerPoint files that
+cannot hold macros, sound and video — and those open at once, so a person's own documents meet no
+new question. Every other kind asks. The kinds known to run code keep the old warning; the rest
+get a calm one that says only that the app does not know the kind, and opens on "Open". Missing a
+kind from the dangerous list now costs the wording, never the question. Every handoff to Windows,
+the preview's "Open externally" included, goes through the one gate in `_open_externally`.
+
+The import now writes the backup's mark onto each attachment it copies out, before the file takes
+its place, as Explorer's own unzip does (`zone_mark_of`, `put_zone_mark`); a disk that keeps no
+streams goes without, and the import carries on. A file attached by hand already kept its own —
+`shutil.copy2` copies the stream on Windows — and so does a duplicated note's copy; both are now
+checked, so a change of copy can no longer drop it unseen.
+
+`test_data_safety` (the marks on Windows); qa7 puts a raw crafted record in the editor and clicks
+each kind; mutants AX01–AX12.
+
+Round three found two edges. A label padded with blank-looking characters the hidden list does not
+name (U+2800 and U+3164 among them) still pushed the real type past the row's end; a name too long
+for its row now gives way before its type, so ".rdp" always shows (mutant RT19). Photographing
+that row showed one thing more: the ✕ was packed after the name, so any name long enough took the
+whole row and the file could not be removed from it. The ✕ is packed first now (mutant RT24). And
+a backup cannot carry each file's own mark: a zip holds no streams, so a restore marks every file
+with the zip's mark only, and a backup kept on this computer or a USB stick restores its files
+unmarked.
+ARCHITECTURE said Windows' defences were kept; it now says where they are not.
+
+**Takeaway:** a label is a claim about a file; what a person sees is read from the file that will
+open. And where the safe kinds are few and the dangerous ones are anything else, list the safe
+ones: a list of what is dangerous is wrong the day it is written, and wrong quietly. A copy that
+drops where a file came from switches off defences the app never sees, so it carries that too.
+
+### Limits that held at the door but not after it
+
+*(2026-10-28 · found by the final audit's second round, with files and clipboards made to hurt)*
+
+**Symptom:** several, each from something a person could be handed — a backup, a clipboard:
+
+- a repeating note with 5,000 moved days took a minute and a half to open, and the same again at
+  every launch, for as long as it was the note last open;
+- Ctrl+V of 600,000 characters of plain text pasted all of them, and every key after took more
+  than a second;
+- a table on the clipboard — 161 KB of HTML, or 74 KB copied from a spreadsheet — became a note
+  of 210 million characters, 1.2 GB of memory, and every save took half a minute;
+- a backup whose settings carried a million day colours (2.4 MB packed) made every note take
+  seconds to open and the app twenty to start, for good;
+- 20,000 templates in a 49 KB backup took fourteen seconds to import, and the template picker
+  five to open.
+
+**Root cause:** every one had a limit, and every limit was checked where the data came in and
+nowhere after it.
+
+- *The moved days.* A load keeps at most 5,000, the number a rule may generate, because each is
+  worked out on every calendar draw. The editor's banner ("5,000 days moved") counted them by
+  asking the calendar about each moved day in turn, and each question read every moved day of the
+  series: 5,000 questions of 5,000 readings, twenty-five million in all. The History asked the
+  same way, the count of days whose own edits fell off the schedule likewise, and the load itself
+  looked each move up along the whole list of deleted days. A cap of 5,000 on the input was a
+  promise of twenty-five million on the work.
+- *The paste.* The 100,000-character ceiling lived in the formatted paste, and Ctrl+Shift+V had
+  been given it the day before ([The plain paste with no
+  ceiling](#the-plain-paste-with-no-ceiling)). Plain Ctrl+V never met either: with no HTML on the
+  clipboard it was Tk's own paste, and so was the right-click menu's Paste, the comments box, a
+  table's cell, a template's fields and the middle mouse button.
+- *The tables.* A table's text is lined up: every cell padded to its column's widest. The paste
+  ceiling counted what came in, then the padding was added — one 60,000-character cell over 3,500
+  rows is 210 million spaces. A sum was capped; the padding is a product. The same padding ran
+  when the caret left a table, when a cell was written and when cells were pasted in, and a row
+  of 30,000 pasted cells also added 30,000 columns to every row.
+- *The day colours.* Each colour's value was checked; how many there were, and whether each key
+  was a day at all, was not. The import took them whole, and every settings write — one for each
+  note opened — rewrote all 62 MB of them. The day markers were capped at three a day, at any
+  length each, and the list of collapsed groups could stop the app starting with one wrong value.
+- *The templates.* No limit at all — and the import checked each incoming name against every
+  template before it, the square of 20,000.
+
+**Fix:**
+
+- *The moved days.* Each question is asked of all the days at once. The rule is asked once for
+  every day in question — a repeat that stops after N times is walked once from its first day, not
+  once per moved day — and the moved days are read once. The answers are the same, which the unit
+  suite checks against the old day-by-day questions on 300 random series. The note opens in under
+  half a second, restart included. test_recurrence counts how often the moved days are read
+  whole, never the time, so a slow machine cannot fail it; mutants IX01–IX04.
+- *The paste.* Every route reads the clipboard through one reader that keeps the ceiling. Where
+  Tk would have pasted the text itself, the app pastes what it keeps, and says so in the
+  formatted paste's own words. qa1 and qa9 paste past the ceiling by every door; mutants
+  IX05–IX09, and PL01 now aims at the shared ceiling.
+- *The tables.* Every way a table is lined up asks first what the padding would come to, and past
+  100,000 spaces leaves the table ragged: each cell keeps the spaces its alignment needs, which is
+  all the padding says, and the drawn grid looks the same. A paste weighs itself with its padding
+  before any of it is built, and stops at the row — or the cell — where it would pass the
+  ceiling; the 161 KB table now goes in as its 95,000 characters. test_tables checks the lengths
+  worked out ahead against what is then built, on 400 random tables; qa1 pastes the spreadsheet
+  and the 30,000 cells; mutants IX10–IX13.
+- *The day colours.* The start and the import read them through one door: real days only, as the
+  calendar writes them, a marker an emoji's length, and at most 20,000 days of each — every day
+  of 54 years. The calendar refuses a 20,001st, so a start never drops one, and what a start does
+  not keep leaves the file. The probe's import now keeps none of its million, and a note opens in
+  a hundredth of a second. qa3 imports the backup and loads the file; mutants IX14–IX17, and I02
+  and I03 aim at the shared door.
+- *The templates.* At most 1,000, far past anyone's use: a load keeps the first thousand, the
+  import stops there and looks names up in a set, and saving a 1,001st by hand is refused with a
+  word. The probe's import takes a tenth of a second and the picker a third.
+  test_data_safety loads the file, qa3 imports the backup and saves one too many; mutants
+  IX18–IX20.
+- *The reading.* The same probes found a pasted page's own reading slow: 10 MB of paragraphs
+  parsed to the end after the ceiling had been passed (7 s), the styles moved once per shift of
+  every padded cell, and the structure at a copy's start marker looked for each stray end tag
+  along every open table. The page is now read no further than the ceiling, the shifts are summed
+  once, and the open tags are counted; the slowest probe takes about a second. test_richtext
+  counts what is fed to the parser and what is compared; mutants IX21–IX22.
+- *Half an emoji.* A probe setting the find box to a lone UTF-16 surrogate led further: JSON can
+  spell one as an escape, Tk will not draw it, and a notes file holding one in a title stopped
+  the app starting, at every launch — the mend existed, but only on the way to disk ([The mend
+  that only ran on the way to disk](#the-mend-that-only-ran-on-the-way-to-disk)). Every data
+  file, the backup's files and a share code are now read through one reader that mends what an
+  escape spells. test_data_safety reads each with one in it; mutant IX23.
+
+**Round three** *(2026-10-28)*: the template editor's table preview shortened a cell wider than its
+column a letter at a time, measuring the rest whole at each step, and it is drawn again at every
+key: 2 s a key under 12 rows of 1,200-character cells, minutes for one cell of 99,000, which a
+single paste or a backup's template can hold. The editor's own grid had long since halved instead
+(`_ellipsize`, whose widths are remembered); the preview now does the same, with one font for every
+drawing so a width is remembered between keys. Each probe's drawing takes a hundredth of a second.
+qa6 counts the measures asked of Tk for a 6,000-character cell, never the time; mutant RT13.
+
+And one more door with no limit at all: the checklist's "Add item" box. A pasted page became one
+item, drawn as one wrapped label as tall as its text — on Linux the app died drawing 30,000
+characters, past X's 32,767-pixel window — and a 490-character share code carried a 60,000-character
+item in. The note's and the template editor's boxes now refuse a key or a paste past 2,000
+characters and say so, as the title's box does. An item already longer — saved before the limit,
+or brought by a share code or a backup — is not cut: a first version cut it at every load, which
+would have taken a person's own words away without a trace. It is kept whole, and its row draws at
+most 2,000 characters and 100 lines, then "…" (`checklist_shown`); the line count matters because
+1,999 line breaks fit the limit and still stand a row past X's height. The template editor's name
+and title boxes keep the note title's 200. test_data_safety, qa1 and qa6; mutants RT14–RT17 and
+RT21–RT23.
+
+**Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
+work costs at the limit — a capped number squared is not capped — and count every door to it, not
+the one the limit was written for.
+
+### Round three: one rescue copy, and files another program holds
+
+*(2026-10-28 · found by the final audit's third break-it round, which attacked round two's fixes
+by name)*
+
+**Symptom:**
+- **Days erased.** Round two's fix for a share code that ends a repeat *moved* the series' own day
+  text into the rescue copy. A second code that turned the repeat back on, or a big rewrite after
+  the repeat was put back by hand, erased the days with no word. Before that fix they had stayed
+  in the note.
+- **The copy replaced.** Widening one table cell re-pads every row, which read as the whole table
+  lost. Its copy replaced the rescue copy the note held. A big delete saved first, then the
+  repeat turned off, lost the deleted words the same way.
+- **A held notes file.** One held by another program at the start read as unreadable. Its copy
+  failed for the same reason, and the first keystroke's autosave replaced fifty notes with one.
+  At the first start of a new version, the copy of the old notebook gave the notes file one try
+  and returned in silence when it was held. The app then opened empty, its first save wrote a
+  notes file, and the old notebook was never looked at again.
+- **Smaller gaps.** The export on such a start packed an empty notebook as "Export complete". A
+  template half written in its editor went with a Windows sign-out. An import's "cut short" line
+  outlived a re-import that finished.
+
+**Root cause:** a note has one rescue copy. Anything that writes a new one takes the old one's place,
+so whatever lives only there lives one save. Separately, a read that failed was taken for a file
+that could not be parsed, and a copy that failed for the same reason was taken for an ordinary
+failure.
+
+**Fix:**
+- Whatever ends a repeat copies the days into the rescue copy and keeps them in the note.
+- Loss is measured in cells, not padding (`_without_padding`; replaced in round four by a count of
+  the words gone, which covers padding too).
+- A turn-off's copy keeps the text of a copy the note does not hold again, whatever came first.
+- An update's question says when it replaces such a copy.
+- The start reads its data files three times, half a second apart. A file it can neither read
+  nor copy is never written over that run (`paths.hold_writes`), and the start says so.
+- The first start's copy of the old notebook is all or nothing for the notes and settings, and
+  writes nothing until it succeeds.
+- The export refuses on a start that could not read the notes.
+- The session end saves a template editor's work beside any template of its name.
+- A finished import takes its line back.
+- `test_data_safety`, qa3, qa5; mutants DR29–DR40.
+
+**Takeaway:** a store with one slot keeps only the last thing put in it. Before moving anything
+into it, ask what else will write there next. And a file that could not be opened is not a file
+that could not be read: one is a moment, the other is damage.
+
+### Round four: days kept but not used, loss counted in words, and a run that saves nothing
+
+*(2026-10-28 · found by the final audit's fourth break-it round, which attacked round three's fixes
+by name)*
+
+**Symptom:**
+- **A kept day took over the note.** Round three keeps a series' days in the note when its repeat
+  ends. Opened from its date on the calendar, the one-off showed its first day's old title and
+  text, and the save wrote them over the note. A series whose first day had been deleted vanished
+  from the calendar, and from its reminder, once turned off.
+- **The copy replaced again.** Adding a column, removing an empty one, or putting a step into a
+  numbered list replaced the rescue copy of a paragraph deleted a moment before. A turn-off whose
+  own save also cleared the text kept an older copy's text instead of the words it took.
+- **Typing lost.** Words typed in the blank editor a delete leaves were gone if the person pressed
+  Ctrl+N, clicked another note, closed the app or signed out within half a second. This was older
+  than round three.
+- **Settings held, then overwritten.** `settings.json` held for a moment by another program read
+  as damaged: the one-time cleanup ran again, and the next setting saved wrote a two-key file over
+  the person's categories, theme and Trash window.
+- **A run that saves nothing, with every way out closed.** It raised the old save dialog at every
+  pause, with advice that cannot work there. The export refused, or said "Export complete" over
+  nothing. An import said "Import complete" with its notes in no file. A sign-out raised a dialog.
+  A held Trash or templates file showed empty, unexplained.
+- **One held attachment** made every backup fail.
+
+**Root cause:** each fix had a reader it did not ask. The days were kept for a turn-back-on, but
+everything that reads them still applied them. Loss was measured as the span between the first
+and last change, and the padding fix of round three covered only one way that span grows. The
+hold was known to the core and the start notice, and to none of the screens that act on it. And
+the flush took "no note, no tab" to mean "nothing typed".
+
+**Fix:**
+- What a day shows is asked of a series only (`effective_note`). What a day holds, for the save
+  that decides whether days are kept, is a separate question (`day_as_kept`). Gated too, that one
+  judged every day empty and dropped them, which qa5's older checks caught at once.
+- The loss is the smaller of the span and the words gone, each with its space (`words_lost`).
+  Neither count comes out under what is really lost. A column added costs nothing; one letter
+  changed in a paragraph written without spaces costs one. A turn-off that also clears text keeps
+  the newest text.
+- The flush saves a blank editor that holds something, as its autosave would have.
+- Settings are read with the notes' retries. A refusal is not damage, and later refusals fall back
+  on the last good read. The cleanup waits while the settings are unknown, and a first start that
+  cannot bring an older notebook in holds `settings.json` too.
+- One question, `_notes_file_unread`, answers whether a run's notes file is unread. A held run
+  says so once, then on the status line. The export packs the notes written since the start and
+  says it holds only them. The import waits for a reopening. There is no dialog at a sign-out, no
+  purge, no welcome note, and a held Trash or templates file is named at the start.
+- An attachment that will not open is left out of a backup, and named.
+- `test_recurrence`, `test_note_identity`, `test_data_safety`, qa3, qa5; mutants DR41–DR56, with
+  DR31, DR32, Y01, TW01, TW13, SF06, DR08, DR37 and DR38 re-aimed.
+
+**Takeaway:** a value kept "only for later" is still read now by everything that read it before.
+Find every reader before deciding a field is inert. And a measure of harm needs a lower bound as
+well as an upper one; two crude counts that each never undershoot are, at their minimum, a fair
+one.
+
+### Round four: what a click put away, and what a screen can draw
+
+*(2026-10-28 · found by the final audit's fourth break-it round, which attacked round three's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **Past what X can draw.** A table whose cells hold line breaks ended the app on Linux, no crash
+  log, inside both table limits: one cell of 1,000, or a paste of 250 spreadsheet rows of four-line
+  addresses. At every start after, too, the note being last open. A sweep of every widget sized
+  by what it shows found the same end from a template named by a pasted page (Save as template's
+  box had no limit), a backup's attachment label of 60,000 letters, a title of 3,000 lines in the
+  day's list, and a question quoting a long name. On Windows the effect is unmeasured; a popup
+  wider than the screen at the least.
+- **Buttons pushed out of their row.** In Settings > Templates a 50-letter name took the pencil's
+  room and 80 the bin's: the template could be neither edited nor deleted. The category row, a
+  statistics pill and the picture preview's Close did the same.
+- **Keys under a picture.** The preview is a frame over the window. Opened by a click, it left
+  the caret in the note under it; Delete or a letter pressed at the picture edited that note, and
+  it was saved. Tab walked from its Close into the note.
+- **A part put away with the keyboard in it.** A click takes no keyboard. Folding the checklist
+  with the caret in its Add box left it there: x and Return added an item nobody saw, and it was
+  saved. So did the calculator, a Settings section left, a panel closed.
+- **Smaller.** Every animated PNG raised halfway through its preview, its file held open. A table
+  cell's menu had no key, and its two palettes closed at the first Tab. The template editor and the
+  picker grew with what they held and never scrolled, Save below the screen. And six lows.
+
+**Root cause:** round three's limits counted what is typed, and every drawer took what it was
+handed whole. A label, a button or a canvas is as large as what it shows, and X makes no window
+past 32,767 pixels: a limit on characters is no limit on lines, nor on what a backup brings. The
+keyboard's gaps were one gap: a part of the window put away or covered while the keyboard was in
+it. Only the pages fixed one by one in round three, Settings and the sidebar, moved it.
+
+**Fix:**
+- A table is also judged by its drawn height, every line of every row counted at the size it would
+  be drawn; its cell editor stops at the same size and scrolls inside.
+- Nothing stored is cut. Every box that names something keeps the limit, and every drawer of a
+  name draws one line, cut (`one_line`, `_fit_title`, `_fit_name`). A question lays out at most
+  12,000 characters and 300 lines, its start and its end kept.
+- A row's buttons are packed before the name that stretches. A scan found every row packed that
+  way, and each hit was read.
+- The preview takes the keyboard on Close however it was opened, and Tab walks its two buttons.
+  Frame times are whole milliseconds; a preview that fails half built is taken down, its file let go.
+- One watcher (`_watch_parts_put_away`): a part its geometry manager forgets while the keyboard is
+  inside hands it to the control just clicked, or to the next one on. A tab left takes it off
+  anything out of sight.
+- Shift+F10 in a cell opens its menu, a palette it opens takes the keyboard, and the keyboard comes
+  back to the cell.
+- What grows in a popup scrolls (`_scrolling_rows`), a popup that grows is placed again, and none
+  is placed past the window's bottom.
+- Lows: a dotted I's cut, Settings' way back to a cell or the find box, the preview redrawn only
+  when its tables change, a paste over a selection weighed whole, and the quiet template save at a
+  cancelled sign-out.
+- qa1, qa3, qa6, qa7, qa9; mutants RU01–RU32.
+
+**Takeaway:** a limit on what is typed is no limit on what is drawn: every drawer of outside content
+needs a size it never passes. And when a fix moves the keyboard off one hidden part, ask what else
+can be hidden with the keyboard inside. The answer is one rule, not a list.
+
+### Round five: a retry paid at every read, and shares in the wrong unit
+
+*(2026-10-28 · found by the final audit's fifth break-it round, which attacked round four's fixes
+by name)*
+
+**Symptom:**
+- **A held settings file froze the app.** With `settings.json` held by another program for the
+  whole run, the start took 19 seconds, Recently deleted 27, a click on a note 4, and every pause
+  in typing 1. Round four's retries for that file were waited through at every read.
+- **Half a table deleted, no copy.** Five rows of a shopping list's eight, deleted at once, made
+  no rescue copy, while the same words written as prose did.
+- **The newest words in no file.** A turn-off whose own save cleared text still took an older
+  copy's text when a save made while the turn-off waited had one.
+- **An item typed, then cleared.** In the blank editor a delete leaves, an item typed in the
+  checklist's Add box was cleared by Ctrl+N.
+- **"Export complete" without the templates.** With `templates.json` held at the start, one
+  template saved in the session became the backup's whole `templates.json`.
+- **A list's markers taken for lost words.** A numbered list of fourteen lines turned to bullets
+  counted every "1." and "•" as a word deleted, and replaced the rescue copy of a paragraph
+  deleted before (found on Android; the rule was the same here).
+- **A series turned back on, hidden.** A repeat turned off keeps its days while any holds text.
+  Turned back on from another date, a day the old series had deleted could be the new one's first,
+  and it was hidden, with no screen to bring it back.
+- **Smaller:** the refused writes of a held file raised a banner at every note opened, over a
+  delete's Undo; the start announced a held file's categories as gone missing; a run that saves
+  nothing showed "Auto-saved" under its own message after the first save; a lock file held a
+  moment at the start let a second window open the same notebook once it was let go; and a
+  table with a "^" under a row too short to have its column made Export note and Ctrl+C fail.
+
+**Root cause:** each round-four fix answered its question in one place and left a sibling asking
+the old one. The retries meant for the run's first read had no record that it was made. Loss was
+counted in words, but its shares were still taken of a length with the padding in it: two units
+in one fraction. And a "word" was any run of letters between spaces, a list's markers included.
+The turn-off's new rule was put in one of its two branches. The blank editor's test asked the
+editor's state, which leaves out the Add box. The export trusted that what the app holds is never
+less than its files, which a held start had made untrue. Round four kept a series' days for its
+return without asking whether it returned as the same series. And the table reader looked up the
+cell above a "^" without asking whether that row had the column.
+
+**Fix:**
+- Only the run's first read of `settings.json` waits for it (`_settings_tried`); every later read
+  tries once. The other data files are read once a run and keep their retries.
+- A save's loss and its shares are in one unit: the old text measured as the loss is, each word
+  with one space (`_measured`). A line's words are counted after its list marker
+  (`strip_list_markers`).
+- A series turned back on with another date or rule drops the old series' deleted days, which
+  hold nothing and stay in the rescue copy (`kept_days_fit`), in the editor and in a share code's
+  update. Days with their own text stay in the note, the owner's choice: left only in the one
+  rescue copy, the next copy would erase them.
+- A "^" with no cell above it stays content, as one in the first row always has.
+- A turn-off that takes text keeps the newest text first, whichever copy is there.
+- The blank editor's question counts the checklist's Add box.
+- A templates or Trash file the start could not read is read at the export and joined with the
+  session's, or named as left out (`read_list_now`).
+- A held file's refused write is reported once a run; a held settings file's categories are not
+  announced; the held run's status line is right from its first save; a sharing violation on the
+  lock file is tried again before the lock fails open.
+- And in the suite: the waits for an export or import to finish had 5–10 s deadlines, and on a busy
+  machine an import outlived one and changed notes under the next checks. They end when the work
+  does, with a ceiling of 120 s.
+- `test_data_safety`, `test_recurrence`, `test_tables`, qa3, qa5; mutants DR57–DR69, with DR29,
+  DR32, DR47, DR49 and RD01 re-aimed. DR60 survived the first test, whose table lost enough to pass
+  under the old measure too; the test now first proves the old measure would miss it.
+
+**Takeaway:** a fix that adds a condition to one branch, or a new unit to one side of a fraction,
+has changed a question that was asked in more than one place. Ask it everywhere, in the same units.
+And a check's deadline is a claim about the machine, not the code: wait for the work, and fail only
+on a ceiling no working run comes near.
+
+### Round five: the shortcuts under a picture, and a toolbar laid out again
+
+*(2026-10-28 · found by the final audit's fifth break-it round, which attacked round four's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **Keys under a picture, by a shortcut.** Round four's preview holds the keyboard for Tab and
+  clicks. Ctrl+N and Ctrl+F got past it: each gave the keyboard to a box under the picture, and
+  the picture stayed. Ctrl+F then Escape left it in the note's text under the picture, and what was
+  typed there was saved. Ctrl+N's title was typed blind. A table cell's palette outlived Ctrl+N
+  the same way, floating over the new note.
+- **A toolbar laid out again.** Round four's watcher hands the keyboard on from a part put away.
+  It read a formatting button laid out again as put away. Every width change that moves the
+  toolbar's buttons between rows (a snap, maximise, restore) sent the keyboard from B into the
+  note, and the next Space replaced the selected words. That was a regression of round four.
+- **Rows counted with the separator.** Tab at the last cell of a table with a separator row (a
+  column resized or hidden, a markdown table pasted) added the row and opened no editor. The
+  keyboard fell to nothing.
+- **A table kept as text in mid-edit.** Enter, Tab at the last cell, or Insert row below could take
+  a table past the height drawn as a grid. The table was then left as text, with the keyboard on
+  nothing, or (from the menu) at the note's end.
+- **Smaller.** A paste past a limited box's limit was refused whole, while the title's box shortens
+  it. Exporting or copying a table walked each row's line once for every empty cell. One row of
+  3,000 empty cells took 4.5 s, a 30 × 100 table 120 ms. And a picture's frame of 0.6 ms ticked
+  every millisecond, half a core while its preview was open.
+
+**Root cause:** the preview's rule covered the keys typed at it, not the app's own shortcuts. Those
+closed only a popup holding typed work, and moved the keyboard into the editor under the picture.
+The watcher judged a part put away by its being unmapped two idle rounds later, but mapping lags
+layout. When a row's size changes, pack asks the parent first, so a button packed straight back
+still reads as unmapped. Tab used `nrows`, the table's text lines with the separator, as a data
+row. And the routes that reopen a cell after a commit had no answer for a grid that had gone.
+
+**Fix:**
+- A shortcut that gives the editor the keyboard closes a popup with nothing to lose, as a click
+  outside does (`_leave_settings_for_the_editor`). The template editor still asks.
+- The watcher leaves the keyboard where it is when the part and every parent are managed again.
+- Tab counts data rows. A commit that leaves a table as text puts the keyboard in its text, at the
+  end of the cell being edited (`_keyboard_to_kept_table`).
+- A limited box's paste deletes the selection and pastes what fits, as the title's does, the
+  owner's choice. A key past the limit is still refused.
+- The export finds a row's pipes once, and sorts the merges into rows once. A frame of 10 ms or
+  less plays at 100 ms, as browsers play it.
+- qa1, qa6, qa7, `test_richtext`; mutants RV01–RV10, with RT16, RT17, RU09 and RU32 re-aimed.
+
+**Takeaway:** a rule about where the keyboard may go must hold on every road that moves it,
+including the app's own shortcuts. And a part is put away when its manager forgets it, not while it
+waits to be drawn: ask the layout, not the screen.
+
+### Round six: a restore on a run that saves nothing, and ceilings kept at the load
+
+*(2026-10-29 · found by the final audit's sixth break-it round, which attacked round five's fixes
+by name; this is its data half)*
+
+**Symptom:**
+- **A note restored, then in neither file.** On a run that could not read the notes file, Restore
+  in Recently deleted, Restore selected or a delete's Undo took the note out of the Trash in memory
+  while its notes save was refused. The next Delete permanently, Empty trash or delete to the Trash
+  wrote that Trash over the file, and the note was gone, though the start's notice had said the
+  notes already there were safe.
+- **The 1,001st item, there for a day.** A checklist of 1,000 items took one more by Add, by the
+  item waiting in the Add box when the note was left, and by a delete's Undo after an Add into its
+  room. It was drawn and saved, and the next start cut it without a word. The template editor's Add
+  and its waiting item were cut at Save the same way, and the editor closed without asking.
+- **Use template dropped the Add box.** In a new note whose only words were an item in the box,
+  Use template replaced it unasked; over a saved note, "Replace current note?" warned of a loss, and
+  Yes lost what the autosave had not yet written.
+- **Comments wiped, no copy.** 780 characters of comments replaced by "ok" went to disk with no
+  rescue copy; the same words deleted from the body kept one.
+- **A day's own text lost on the way from the phone.** A repeat turned off on the phone kept its
+  days' own text only in the rescue copy; this app keeps them in the note, and here the next big
+  delete made a copy of words alone, so the day's text was in no file (found on Android).
+- **A backup taken for whole.** An export that finished as the window closed was recorded as the
+  last export: a backup of a held run's session alone showed as "Last exported", and files it left
+  out went unnamed.
+- **Smaller:** a held run's Empty trash deleted an attached file that a note in the unread notes
+  file used; and the Add box taken by a save that stays on the note rebuilt every row, 2.2 seconds
+  at 1,000 items.
+
+**Root cause:** each was a rule kept in one place and assumed in another. The restore wrote the
+notes first so that a failed write would leave a duplicate: true only if a later write succeeds,
+and a held run's never does. The checklist's ceiling lived in `normalize_note`, at a load, so every
+door into the editor's list passed it by. Use template asked a content test without the Add box,
+the one route into an empty editor that did not save first. The rescue copy's measure read two of
+the three texts the copy holds. The two apps kept a turned-off series' days in two places. And the
+close finished an export's work without the poll's knowledge of what the export held.
+
+**Fix:**
+- A restore on a run whose notes file is held is refused, with the reason, as an import is
+  ("Restore after reopening"); a notes write that fails on an ordinary run puts both lists back as
+  the files are. No attached file is deleted on a held run (`_delete_attachment_files`).
+- Every door into a checklist refuses the 1,001st item and says so (`_checklist_full`): Add, whose
+  words stay in the box, the Add box taken on leaving, a delete's Undo, the template editor's Add
+  and Save, and Save as template from a full note. The template editor asks on closing over words
+  a full list cannot take.
+- Use template over a saved note saves it first, its Add box too, as Ctrl+N does, and asks
+  nothing: the note is left, not replaced. Over a new note's unsaved content it asks, as test plan
+  case 32 has it, the box counted by the test the blank editor's flush shares
+  (`_editor_holds_typing`).
+- The comments are weighed by the rescue copy's bars as a text of their own: counted in with the
+  body, a long comment would make a whole body deleted read as a small share.
+- One place for a turned-off series' days, the note, the owner's choice: a note read whose
+  series' copy holds days with their own text, and which keeps none itself, takes them in, once
+  (`_days_back_from_copy`, asking the one `days_hold_own_text`). Only the series' own copy: an
+  update's copy of a note that did not repeat holds the days the update replaced, on purpose. The
+  phone keeps them in the note as well (its round six).
+- An export that finishes at the close follows the poll: a backup of the session alone is not
+  remembered, and what its message would have said, the next start says (`_left_out_said`, shared
+  with the poll).
+- The Add box taken by any save adds one row, as Add does (`_append_checklist_item`).
+- `test_data_safety`, qa3, qa6; mutants DR72–DR94, with DR44, DR47, DR58, DR71, DR76 and DR77
+  re-aimed.
+
+**Takeaway:** "a failed write leaves a duplicate at worst" is a promise about the next write. On a
+run whose writes are all refused there is no next write, so the lists in memory must stay what the
+files are. A ceiling kept at the load is a ceiling the editor crosses: every door that adds must
+ask it. And when two programs keep one notebook, a thing they both keep lives in one place.
+
+### Round seven: a copy taken for the series', and what one slot holds
+
+*(2026-10-29 · found by the final audit's seventh break-it round, which attacked round six's fixes
+by name; this is its data half)*
+
+**Symptom:**
+- **The same backup twice, and the earlier version gone.** After a backup's Update of a repeating
+  note, importing the same backup again said the note was "edited elsewhere", and the default
+  Update replaced the only earlier version: the series, with each day's own text, was in no file.
+  This is the loss "Importing the same backup twice, the second time" was about, come back.
+- **Two letters of comments cleared, a deleted body gone.** A big delete of a note's body kept a
+  rescue copy. Then clearing a comment of two letters made a new copy of the note as it stood,
+  over the first: the deleted words were in no file, and nothing said so.
+- **Restore previous over new comments.** Comments typed after a big delete were written over by
+  "↩ Restore previous", with no copy of them kept and the question saying nothing (found on
+  Android; the same rule here).
+- **A sign-out during an import's question.** The import's files, already copied, and its
+  unpacked backup stayed behind, and the next start said nothing.
+- **Smaller:** a start that set an unreadable notes file aside deleted attached files its unread
+  notes use; the retry for a lock file another program holds never ran on Windows; a full
+  checklist's Add box advised "Delete an item to make room" after leaving the note had cleared the
+  box; a held templates file's backup kept the file's template over one the session made again
+  under its name; and a sign-out at 1,000 templates wrote one the next start cut, unsaid. A series
+  the phone's 0.12.0 had turned off and back on, its days in the copy alone, never took them back.
+
+**Root cause:** round six taught a note's read to take a turned-off series' days back from its
+rescue copy, and told "the series' own copy" from an update's by whether it repeats. An update's
+copy of a series repeats too. And the read is not only the load: the update's own comparison
+normalises the note, so the copy's days made an unchanged note read as changed. The comments, now
+a trigger for the one slot, filled it over a body's copy as no edit of them had before. The
+restore weighed the texts it writes over by a list that left one out. And the import cleared its
+"running" state before its questions, so a session that ended then found nothing to settle.
+
+**Fix:**
+- Days come back only from a series' own copy, told by its shape: a turn-off's copy, on either app,
+  holds the text, the date, the repeat and the days, and none of what only an update's copy holds
+  (`_series_own_copy`). The update's comparison reads the note without its copy. A series turned
+  back on as it was takes its days back when the copy is that same series.
+- A save due for the comments alone, over a copy the note does not hold again, keeps that copy's
+  words and takes only the comments, in a turn-off's save too, as the turn-off already kept a
+  waiting copy's words.
+- `copy_replaced_by_restore` weighs the comments, and the styles of the same words.
+- An import's questions are known to the end of a session (`_import_asking`): word for the next
+  start, which takes its files and unpacked backup out (`_drop_left_import`, only bare names in
+  attachments and only a `notes_import_` folder in the temporary folder, since settings.json is a
+  file another program can write); an answer takes the word back.
+- A notes file set aside unreadable keeps every attached file, as a held one does
+  (`_UNREAD_AT_LOAD`). The lock's retry reads `EACCES`, which is how `open()` reports a sharing
+  violation; the test holds the file for real. Words a full list's Add box could not take wait
+  for their note, and the window's close asks before losing them. A held templates file's backup
+  carries both versions of a name, the session's first. A sign-out at 1,000 templates writes none
+  more, and the next start says so.
+- `test_data_safety`, qa3, qa5; mutants DR95–DR110, with DR02, DR40, DR46, DR65, DR74, DR77 and
+  DR92 re-aimed.
+
+**Takeaway:** a rule about "the copy" has to say which copy. Asked by whether it repeats, an
+update's copy of a series passed for the series' own; asked by what it holds, it does not. And a
+rule that runs inside `normalize_note` runs wherever a note is shaped, the comparisons included.
+One slot holds one version: each new reason to fill it is a new way to empty it.
+
+### Round six: the keyboard out of a cell, and a list's pieces parked beside it
+
+*(2026-10-29 · found by the final audit's sixth break-it round, which attacked round five's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **A piece of a list over the list.** A checklist's chunk parked out of sight grew taller than
+  its 20,000 px parking place and hung down over the rows in view: at 150–300%, the top of a list
+  of long items showed item 9 or 12 where item 0 stood, and Space or a click ticked an item
+  nobody could see. Two roads led there. A chunk's first item deleted and put back by its Undo
+  went into the chunk before, which grew by one at every round; and four items of 100 lines at
+  300% made a chunk of 22,000 to 42,656 px. Scrolled more than 20,000 px into such a chunk, its
+  rows were drawn short of their place and its last ones never shown.
+- **The keyboard sent rows up.** Space on the last item's bin, alone in its chunk, put the
+  keyboard on the chunk before's first item, and the next Space removed that one. Recently
+  deleted did the same 16 rows up, where Restore asks nothing; the template editor sent it to
+  "+ Add".
+- **Out of a cell onto nothing.** Escape in a table cell, the way out the User Guide names, and
+  Ctrl+V of copied cells left the keyboard on nothing: what was typed next went nowhere, and Tab
+  began again at the tab strip.
+- **Smaller.** Each scroll step of a long checklist moved every chunk within a view above it and
+  two below: 18 ms a step on Windows at 1,000 items. Enter mid-cell that left a table as text put
+  the caret at the cell's end. The template editor, opened from Settings, shortened a paste with
+  the word only on the status line hidden behind Settings. A limited box weighed Windows' CR LF
+  as two characters and kept the CR. And Enter on the picture preview's buttons did nothing.
+- **Found by the new check for that last one:** the preview's Open externally opened the
+  overlay's own name, not the picture. Round four's way back for the keyboard reused the name
+  `path` lower down the same function, and the button read the name when pressed.
+
+**Root cause:** round five built a long list in chunks of a count of rows and parked each one a
+fixed 20,000 px above the view, on the strength of one measurement, a row of 2,000 letters.
+Nothing kept a chunk that short, and Undo put a chunk's first row back into the chunk above it.
+Where the keyboard goes after a press was found by its place among its siblings, and a row's
+siblings were now its chunk's: a chunk the redraw did not make again named the wrong rows. The
+cell routes round five fixed were the ones its finding named, while Escape and a paste of cells
+close the editor too. And the scroll placed every chunk near the view, which moves a window for
+each.
+
+**Fix:**
+- A chunk out of sight is parked beside the view, 20,000 px to its left as well as above it, so
+  no height reaches it. One in the view stands at its true place, however far above the view's
+  top that is.
+- A chunk takes no row more once it is 4,000 px tall by its rows' heights as they are made
+  (`RowStack.TALLEST`, `_natural_height`). Undo puts a row back into the side with room, or into
+  a chunk of its own, and long items moved together are chunked again past four times that.
+- A row's place for the keyboard is its place among its block's rows, counted across chunks
+  (`place_of_row`), and the Trash's own route counts the same way.
+- Escape leaves the keyboard in the note's text under the table, where the caret goes from a
+  drawn table's lines. A paste of cells brings it back to the cell, as the paste from the cell's
+  menu does. Enter mid-cell into a table kept as text puts the caret after its break.
+- A scroll step places only the chunks in the view, and short checklist items go 32 to a chunk:
+  18 ms a step became 7 on Windows, measured in one run.
+- The template editor says what its boxes' limits did on a line under its heading
+  (`_say_by_the_box`). A paste is weighed with each line break one character, as Tk's own paste
+  puts it in.
+- Enter presses the preview's buttons, and so does the keypad's where Tk has one. Open
+  externally opens the picture.
+- qa2, qa6; mutants RY01–RY17, with RW01, RW06, RW08–RW17 and KF07 re-aimed.
+
+**Takeaway:** a limit justified by one measurement holds only for what was measured: a piece of a
+list parked a fixed distance away has to be parked where no size of it reaches the view. And a
+place is only as good as the parent it is counted in. Once a list is split into pieces, where a
+row stood is asked of the list, not of the piece.
+
+### Round seven: a list's pieces measured once, and Enter held down
+
+*(2026-10-29 · found by the final audit's seventh break-it round, which attacked round six's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **A list blank past 16 bits, again.** Long checklist items gathered by moves in a wide window,
+  then the window narrowed to its minimum: a chunk measured at 13,740 px stood 41,684. Scrolled
+  more than 32,768 px into it, the list was blank, and Space ticked an item nobody could see.
+- **Enter held on a picture.** Its preview opened and shut over and over: Close took the
+  keyboard and the next repeat, the name got the keyboard back and the next.
+- **A paste cut without a word on the note's page.** The checklist's Add box and the title said
+  a shortened paste on the status line, which stands at the foot of the scrolled editor, out of
+  sight at the window's own sizes. And a title pasted with its line break was said to be
+  shortened when nothing was cut.
+- **Left in the template picker** went to a template 30 further down, in a chunk parked out of
+  sight.
+- **CR LF weighed twice.** On Windows a paste into the body or the comments just under the
+  100,000-character ceiling lost its end, one character for every line break past it, and was
+  said to be cut at 100,000.
+
+**Root cause:** each was a measure taken once, or of the wrong thing. A chunk's height was its
+rows' heights as they were made, and a checklist label is made at its starting wrap and wrapped
+narrower later; round six's guard against tall chunks compared that first measure with a
+bound, and nothing else ever asked. The arrows corrected a parked chunk's y but not its x. The
+status line was taken as seen because it was mapped. The ceiling weighed the clipboard's text
+before its line breaks were made the note's, and the title weighed what was copied, not what it
+kept. And a key held down repeats -- Windows sends presses alone, X11 a release and a press at
+one time stamp -- and a control Enter's press handed the keyboard to took each repeat as a
+press of its own.
+
+**Fix:**
+- A chunk's height is read as its rows stand (`_RowGroup.height`): a row wrapped again is
+  measured again (`rewrapped`), a row made later is wrapped as its block's rows last were
+  (`_wrap_as_its_rows`), and the height laid out counts when it is more. A block whose rows
+  grow past four times `TALLEST`, with more than twice it beside the tallest row (`too_tall`),
+  is chunked again by its owner once for each width (`_rechunk_too_tall`); the note's checklist
+  keeps its view and the keyboard on its item (`_chunk_checklist_again`). The moves' guard asks
+  the same question. Whatever its rows do, no chunk is placed past 32,767 px (`RowStack.REACH`).
+- Enter held down presses once (`_enter_repeats`): on a drawn control, the preview's buttons
+  and a question's answers. Let go of, it presses again. A press Tk is asked to make carries no
+  time and is never taken for a repeat.
+- A limited box on the note's page, and the title, say what they did on the status line while
+  it is in sight (`_in_sight`: mapped, and inside the view of every canvas it is scrolled on),
+  and in a banner over the window while it is not. A title is weighed as it goes in.
+- The arrows read a choice's x where it stands, as its y (`_root_x`).
+- The ceiling every paste keeps weighs a line break as one character, for every route
+  (`_cap_paste`).
+- qa2, qa6; mutants RZ01–RZ12, with RY14 and RY17 re-aimed.
+
+**Measured, not changed: a scroll step that grows with the list.** The round found a checklist
+scroll step costing five to seven times more at 1,000 items than at 100. Measured in one run in
+the Linux image, three units a step from the top: 2.1 ms a step at 100 items (1,308 widgets in
+the window), 10.9 and 17.4 ms at 1,000 (5,836). With no chunk placed again the step cost 0.2 ms
+at either size; the app's own Python was the same few microseconds a step at both, and so were
+the events a step brought (about 100 exposures). At 1,000 items with the rows of every chunk
+past the fourth destroyed (1,476 widgets, 32 chunks still), a step cost 2.4 ms, as at 100; with
+those chunks unmapped instead, 17.1. So the cost is Tk's and X's, for the one chunk moved into
+the view, and it grows with the windows that exist, mapped or not, not with the chunks. Fewer
+windows to a row (each is five) would be the fix, and that is no small one. Windows was not
+measured here; round six measured 7 ms a step there at 1,000 items.
+
+**Takeaway:** a measure taken once is a measure of that moment. Whatever can change after it -- a
+width, a wrap -- must tell what read it, or be read again where it is used. And a key held down
+is many presses: a control the first press hands the keyboard to must not take the rest.
+
+### Round eight: a day reset that came back, and what one copy keeps
+
+*(2026-10-30 · found by the final audit's eighth break-it round, which attacked round seven's
+fixes by name; its data half, mirrored on the phone)*
+
+**Symptom:**
+- **A day reset, back at every start.** A weekly series turned off, its text edited, turned on
+  again as it was; then "Reset this day to the series content", answered Yes. At the next start
+  the day's old text was back -- and in a duplicate, after a Trash restore, and in a backup
+  imported a minute later, which read as "edited elsewhere".
+- **Two letters cleared over a long comment.** A long comment deleted, kept in the rescue copy;
+  "zz" typed, saved, cleared. The copy now held "zz", the long comment in no file.
+- **A turn-off after an import's Update.** The note as it was here before the Update lived only
+  in the copy; turning the repeat off replaced it, unsaid.
+- **"Import complete", then a sign-out.** The next start said the finished import had kept
+  nothing and asked for it again.
+
+**Root cause:** round seven let days come back from a series' own copy into a note that repeats
+again as that series, whenever the note holds none -- the state a person makes on purpose by
+resetting the last day -- and the copy kept its days, so the move ran again at every read.
+Round seven's comments rule kept the copy's body and always took the comments being cleared. The
+turn-off kept a waiting copy's words only when it held nothing but words, and an update's copy
+holds more. The flag a session end reads stayed up through the last dialog, after the merge was
+saved.
+
+**Fix:**
+- `spend_series_days`: once a note repeats as its copy's series, the copy's days are spent -- at
+  every read after the move, and in the save that turns the repeat back on. A turned-off note's
+  copy keeps them, as before. An incoming note is compared without its copy too.
+- `comments_kept_by_copy`: the comments whose loss would be larger stay, counted by what is gone.
+- An unspent update's copy is kept whole by a turn-off, given the series where it lacks it.
+- The flag is lowered once the merge is saved, before "Import complete" and "Import failed".
+- The lows: a restore weighs any style on words held in the copy's but not the same; a start
+  that cannot read the notes keeps an import's word for the next start that can; a worker held
+  past the session's join names what it copied; a template saved after a cancelled sign-out takes
+  back the word that it was not kept.
+- Written down, not fixed: notes 0.12.0 turned off and on again on the phone with a rule written
+  another way, or a day skipped since, keep their days in the copy alone. Days carried into later
+  copies of words were never released (that code came after 0.12.0).
+
+**Takeaway:** a move into the note happens once: what a copy has given back, it holds no more.
+And when two texts compete for one slot, the one whose loss would be larger stays -- measured,
+not assumed to be the newest.
+
+### Round eight: words said beneath an Undo, and Enter held on every box
+
+*(2026-10-30 · the eighth round's interface half)*
+
+**Symptom:**
+- A paste into the title lost the spaces at its edges, two words running together.
+- While an action's Undo stood on the banner (about eight seconds), "Pasted text shortened" for
+  the Add box or the title was said nowhere a person looks; and "Pasted title shortened" itself
+  lasted half a second before the autosave wrote over it.
+- Enter held on a group header in the note list folded and unfolded it on every repeat.
+- A full list's waiting words raised "Checklist full" on every way out of the note, and the
+  window's close asked about a note already deleted.
+
+**Fix:** a title paste turns only line breaks and tabs into single spaces, keeping the rest as
+copied. A box's words go on a second banner beneath an Undo, and the autosave writes over neither
+that banner nor the status line's words for their 1.8 seconds. Every Enter binding that acts asks
+round seven's held-key rule first; the body, table cells and the find bar keep their repeats.
+"Checklist full" is said once for the same words in the same note, and the close asks only about
+notes still in the list.
+
+**Takeaway:** a message that yields to an offer must still be seen somewhere. And a rule for a
+held key is a rule for every binding that acts on one, not for the control the last report
+named.
+
+
+### Round nine: days spent before they came back, and a copy kept twice
+
+*(2026-10-30 · found by the final audit's ninth break-it round, which attacked round eight's
+fixes by name; its data half, mirrored on the phone)*
+
+**Symptom:**
+- **A day's own text, gone at the upgrade.** A weekly series in 0.97.405 (or the phone's
+  0.12.0) turned off, back on as it was, and then any other day given text of its own: the
+  first day's own text lived only in the copy. The first start of this build erased it, and
+  Restore previous, still offered, brought back the series text alone.
+- **A deleted day, back on the calendar.** Turned off, on again from another start, then the
+  start put back: the deleted Monday showed again, with nothing to undo it.
+- **A copy replaced at the second turn-off.** A big delete, the repeat off, back on, off again:
+  the deleted words were in no file, Restore previous still on screen.
+- **A held turn-off after an Update.** The comments cleared and the autosave let run before
+  Save: the version from before the Update kept only its words, its checklist and days lost.
+- The lows: an older backup of a turned-off series read as "edited elsewhere" against the same
+  notebook; the status line after a turn-off over an Update promised the series; a session
+  ended with "Import failed" on screen left the unpacked folder in the temp folder for good.
+
+**Root cause:** round eight spent a series' copy's days whenever the note repeated as that
+series again, on the premise that the note had just taken them back -- true only after the
+all-or-nothing move into a note holding no day at all. A note holding any day of its own took
+none, and a save that put the start back took none either. The turn-off asked its copy's kind
+in an order where the held save came before the Update's copy, and knew no third kind: an
+earlier turn-off's copy of the same series.
+
+**Fix:**
+- `spend_series_days` takes the copy's days back first, per date: each day of the copy goes to
+  the note on every date the note's own days leave free -- the owner's rule from round five,
+  kept days come back onto the same date and rule -- then the copy's are spent. The note's own
+  day wins its date, and a copy's move never goes onto a date the note holds. It also settles
+  what round eight wrote down as not fixed: a day skipped since keeps its days no longer in the
+  copy alone.
+- `_turn_off_rescue_copy` asks for an Update's copy before the held save, and gives an earlier
+  turn-off's copy of the same series (`copy_holds_this_series`) its words, as a text copy's.
+- The status line names what Restore previous brings back after an Update.
+- An arriving note is read as a load reads it, its copy's days taken back, then compared bare.
+  This turns round eight's bare reading of the arriving side around: an older backup whose copy
+  holds a day reset here since holds that day, and reads, truly, as changed.
+- "Import failed" is said after its unpacked folder is gone.
+
+**Takeaway:** a rule that empties one place on the premise that another holds the same must
+ask the other place, per item, at the moment it empties -- the premise held for the road it
+was written on and for no other.
+
+### Round nine: work that grew with the square of what was typed
+
+*(2026-10-30 · found by the final audit's ninth break-it round, and by the sweep its fixes
+asked for)*
+
+**Symptom:**
+- **A paste into the title froze the window.** Round eight's title paste split what came in
+  with a pattern that, inside a run of spaces with no line break, backed off one space at a
+  time from every start: 40,000 spaces held the window five seconds.
+- **The find bar, open while typing, froze it for seconds at every pause.** A paragraph with
+  1,000 hits among bold words: 14 seconds per rescan; 2,000, over half a minute.
+- **The spelling look**, which runs at every pause, grew four times for each doubling of a long
+  line of short sentences; two more patterns (a pasted page's block tags, the spelling's
+  sentence ends) took seconds on a hand-made clipboard or a line of dots.
+- The lows: "shortened" said when only a paste's own trailing space was cut; "Checklist full"
+  remembered as said for words already added, or never said at all.
+
+**Root cause:** one shape, five times: a loop over the matches, the sentences or the pieces of
+a line that measures the line again from its start on every step -- a regex retried at every
+position, Tk's `search` started anew after each hit across every tag on the line, a UTF-16
+re-encoding per sentence. Each is linear in one step and quadratic in the loop.
+
+**Fix:** each reads the text once and counts as it goes: the title paste splits on the break
+characters alone; the find bar finds hits with `str.find` over the line read once, counting Tk
+columns and Tcl's case folding as Tk would (which corrected Tk's own offset after a letter Tcl
+lowers into fewer bytes); the spelling encodes a line once and puts each word in its sentence
+by bisection. Every new form was compared with the old on tens of thousands of random inputs;
+each has a check timed against its own half in one run, and a mutant putting the loop back.
+The paste reads no further than any paste (`_cap_paste`).
+
+**Written down, not fixed:** the autosave still reads a heavily tagged line about 4,000 times
+per save -- quadratic in the bold words on one line, capped near 0.3 s by the per-line span
+ceiling; an emoji query also matches a drawn table's hidden text.
+
+**Takeaway:** a cost is judged by the loop that calls it: "measure the line" is cheap, "measure
+the line for every hit" is the square of the line. Time a check against its own half, in one
+run, and a regression of this kind cannot hide behind a fast machine -- unless each step is
+cheap enough for the linear work around it to hide the ratio: the find bar's plain-line mutant
+survived the integrated run that way, and its check now counts the characters measured instead.
+
+### Round ten: the days a date held without a word, and older words given back
+
+*(2026-10-30 · found by the final audit's tenth break-it round, which attacked round nine's fixes
+by name; its data half, for the phone to mirror)*
+
+**Symptom:**
+- **A day's own text, gone at the upgrade, by the same day.** A weekly series in 0.97.405 (or the
+  phone's 0.12.0) turned off and back on as it was kept a day's own text in the copy alone. Then
+  that very day was moved, or only given a colour: the first start of this build erased the
+  text, on disk too, and Restore previous, still offered, brought none of it back. A day moved
+  onto the date where the copy had moved one did the same. Measured over 20,000 shapes either
+  app's editor makes, the take-back lost a copy's day with words of its own in 1,876.
+- **A line added between two turn-offs, taken back.** Off, a line added, on again as it was, off
+  again: the second copy held the first one's words. The status line named Restore previous,
+  which swapped the older text in, and the next turn-off put the added line in no file.
+- **A promise with no button.** An Update that only turned the repeat on, a day given text, then
+  the repeat off: the status line promised Restore previous, and the same save dropped the copy
+  as spent.
+
+**Root cause:** round nine's take-back asked whether the note's days *named* a date, not what
+they held there. A move holds no words -- `move_day` keys a day's edit under the date it is drawn
+on -- and a day's edit that only changed its colour holds the series' words; both won the date,
+and the copy's words for that day were spent. And round nine's second turn-off gave an earlier
+copy its words whenever they differed from the note's: the test for a copy being spent, not for
+words being lost.
+
+**Fix:**
+- `spend_series_days` works by the day, not by the date. The rule: a copy's day is dropped only
+  where the note deleted that day or wrote words of its own for it. Elsewhere its words go to the
+  date the note draws the day on -- where the note moved it, or where it stood -- and an edit
+  there with no words of its own takes the copy's words and keeps its colour and category.
+- A copy's move the note leaves no room for leaves its words with the day. A copy's move onto a
+  day whose own move stays behind stays behind too (`_copy_moves_taken`): taken alone, two days
+  stood on one date and one was drawn nowhere. An edit the copy draws on no day stays on its date.
+- Proved over shapes, checked against the calendar itself (`expand_occurrences`), not against the
+  fix: every word the note wrote stays, and every day of the copy with words of its own is shown
+  on the day the result draws it, unless the note deleted or rewrote that day. On 20,000 shapes
+  either app's editor makes: 1,879 broken before, none now. On the auditor's 20,000: 2,539
+  before, 35 now, each a copy holding two edits for one date, one of them drawn on no day -- a
+  shape neither app writes, since `move_day` carries a day's edit along. `test_data_safety`
+  keeps 300 shapes of the first kind.
+- `_turn_off_rescue_copy` gives an earlier copy its words only when the note has lost words to it
+  -- the big delete's own test, `rescue_copy_due` from copy to note -- else it copies the note as
+  it stands. A text copy is asked the same: words put back and added to are no loss.
+- `_repeat_off_line` promises Restore previous only while a copy the note does not hold again
+  remains; otherwise it says every day's own text stays in the note.
+- `test_data_safety`, qa5; mutants DR131–DR139, with DR126, DR44, DR32 and DR127 re-aimed. The
+  phone's fixture, `days_cases.json`, gains the same cases.
+
+**Found after, on the phone first: the same copy, another series.** A big delete, the repeat off,
+back on as *another* series -- another start, every two weeks, an end date -- then off again: the
+second turn-off gave an earlier copy its words only if it held words alone or this very series,
+so the first one's copy, the deleted words' only home, was replaced by the short text. Restore
+previous, still offered, brought back the series and the short text. Now any earlier copy but an
+Update's, which is kept whole, gives its words whenever the note has lost words to it, whatever
+series it held; the new copy keeps the series as it is now. Round nine had closed the road "back
+on as it was" and no other: the question was which copy, when it should have been which words.
+
+**Written down, not fixed: a notebook this build has saved must not go back to 0.97.405.** This
+build keeps a turned-off series' days in the note, and a later big delete may leave the copy
+holding words alone. 0.97.405's save clears the days of a note that does not repeat on every
+save, so one letter typed there erases them, and its Restore previous does not bring them back.
+Only a downgrade reaches it -- the built apps keep their notebooks in different folders -- but a
+source run of `main` against the same notebook does, until this branch is merged. The release
+notes say it.
+
+**Written down, not fixed: a day reset in a series run from another start.** The repeat off, on
+again from another start, a day reset there, then the start put back: the reset day comes back
+from the first turn-off's copy. Both apps do it, and both rounds that found it judged the road
+contrived; the phone's "What the audit's tenth round left" names it too.
+
+**Takeaway:** a date is not a day. Ask what a day holds -- its words -- not whether something
+names its date. And a copy gets its words back when the note has lost them, not when the two
+merely differ.
+
+### Round ten: the note read again by every reader, and an edit the find bar never heard
+
+*(2026-10-30 · found by the final audit's tenth break-it round, which attacked round nine's fixes
+by name; its speed and find halves)*
+
+**Symptom:**
+- **Round nine's own find case still froze every pause.** Its scan was linear now, but the
+  autosave that runs at each pause paid for the hits the bar showed: a paragraph of 2,000 hits,
+  3.07 s a pause, against 0.26 s with the bar closed.
+- **A paragraph full of typos froze every pause for eight seconds;** twenty lines at the span
+  ceiling took five seconds to open and five at every pause -- the ceiling bounded a line, not a
+  note. Select All over a long paragraph in one size or colour asked Tk about every character, three
+  or four questions each, at every key and click.
+- **The find bar went stale.** It heard a key's release and nothing else: after a right-click
+  Paste or Cut, an emoji, the list buttons, the calculator or a spelling suggestion, its counter
+  and Enter stood on old places. Tk's own Cut, Paste and middle-click were not even saved until the
+  note was left.
+- **A find query of two lines crashed the app on Linux** (Tk 8.6.16's case-insensitive search over
+  a line holding an emoji).
+- The lows: an emoji query one place late after "İ", and matching a drawn table's hidden text; a
+  middle-click putting line breaks into the title; a title over the 200 cap that Backspace could
+  not shorten.
+
+**Root cause:** Tk's cost to read a line grows with the square of the tag toggles on it, and every
+display tag -- a find hit, an underline, a stored style -- adds two. Round nine removed the loops
+that measured a line once per hit; the readers that run at every save still asked Tk for each
+line, once per reader, about seventeen times a save, plus once per styled piece's end. A typed key
+ran Tk's regular-expression search over its whole line to find where the letters it typed ended.
+The stale find bar was the same mistake in another place: it asked one event, not every edit.
+
+**Fix:**
+- A save, an opening and a key read the note once and work out its lines, list markers, depths,
+  alignments and styles' places in Python, counting Tk's columns as Tk does. A save reads the note
+  twice whatever is shown on it; an opening six times; a key, the first 64 characters of its line.
+  Copy, the size and font boxes, Tab and the bullet button over a selection, the renumbering: one
+  read each. The format buttons answer from tag ranges; a typed run finds its space in Python; the
+  word count waits for the pause while the find bar shows hits.
+- The spelling underlines at most 500 a line and 2,000 a box, those nearest the caret.
+- Round nine's 2,000 hits: 0.50 s a pause (3.07). Typos at 40,000 characters: 0.03 s (1.64). A
+  uniform selection of 8,000 characters: about none (0.22). The stored note was compared byte for
+  byte with round nine's readers on 80 random notes with tables, checklists, attachments, lists and
+  every style: none differs.
+- Every edit, whatever made it, passes `_schedule_autosave`, which now tells the find bar; Tk's own
+  Cut, Paste, Clear and middle-click are heard by a bindtag first in each box's list
+  (`EditWithoutKey`), and saved. The find model remembers what it was read from, so a key in the
+  title no longer rescans the note.
+- A query with a line break is found in Python, never by Tk's search, which the find code no longer
+  calls; an emoji query goes through the same loop as every other, folded one letter for one.
+- The title's middle-click goes through its paste's cap and one-line rule; every length-limited box
+  lets a too-long value shrink, and measures its room before deleting a selection.
+- Checks count the work -- Tk calls, characters read, searches asked -- each shape against its half;
+  mutants RX36–RX86 and SP28–SP30.
+
+**Written down, not fixed:** a key with the bar open on such a paragraph was not timed again after
+the typed run's search went (0.29 s of its 0.39); the find highlights have no bound per line; the
+undo journal reads the note once per undo step (0.24 s on that paragraph).
+
+**Takeaway:** a cost is judged by everything that runs at the same moment, not by the part a fix
+touched -- round nine timed the find bar's scan and never the save beside it. And an event is not
+an edit: hear edits where every one of them passes.
+
+### Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take
+
+*(2026-10-31 · found by the final audit's eleventh break-it round, on both apps at once: the
+desktop's data auditor and the phone's, each reproducing it in its own app)*
+
+**Symptom:**
+- **A move over words nobody could see.** A weekly meeting with notes kept for some future
+  Mondays changes to Tuesdays: those Mondays' words stay in the note, off the schedule, as the
+  owner decided on 2026-10-12. Then one week is held on Monday again -- "📅 Move this day…" onto
+  that Monday. The move was accepted, the old Monday's words were written over, and the move's
+  Undo took the day back without them. With no words of its own, the moved day took the old
+  Monday's words as if they were its own, and the Undo filed them under the wrong day.
+- **A day's return over another day.** While a day was away, another could be moved onto its
+  date; its Reset or its move's Undo brought it home over that one, hidden, and "Only the date"
+  wrote over its words. The phone had refused that return since porting Phase 3, and listed the
+  desktop's behaviour as a finding still open.
+- **A copy's words read as the note's.** A day coloured while the series still said one thing
+  keeps the series' words as they were then. Change the series' text afterwards and the day holds
+  words no other day does -- read, by round ten's take-back, as words of its own, so the copy's
+  own text for that day was dropped at the first start of this build over 0.97.405's notebook (or
+  the phone's 0.12.0), in no file after the next save. Restore previous stayed offered and brought
+  none of it back. Of the auditor's 6,000 shapes with the series' text edited, 84 lost words
+  this way.
+
+**Root cause:** both asked the wrong question about a date. The move asked only whether the
+calendar draws a day there, not whether the note keeps an edit there; the take-back asked whether
+the note's day held words unlike its series, not whether it held the copy's.
+
+**Fix:**
+- `_day_is_free` (`Days.dayIsFree` on the phone) also refuses a date the series keeps an edit
+  for, and a day's own date is no longer free whatever stands on it. The move says why in words of
+  its own ("This series still keeps the words of a day on …"); "Reset this day" asks the same
+  question before it asks anything, and says "Another day of this series is on … now".
+- `spend_series_days` drops a copy's day only where the note deleted that day. One whose own
+  words the note's day does not hold -- the series' words are not the day's (`_own_words_held`) --
+  or that lost its date to another of the copy's, stays in the copy under the date it wanted, and
+  Restore previous brings it. Read again, nothing changes; the day reset, it takes the words. The
+  owner chose this over a finer test of the words, which would still lose a day coloured between
+  two edits of the series.
+- Settings → Your name kept its own check, and a paste past its 30 characters was refused whole,
+  without a word: it is a limited box now, as every other (`_limit_entry`).
+- `test_data_safety`, qa5, qa6; mutants DR140–DR144 and RX88. The phone's fixture, rebuilt from
+  this core, gains six cases; of its 62 before, one changed, as intended.
+
+**Written down, then undone by round twelve:** a copy is one slot. The words kept there were as
+safe as the copy -- and, as the next round showed, not that safe.
+
+**Takeaway:** ask a date what it holds, not only what it draws. And a day's words are its own
+only where they are not its series' -- old series words are still the series'.
+
+### Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit
+
+*(2026-10-31 · found by the final audit's twelfth break-it round -- small, its areas turned to
+round eleven's fixes and what rounds ten and eleven had not covered)*
+
+**Symptom:**
+- **Round eleven's keep, broken three ways.** The copy holding the words no day could take is
+  still the series' own copy, so every start read it again -- by date, without the copy's moves
+  and deleted days: words filed under another day's own date were dropped at the second start,
+  or put on the wrong day; a day reset took the old words back. And Restore previous of such a
+  copy put its few days in place of all the note's own, parking those in the one slot, where the
+  next turn-off or big delete erased them while the status line promised them back.
+- **A deleted day's Undo over another day.** Delete a day, move another onto its date, then
+  Undo the delete: the day came back over the moved one, which no calendar drew any more; its
+  words read as the deleted day's, and the deleted day's own were lost. Both apps.
+- **Ctrl+Z in a table cell emptied it.** The cell editor kept the loading of its words on its
+  own Undo; Ctrl+Z took them out, and leaving the cell saved it empty.
+- **The find bar held every key.** With a common letter searched in one long paragraph, each
+  key anywhere in the note held the app 0.7 s at 12,000 characters and 1.4 s at 17,000 on a fast
+  machine: every hit was painted, and every tag_add and read of that line walked all its toggles.
+
+**Root cause:** a copy is a copy of the series, read again at every start; anything put there
+is re-judged in the copy's frame. The delete's Undo asked whether the rule still gives the day,
+not whether the date is free. Two Undo stacks met in one cell. A bound on the hits per note
+was taken for a bound on the work per line.
+
+**Fix:**
+- The owner chose the other way to keep the words: a copy's day's own words that a day already
+  holding words lacks go on that day, after its own (`_words_added`: a title and text to its
+  text, comments to its comments; the series' words are not the day's), and the copy's days are
+  spent as before. Nothing is kept in the copy; Restore previous is as it was.
+- `_undo_occurrence_delete` asks the move's question: with another day on the date, or an edit
+  kept there, the day stays deleted and the toast says why. The refusal sentences say "text or a
+  colour of its own", and Reset says which holds the date.
+- `_open_cell_editor` resets the cell's Undo once its words are in (`edit_reset`), as the body's.
+- `_find_painted` paints at most `FIND_LINE_PAINT` (200) hits a line, those around the current
+  one; the model keeps them all, for the count and Enter.
+- `test_data_safety`, qa1, qa5; mutants DR145, RX89, RX90 new, DR143, DR144 and DR135 re-aimed.
+  The phone's fixture, rebuilt from this core: of round ten's 62 cases one changed, as intended.
+
+**Written down, not fixed:** linux_ci's tracked copy trusts a tracked name that an 8.3 short name
+or a case-only twin could alias (no such name is tracked); a deleted day's edit kept from an old
+notebook blocks its date, and no screen lists it.
+
+**Takeaway:** a place the next read looks at again is not a place to keep things -- keep them
+where they are seen. And bound the work by what each step walks, not by the total count.
+
+### Round thirteen: words added twice, and a paint window left behind
+
+*(2026-10-31 · found by the final audit's thirteenth break-it round, small, on round twelve's
+fixes; the phone's round found the same rule's cost and a table's line besides)*
+
+**Symptom:**
+- **A day's text shown twice.** Round twelve added a copy's day's words whole whenever they
+  differed from the day's. A day grown from the copy's text -- the same day, written on since --
+  got the copy's version again under it: "Agenda. / Book room / Cancelled / Agenda. / Book room".
+  Of 1,500 editor-made shapes, 235 doubled a line. An emptied word added a blank line, and a
+  table added under the day's own table read as one table on the phone.
+- **The paint left behind.** The find bar's 200 painted hits were laid around the hit current
+  before a reveal, and Enter never moved them: past a hundred hits, the current one's neighbours
+  were bare, and a paragraph full of the letter showed none marked.
+
+**Root cause:** "differs" was taken for "lacks". And the paint window was placed before the new
+current hit was known, and never asked again.
+
+**Fix:**
+- `_lines_lacked`: a copy's word adds nothing when the day holds it as one run of lines; else it
+  adds all but the lines the day begins with -- whole, so a table among them keeps its rows. Empty
+  pieces add nothing; a body ending in a table keeps the line under it (`with_caret_line`).
+- `_find_paint_around` lays the paint around the hit current once the rescan is done, and Enter
+  repaints when it walks past the painted ones.
+- `test_data_safety`, qa1; mutants DR146–DR148, RX91, RX92 new, DR144 re-aimed. The phone's
+  fixture gains five cases.
+
+**Written down, not fixed:** in a table cell, Ctrl+Z right after Enter or an alignment change has
+nothing to take back -- the cell reopens, its Undo empty (the safe side of round twelve's fix).
+The same for a style: since wave 3, Ctrl+B/I/U/D style an open cell, and its Ctrl+Z takes back
+the typing before them, not the style.
+
+**Takeaway:** a rule that adds must ask what is already there, as lines, not as a whole -- and a
+window over a list follows the item it is for.
+
+### Round fourteen: the old text again after an edit in the middle
+
+*(2026-10-31 · found by the final audit's fourteenth break-it round, small, on round thirteen's
+fixes; the phone's round found a day cut off from its series by round thirteen's own fix)*
+
+**Symptom:** round thirteen's rule spared only a day grown at its end or its start. A day whose
+first line was corrected, a line changed or deleted in its middle, or one table cell edited (its
+column re-padded, every row's text changed) got the copy's old text -- or the whole old table --
+again under it. A ticked box brought the task back unticked.
+
+**Root cause:** "all but the lines the day begins with" is a prefix, not a comparison: the first
+difference cut off everything after it.
+
+**Fix:** `_lines_lacked` adds the copy's lines outside the longest run of lines the two share in
+order, comparing a table's rows by their cells' words (`_line_key`: padding and a box's tick left
+out, every separator alike), a table among them with its header and separator. A corrected line
+adds its old form once; an edited cell adds its old row under the table's header; a ticked box
+adds nothing. `test_data_safety`; mutants DR149, DR150 new, DR146, DR147 re-aimed. The phone's
+`linesLacked` is the same, and its fixture gains four cases.
+
+**Written down, not fixed:** a waiting heavy run can take the current holder for its own parent
+when that parent died (the guest turn's pid check); 62 run folders in `%TEMP%` from before the
+scratch marker are swept by nothing.
+
+**Takeaway:** to keep what is lacking, compare what both hold, in order -- and compare a table
+by what its cells say, not by how its columns are padded.
+
+### Round fifteen: four ways of adding, and a note of its own
+
+*(2026-11-01 · found by the final audit's fifteenth break-it round, small, on round fourteen's
+fix; the owner chose the simpler rule)*
+
+**Symptom:**
+- **Another series' days in no file.** A note repeating as another series than its copy's
+  (restarted from another date or rule) kept the old series' days with words in the copy alone.
+  The next turn-off, big delete or import Update replaced the copy, and they were gone.
+- **The line comparison's own cases.** A line moved within a day came back as added text, and a
+  long day made the take-back freeze.
+- **A day gone under a new rule.** A day moved onto a Tuesday, then the rule made daily: the
+  Tuesday was the rule's own day, the moved day was drawn nowhere, and a delete there took it.
+- **A day only coloured read as words** when its title had a space after it, or its text ended
+  in a table with the line under it on one side only (the phone's copy keeps text as typed).
+
+**Root cause:** four rounds tried to add a copy's words to a day that already held words, and
+each way of telling the lines apart left a case. A move was checked against the rule it was
+made under, never against the rule after it.
+
+**Fix (the owner's choice, the simpler rule):**
+- A day holding words of its own keeps them exactly. The copy's different words for it are set
+  aside (`_set_aside`) and become a note of their own on that date, titled with the series' name
+  and "(earlier text)" (`notes_set_aside`), at the start and at every save, said on the status
+  line. `_words_added`, `_lines_lacked` and `_line_key` are gone.
+- `copy_days_set_aside` runs before a turn-off, a big delete or an Update replaces another
+  series' copy -- after `kept_days_fit` has read it.
+- `moves_home` sends a day moved onto a date its rule gives by itself home with its words, until
+  none is left, at every read and every save or update of the series. A chain on dates the rule
+  leaves free holds, and so does a deleted day's date.
+- `_same_word`: a title without its spaces, a text with the table's line on both sides or neither.
+- A file's `_set_aside` is read at most `MAX_OCCURRENCES` long, as moved days are, and the notes
+  made of it are numbered from one look at the notebook: a commit's security review found a
+  long list in a file walking the whole notebook again for each note made at the start.
+- `test_data_safety`, `test_recurrence` (its 2,000 moved days now under a rule that ends before
+  the dates moved to), qa5; mutants DR143, DR144 re-aimed, DR146–DR148 and DR150–DR160 new. The
+  phone's fixture gains eleven cases and compares the notes made.
+
+**Written down, not fixed:** `_write_series_owned`'s whole-note copy for a turn-off has no
+caller (every day's save passes `schedule=False`). A note set aside may repeat lines the day
+also holds: only the same words count as held.
+
+**Takeaway:** when each fix of a merging rule leaves a new case, stop merging -- keep both,
+side by side, where the person sees them.
+
+### Round sixteen: a home the rule no longer gives, and a chain walked once a link
+
+*(2026-11-01 · found by the final audit's sixteenth break-it round, small, on round fifteen's
+rule; the phone's round found the same two)*
+
+**Symptom:**
+- **Words sent off the calendar.** A weekly series' Monday moved to Thursday, then the series
+  moved to Thursdays: `moves_home` sent the day "home" to the Monday, a date the rule no longer
+  gives. Its words left the Thursday they showed on for a day off the schedule, and a 0.97.405
+  notebook in that shape changed so at its first start here.
+- **A crafted backup froze the window**, 8.5 s for 2.25 MB: `moves_home` sent one link of a
+  chain home per pass, the square of the chain's length, at every read.
+- **Restore previous missed the rule.** An older rule brought back could give a date a day had
+  been moved onto since; the day was drawn nowhere until the next start, and a delete on that
+  date took it, its Undo refused.
+- **Smaller ones.** A copy of another series asked for each day by its date alone, so a day the
+  note had moved since was set aside as "earlier text" it still held. The start's notes were not
+  written until a save, so each launch made them again under new identities. The made notes were
+  said over a turn-off's own line, its Restore previous promise lost. A save made an empty note
+  of a day with no words, which the start never did.
+
+**Root cause:** round fifteen's `moves_home` asked only where a day had been moved TO, never
+whether the date it came FROM was still the rule's. And its fixpoint loop was a pass per link.
+
+**Fix:**
+- `moves_home` walks each chain once, a memo per day. A day goes home only where the rule still
+  gives its own date and it was not deleted; where not, the move goes and its words stay where
+  they showed. Called by `restore_previous_version` too.
+- `copy_days_set_aside` looks for a day where the note holds it: its date, the date the copy
+  moved it from, and where the note has moved that day since.
+- The core's `settle_set_aside` makes the notes, at the start in `load_notes` (written there, as
+  minted identities are) and at every save; `notes_set_aside` reads entries as the load does.
+  The save says them after its own line. The start's news says "the day's or the series' name".
+- `test_data_safety` (the Thursday, a 2,000-link chain counted, a swap, a moved copy day, the
+  start written once, a wordless entry), qa5 (Restore previous, a big delete, the status line);
+  mutants DR152, DR153, DR146, DR159 re-aimed, DR161-DR169 new. The phone's fixture fingerprints
+  four more regions of this file.
+
+**Written down, not fixed:** a rule changed and changed back does not bring back a move it
+dropped: the day's words are then on a date off the schedule, said by the banner. A share code's
+Update keeps no move in its copy, so Restore previous after it brings the rule back, not the move.
+The import's own status line still follows the made notes' one.
+
+**Takeaway:** a rule that moves something "back" must ask whether "back" still exists; a
+fixpoint loop over links is a quadratic waiting for a long chain.
+
+### Round seventeen: a week shifted a day at a time, and a day no list showed
+
+*(2026-11-01 · found by the final audit's seventeenth break-it round, small, on round sixteen's
+fixes and the series' days as a whole; the phone's round found two of these)*
+
+**Symptom:**
+- **A day's text in no file (critical, round sixteen's).** A week's standups shifted a day at a
+  time (Wed to Thu, Tue to Wed, Mon to Tue), then the shift made the rule (Tue-Thu): the
+  Monday's words stayed on Tuesday as round sixteen wanted, the Tuesday came home there, and the
+  words left over were written over the Wednesday's. Nothing asked or said, and a 0.97.405
+  notebook in that shape lost them at its first start.
+- **A day no list showed.** A day moved onto a deleted date, its own date then no longer the
+  rule's: drawn by no day, and `off_schedule_days` left out every deleted date.
+- **A dead move's date taken twice.** A move whose own date the rule no longer gives is kept
+  (a rule changed back brings it back), drawn nowhere; a day moved onto its date wrote a second
+  move there, and every reader took the dead one.
+- **A series turned back on as it was read as another** when its start's weekday was lit once
+  and not the next time: its deleted days came back and its copy's days became "earlier text".
+- **An Update's copy, as a restore leaves it**, was not set aside when replaced (round fifteen
+  asked the copy's shape), so its days' words went with it; and a backup's Update set aside words
+  the backup itself brought back.
+
+**Root cause:** round sixteen moved words one by one and then wrote what was left over the
+dates, never asking where each would land; and several questions about a day were asked of its
+date, or of a copy's shape, instead of what each holds. Underneath: since round eleven nearly
+every finding came from rules that moved a day's words on their own, and each such rule was the
+next round's finding.
+
+**Fix (the owner's choice, with three changes to the audit itself):**
+- Words never move on their own. `moves_home` became `drop_hidden_moves`: a move onto a date
+  the rule now gives -- the day drawn nowhere there -- is dropped, its words staying where they
+  showed, as that date's day; nothing is written anywhere, so nothing can be written over. A
+  day's words left on a date the series no longer has are listed off the schedule, for the
+  person to settle.
+- `off_schedule_days` asks a deleted date a day was moved onto of the series as it is.
+- `move_day` drops a dead move onto the date it moves a day to.
+- `_same_series`: a weekly rule's start weekday, or a monthly rule's day, lit or left to the
+  start, is one rule -- for `_repeats_as` and `kept_days_fit`.
+- `copy_days_set_aside` takes any copy that repeats, an Update's too, except the one a turn-off
+  keeps whole; a backup's Update counts its own days as held.
+- The notes made of days set aside are said on an info banner of their own, with Show, the
+  status line left to the save.
+- `test_data_safety` (the shifted week, a stray word, a deleted date listed, the weekday lit,
+  the dead move, an Update's copy, a backup's days), qa5 (the banner, a turn-off keeping an
+  Update's copy of another series); round fifteen's and sixteen's checks of words "sent home"
+  now expect them where they showed. Mutants DR169 re-aimed, DR170 and DR172-DR178 new;
+  DR154, DR162 and DR171 gone with the code they mutated.
+- The audit, the owner's choices: a committed fuzz of a series' days checks that no action
+  sequence loses or doubles a day's words; a finding keeps a round open only if ordinary steps
+  in the app reproduce it (data loss always counts); lows wait for a wave of their own.
+
+**Written down, not fixed:** Restore previous of a copy holding some day kinds and not others
+restores those beside the current series' others, and a move can then send an old day's words
+to another weekday (five uncommon steps, nothing lost).
+
+**Takeaway:** decide where everything lands before moving anything, and refuse any landing
+that writes over something -- or, simpler, do not move a person's words on their own at all.
+
+### Round eighteen: History, the one search of a day's words, and the days it never asked about
+
+*(2026-11-01 · found by the phone's eighteenth break-it round, on both apps, under the owner's
+severity rule)*
+
+**Symptom:** a series with an end (or a count) listed its days in History only between its
+start and end, so a day moved past the end, or before the start, was drawn on the calendar and
+in no row: a search for its words -- History is the one search of a day's own words -- found
+nothing, and the row counted one day fewer. An endless series skipped every deleted date, so a
+day moved onto one was missed the same way (round seventeen fixed that for the off-schedule list
+and not for History).
+
+The desktop's round found a sibling round seventeen left: `_same_series` read a weekly rule's
+weekday lit or not as one rule for three readers, but `rescue_copy_spent` and
+`copy_replaced_by_restore` still compared the rule as stored. Turned back on as it was with the
+weekday unlit, the copy was never spent: Restore previous stayed offered for nothing, and the
+next turn-off brought back an old agenda.
+
+**Fix:** `history_entries` adds the dates moved days are drawn on (`drawn_moves`) to a bounded
+series' days, and skips a deleted date only when no move lands on it. `_copy_field_held`
+compares a copy's rule by the days it gives, in both copy readers. The fuzz of a series' days
+now shifts a run of days a day later (round seventeen's road), counts a word kept only where a
+person can reach it, and fails with round sixteen's code put back. `test_data_safety`; mutants
+DR179-DR181. The phone's `Recurrence.history` and `copyFieldHeld` the same.
+
+**Takeaway:** a fix to one reader of a shape is a question to every reader of it.
+
+### Round nineteen: two moves onto one date, and a list that threw
+
+*(2026-11-01 · found by the phone's nineteenth round; the finder graded it low by the owner's
+rule, the session did not)*
+
+**Symptom:** a series holding two moves onto one date -- left by the phone's 0.13.0 after three
+ordinary taps (a day moved, the repeat made every two weeks, another day moved onto the same
+date), or here by the Undo of a deleted moved day beside a dead move -- was listed twice in
+History. The desktop drew a double row; the phone's list threw on the twin key at every
+unfolding. The finder graded it low, the road on this build alone being an Undo race; but the
+road through 0.13.0, the version on the owner's phone, then the install, is ordinary.
+
+**Fix:** `drawn_moves` (History and the banner's count) lists a date once, for the move
+`moved_from` names; `_undo_occurrence_delete` drops a dead move onto the date it puts a day back
+on, as `move_day` does. The phone also keeps one move a date in the raw notes at its read.
+`test_data_safety`, qa5; mutants DR182, DR183.
+
+**Round twenty (the phone's) on this fix:** of two moves onto one date, the read kept the one
+whose own date sorts first -- often the dead one, which the calendar did not draw -- so a meeting
+moved under the phone's 0.13.0 jumped back to its own date at the install, its words listed off
+the schedule. `normalize_note` now keeps the move whose own date the rule gives
+(`_rule_days_among`, asked only of dates two moves land on), as the phone's `cleanMoves` does;
+mutant DR184.
+
+**Round twenty-one (the phone's), the owner's call:** a day the note deleted won over the
+copy's words for it, which were dropped (round ten's rule). But the phone's 0.13.0, turned off
+and on as it was, showed such a day blank, its words in the copy alone: deleting a day that
+looked empty erased words the person never saw. Now the day stays deleted and the copy's words
+for it are set aside, a note "(earlier text)" (`_copy_days_placed`); mutant DR185.
+
+**Takeaway:** a grade is about the road a person takes: a crash an upgrade can reach is not low
+because this build alone makes it rarely.
+
+### Round twenty-three: the day the editor stayed on
+
+*(2026-11-01 · found by the phone's twenty-third round; the desktop had the same hole)*
+
+**Symptom:** a weekly meeting's day deleted, then a backup from before the delete imported with
+Update: the day was back, and the note kept a copy holding it deleted. Open that day, press
+"↩ Restore previous": the restored version deletes the day again, and the editor stayed on it.
+What was typed next was saved to that day -- one the calendar did not draw, the list of days off
+the schedule did not list, and History's search did not find.
+
+**Mechanism:** `load_note` kept the day whenever the note still repeats. A note can repeat and
+not draw that day: deleted, or a rule that no longer gives the date. Every reload of the editor
+goes through `load_note` -- Restore previous, an import's Update behind the editor
+(`_editor_follows_external_change`), Reset this day -- so each could leave it on such a date,
+and the day's save never asks.
+
+**Fix:** `load_note` opens a day only where the series draws one (`expand_occurrences` on that
+date); elsewhere the whole note opens, as for a note that no longer repeats. The phone the same,
+and its `Days.saveDay` also refuses a day it does not draw, as its other day actions do. qa6;
+mutant DR186.
+
+**Takeaway:** a guard written for one way a day stops being drawn is a question about every way:
+ask whether the day is drawn, not why it might not be.
+
+### The lows wave: a fuzz that never took the road it guarded
+
+*(2026-11-01 · the owner's lows wave, after wave 1 closed on both apps)*
+
+**Symptom:** the fuzz of a series' days, written in round 17 so the rounds would stop finding
+lost words one road at a time, passed on its 300 seeds. Round 22 measured it: in 3,000 roads it
+never once reached round 21's fix (a copy's words for a day the note deleted, set aside). Round 20
+found three of the next seeds doubling a word. Taken out, round 21's fix was caught by its own
+hand-written check, never by the fuzz.
+
+**Mechanism:** the fuzz could not take the road. Round 21's shape comes from the phone's 0.13.0 or
+the desktop's 0.97.405 -- a series turned off and on as it was, its days in the copy alone -- and
+no step built it. With the step added, the fuzz still let the fix go: it excused any word whose
+copy "changed" as the one-slot rule allows for a copy replaced, and a copy spent back into the
+note changes too. Its doubled words were the duplicates the owner later chose to leave.
+
+**Fix:** the fuzz turns a series off, puts its copy's repeat back (as it was, or from another
+start), and takes the older versions' turn-off and turn-on followed by the install's read. It
+counts that it reaches the placement and its deleted-day branch, and excuses only a copy replaced
+by another, never one spent. Words shown twice are counted, not failed. History must find every
+day the calendar draws or lists off the schedule. 1,500 roads, held at 4,500; DR187 (the roads
+taken away) and DR188 (round 21's fix taken out, watched by the fuzz alone). The phone's fuzz
+was rewritten the same way, with the roads it never took: Reset, the Undos, Make it a note, the
+Trash and back. The same wave fixed what the rounds had recorded as low where a person can meet
+it (the commit lists them); the hand-made and legacy shapes are written down as known.
+
+**Takeaway:** a random test proves only the roads it takes: count that it reaches the branch it
+guards, and take that branch's fix out to watch it fail alone.
+
+### The lows wave's own rounds: a day's lists, read by line
+
+*(2026-11-01 · the verification rounds of the owner's lows wave)*
+
+**Symptom:** the wave stopped a day of its own text from wearing the series' looks, and its first
+verification round found what that took away: a nested numbered list on such a day showed flat,
+and the next Enter renumbered it as one run and saved it. Given its depth back from the series,
+the second round found the older form of the same thing, as old as 0.97.405: add an item on the
+day, or a line above its list, and the items below took the depth of whatever stood on their line
+in the series -- shown on the wrong level, then renumbered and saved by the next Enter.
+
+**Mechanism:** a day's override kept its own words and nothing of its lists. A list's depth lives
+in the paragraph entries, which only the series had, numbered by line, so every read of a day's
+lists asked the series what stood on the same line. That is right while the day's lines line up
+with the series', and wrong from the first line added or taken away.
+
+**Fix:** the owner's call, "a day keeps its own lists". A day's override stores `paragraphs`, its
+own list lines (kind and depth; never alignment, which a day does not own), written at every save
+of the day, an empty list included. A day saved before falls back to the series by line, as
+before. A day follows its series again only when its lists match the series' as well as its
+words, and the unsaved-changes check compares them. The same rounds made the "(earlier text)" note
+count as already there only when its comments match too. DR201 and DR204-DR207; rounds 3 and 4
+were clean, which closed the wave on the desktop. The phone, where the same lines also passed
+through its own list rules and its own way of following an edit, met two more cases on the same
+road, told in its log.
+
+**Known, recorded:** a day coloured under 0.97.405 holds a copy of the series' text and no list
+lines; it reads the series by line until the series' text changes above its list. Storing those
+lines once, at this build's first read, would close it.
+
+**Takeaway:** what a copy can change, the copy keeps; structure borrowed by line number holds only
+until the first line moves.
+
+### The lows wave's last rounds: a paste meeting a list, one road at a time
+
+*(2026-11-01 to 2026-11-02 · the verification rounds 5 to 11 of the owner's lows wave)*
+
+**Symptom:** each round sent one agent at the last fix by name, and each found the next case of
+one class: what a copy carries and where a paste puts it, at a list. A whole line copied with its
+break carried the next line's looks; a copy begun at a line's end, the line it began on. Ctrl+X
+wrote the words alone, so an item moved by cut and paste lost its level, bold and centring. A
+whole item pasted over another kept the covered marker, "2. 3. three": over a selection ending at
+the next item, then over the last item, then with nothing selected in a new empty item, "3. 1.
+Kiwi". A Word paragraph's line break, which the rich route drops, took the next item's with it. A
+line's depth was whichever margin tag Tk had made first that session. A word copied out of a
+nested item set the level of the item it went into.
+
+**Mechanism:** two rules were never written down, so each road answered for itself: what of a
+line's looks a copy holds, and what a paste bringing its own marker does at an item's marker. Each
+fix covered the road it was found on, and the next round found the branch beside it -- twice a
+branch the fix itself had opened: a paste read off the clipboard's plain text while the rich
+route put in something else, and a copy's entry made a line's one margin.
+
+**Fix:** the rules as they now stand, on both apps. A line's looks travel with its start: a copy
+holds the looks only of lines it has from their start -- not the line after a final break, not
+the line it began inside. Ctrl+X writes what Ctrl+C writes. A paste over a list deletes as typing
+over it would, except that what the paste brings counts: its own marker takes the covered one's
+place when the selection begins at an item's marker, its own line break the covered break's --
+read from what the paste will really put in, and nothing changes when the clipboard holds no
+text. With nothing selected at an item's marker end, the item keeps its marker, kind and depth,
+and the paste's own marker goes, as Word keeps a paragraph's list when a paste brings no paragraph
+mark. A line has one margin. Round 9 gave each agent the rule written out and asked for its whole
+matrix -- the phone's agent replayed 84,138 cases, and the two apps' deletion rules agreed on all
+6,146 compared -- rather than one road; rounds 10 and 11 found one more case between them, then
+none. DR208-DR226.
+
+**Known, recorded:** a copy begun at a line's start still gives its looks to the line it is
+pasted into after words; a list copied from its first item's words reaches Word with that item as
+a plain paragraph, which is the owner's call.
+
+**Takeaway:** when each fix of a rule leaves the case beside it, write the rule down and test its
+whole matrix on both apps at once; a fix by road is a fix of one cell.
+
+### Wave 3: a promise about Enter, kept by one copy of the question
+
+*(2026-11-02 · the final audit's third wave, a read of the code and the documents for what was
+written by rote; round 3, high)*
+
+**Symptom:** the README and the user guide promise that on a question about something you cannot
+take back, Enter gives the safe answer. Resetting a day of a series that had been moved, and held
+text of its own, asked "Only the date / The date and the text" with no default. A dialog with no
+default focuses its last button, so Enter pressed "The date and the text", and the day's own words
+were gone: no Undo, no rescue copy. The same question for a day that had not moved passed
+`default="no"`.
+
+**Mechanism:** one question written twice, the rule given to one copy. The dialog's own rule --
+no default means the last button -- is right wherever the last answer is the safe one, and
+nothing asked which questions end on the other kind.
+
+**Fix:** "Only the date" holds the focus (qa5, mutant WS04). Every other question with buttons of
+its own was read: none else ends on an answer that cannot be taken back.
+
+**The wave's other lessons**, from eight rounds on both apps:
+
+- **A number lives in one place, dated.** Counts written into several documents -- the walk's
+  checks, the fixtures' cases, the tests -- were right in one and stale in the rest.
+- **A test of a dead copy proves nothing.** Tests drove helpers the app no longer called (the
+  phone's `setMarker`, `parseNotes`) while the road a person takes went untested.
+- **SKIP, not PASS.** A check that cannot run on a platform now says SKIP; several had passed
+  there without checking anything.
+- **One rule, one place.** Small rules spelled out by hand drifted apart: the stored stamp's
+  format in fourteen places, the contrast formula in the gate beside the one in `themes.py`, the
+  phone's paste keeping its own copy of the table rules.
+- **A comment says why, not when.** A fix's history belongs in this log, where it can be found.
+
+**Takeaway:** a promise in the person's documents is a rule every copy of the code must keep;
+find the copies before trusting the one that was fixed.
+
+### Wave 2: the timers that ran inside a question
+
+*(2026-11-03 to 2026-11-04 · the final audit's second wave, an ordinary person's week and a
+careless hand, rounds 1 to 14; rounds 13 and 14 were clean, which closed it on the desktop)*
+
+**Symptom:** the gravest finds came last, in rounds 11 and 12, and had one shape. A backup import
+that finished while a share code's "Possible duplicates" question was open merged inside it: the
+backup's notes took the ids the code's import had counted before it asked, two notes wore one id,
+and opening one wrote over the other. A backup's Update of the open note, read back into the
+editor, asked the template editor's "Save changes?"; its Cancel kept the stale editor, whose next
+save put the old text back over the Update. A restore from the Trash whose save failed took back
+"the last n notes", counted before the error's question, and with them a new note whose autosave
+had run inside it.
+
+**Mechanism:** the app's questions wait in a nested event loop, and every timer runs inside it --
+the backup's poll, the autosave, a new note's first save. Anything read before a question (a
+count, the next free id, which note is open) can be stale when it is answered. Round 11 fixed the
+case it met; round 12 swept the class and found the other two.
+
+**Fix:** a backup's merge waits for a question already open; a code's import counts its next id
+once its questions are answered; a reload after a change made from outside asks nothing; a failed
+restore takes back exactly the notes it brought, by identity. WS78-WS81.
+
+**On the way.** Rounds 1 to 10 walked an ordinary person's first week. Every search now folds
+case and accents by one rule; a new note that Show or the search hides is said, with Show all;
+opening the note already on screen leaves it as it is, where it reloaded it and emptied Ctrl+Z.
+They also caught my own fixes:
+
+- The search fold first cut a Korean syllable to its first letter; the calculator's comma first
+  read "1,000" as 1; Show all first took the keyboard away.
+- Round 4 kept an Update's rescue copy whole on every later big delete, and so lost the words
+  that delete took (round 5). Round 5 kept those words aside as an "(earlier text)" note, which
+  stayed in the list after every Ctrl+Z (round 6).
+- Two scroll checks passed or failed on the state the check before them left behind.
+
+**Takeaway:** a question that waits is a window in which every timer runs: read what it decides
+about after it is answered, never before.
+
+### The comments that told every story twice
+
+*(2026-11-03 to 2026-11-06 · the owner's decision of 3 November, done between the rounds of
+wave 2)*
+
+**Symptom:** the code's comments had grown into a second copy of this log. Around 7,000 lines
+told how a line came to be -- the field report, the round, the measurement -- beside what it does.
+A reader went through the history to find the reason, and the same story lived twice, free to
+drift.
+
+**Mechanism:** each fix wrote its story where it was made, and nothing ever took one out.
+
+**Fix:** a comment says why in at most three lines, a docstring's prose in six, a module's
+overview in ten; a story that needs more is here, and the code points at it (`ISSUES_LOG:
+"<title>"`). `tools/check_comments.py` holds every module to it -- 29 of 29 since the entry file
+joined on 2026-11-05 -- and follows every pointer. Each commit was compared with its comments
+stripped: nothing but comments changed. Four mutants that quoted a comment were re-aimed. One
+commit went in with `check_mutant_targets.py` red, its exit code read through `| tail`
+(ba97c20, fixed in a33dd21); each gate's own exit code is read since.
+
+**Takeaway:** a comment says why; the story of how goes where stories are kept, with a pointer
+left behind.
+
+### Wave 2's lows: three checks that could not tell
+
+*(2026-11-06 · the lows of the final audit's second wave, fixed in two batches and every fix
+mutation-tested)*
+
+**Symptom:** three checks passed whether or not their fix was there:
+
+- **Ctrl+Z that did two things.** In a table cell, Ctrl+Z took back the cell's last typing and
+  the banner's Undo too: Tk's own Undo runs first, and the app then saw nothing left to undo. The
+  qa check for "one press undid twice" built a box with TWO steps, so one press always left one,
+  and the check passed whatever the order. (The fix itself guessed, and was wrong twice: see the
+  next story.)
+- **A Trash restore that restored nothing.** The check that a note kept aside and put back from
+  the Trash stays moved it to the Trash without taking it out of the notes: the "restore" made a
+  second copy, and the mutant (no forgetting on restore) survived.
+- **One check left Settings open for the rest of the suite.** With the mutant for "Show all
+  leaves Settings", the page stayed up, every later keyboard check typed into it, and the suite
+  ended early: NO-RUN, not KILLED.
+
+**Mechanism:** each check built a gentler world than the bug's -- two undo steps where one
+matters, a "restore" that copied, a page its own failure left open.
+
+**Fix:** the box has one step; the note is deleted as a delete does; the check closes Settings in
+its own `finally`.
+
+**Takeaway:** before trusting a check, ask what the world looks like when the fix is gone -- one
+undo step, a note really gone, a page left open -- and build that world, not a gentler one.
+
+### Wave 2's lows: Ctrl+Z read from a guess, then from the event
+
+*(2026-11-06 to 2026-11-07 · the lows wave's verification, rounds 1 to 6)*
+
+**Symptom:** the lows fix for "Ctrl+Z in a cell undid twice" decided whether the cell's own Undo
+had just taken typing back by looking at what it left: a redo step. Two verification rounds each
+found a road where that guess was wrong, both of medium weight:
+
+- **Round 1.** The note's text and comments ask before their own Undo runs, so a redo step there
+  is an EARLIER press's. Ctrl+Z after an undo did nothing at all while the banner offered Undo.
+  Patched with a flag for those two boxes.
+- **Round 2.** The same guess on the all-tag road: a table cell holding only a redo step -- its
+  typing taken back a moment before -- did nothing too, and so did the comments with Caps Lock
+  on, which reach Tk's own Undo.
+
+**Mechanism:** the guess. A redo step has other causes than this press.
+
+**Fix:** Tk's own `<<Undo>>` is now bound on the Text class (`_text_class_undo`): it undoes as Tk
+does and records whether this press took anything back, and the banner's Undo reads that record.
+The rounds after found what the guess had hidden:
+
+- **Round 3 (medium).** Ctrl+Shift+Z, the Redo key, matched `<Control-Z>` -- bound for Caps Lock,
+  and a Tk pattern allows extra modifiers -- and ran the banner's Undo from a cell, a title or the
+  list. A press with Shift held is now never the banner's Undo. The record also outlived its
+  press: left by a Caps Lock press with no banner up, it made the next Ctrl+Z in the comments do
+  nothing. It is now forgotten at idle, so it belongs to one press only.
+- **Round 4 (low).** In a table cell the Redo key did nothing (Tk on Windows redoes by Ctrl+Y
+  alone), and under Caps Lock, where it arrives as a lower-case z, it undid a second step. A Text
+  class binding now redoes, and the class Undo redoes when Shift is held. That fix made round 3's
+  mutant survive: its check pressed the key in a text box, which the new Redo now answers before
+  the banner's code. The check presses it on the list as well.
+- **Round 5 (medium).** A cell left with Enter and opened again took the banner's Undo with
+  Ctrl+Z: the cell's typing was already in the note's own journal, which the record did not
+  count. The count of steps now rises where every step is pushed (`_push_atom_step`) -- placed
+  first at the step's end, it missed the cell's commit, and qa1's count stood still to show it.
+- **Round 6 (medium).** A style applied in a cell, then Ctrl+Z: the style was a step the count did
+  not know, and the banner's Undo went instead. A style now counts as the cell's own edit.
+
+**Takeaway:** do not infer what an event did from the state it left when the state has other
+causes. Record the event where it happens, and keep the record no longer than the event. A key
+binding matches more than it names: list every key that reaches it. And count where every step
+passes, not where one road ends.
+
+### Wave 2's lows: a tab turned behind Settings
+
+*(2026-11-07 · the lows wave's verification, rounds 4 to 7; high twice)*
+
+**Symptom:** round 4 of the lows wave's verification made Show all take the person to the list.
+Round 5 found it high: pressed with Settings open over a template being written, its question
+answered Cancel, Show all still turned the tab, and the template editor kept for the person was
+destroyed with its words. Round 5's fix asked Settings first. Round 6 found the same loss by
+another road (Ctrl+S over Settings turned the tab behind it), high again.
+
+**Mechanism:** a change of the tab behind Settings closed what Settings holds, whichever road
+turned it; each fix closed one road.
+
+**Fix:** at the class: while Settings is open, a change of the tab behind it no longer closes what
+Settings holds. Round 7 added that Ctrl+S over Settings saves without turning the calendar either.
+
+**Takeaway:** when a fix moves the screen, ask what the screen it leaves is holding; and when the
+same loss comes back by another road, fix the place every road passes, not the road.
+
+### Wave 2's lows: the banner that waited
+
+*(2026-11-06 to 2026-11-07 · the lows wave and its verification, rounds 1 to 10)*
+
+**Symptom:** a new note hidden by Show, or an "(earlier text)" note, said over an Undo still
+offered, took the delete's only way back (wave 2, round 2). The lows wave held such banners back
+until the Undo went. The verification rounds then found what holding back does to a message:
+
+- **Round 1 (medium).** Put on the status line, the next autosave wrote over it within a second.
+  Now it shows beneath the Undo, and as its own banner with Show all once the Undo goes.
+- **Round 2 (lows).** "Once the Undo goes" was also "the moment Undo is clicked", so the held-back
+  banner covered what the Undo itself said. One slot kept only the last of two. The "(earlier
+  text)" banner offered Show for a note deleted or spent meanwhile. And "Saved in General, hidden
+  by Show: Work", shown seconds late, read as being about the note the Undo had just put back.
+
+**Mechanism:** a message held back is said about a moment that has passed.
+
+**Fix:** the held-back banners are a list shown in turn, behind any banner put up since
+(`_banners_in_turn`). Each asks again, when it is finally shown, whether it still has something
+true to say, and the hidden note's banner names its note. The rounds after kept finding banners
+and timers on the same seam, none above low once round 7 came back clean:
+
+- **Round 7.** The Undo ran out under a question it could not be clicked through: it now waits the
+  question out, and four seconds more.
+- **Round 8 (the verification's second clean round).** Asking again cost a read of the whole list
+  per hidden note -- a large import froze; the list is read once. "Import cancelled" and the
+  comments' table notice still showed straight over an Undo.
+- **Round 9.** Round 8's finding had named "Earlier text of N days … Show" as a sibling; only
+  "Import cancelled" was moved, and the record said both. Now every such banner goes through
+  `_banner_after_undo`. Round 10 found nothing at all.
+
+**Takeaway:** a message held back is a message about the past. Ask it again when it is finally
+said, and say whose it is. And a finding that names its siblings is closed when each sibling is,
+not when the first is.
+
+### Wave 5: the window that opened under the taskbar
+
+*([0.102.556](../CHANGELOG.md#0102556--2026-11-23) · 2026-11-09 · found in the release wave's
+photographs of the Store package, taken inside Windows Sandbox)*
+
+**Symptom:** the package to ship was started eight times, once per theme, on a sandbox at 150%,
+and its window photographed. Twice the sandbox's taskbar covered the window's last 27 px, half of
+the Settings button; the other six launches were higher on the screen and whole.
+
+**Mechanism:** the app sized its window to the work area (the screen less the taskbar), less a
+frame allowance, and left where it opens to Windows. Windows' default place moves from launch to
+launch, and for a window that tall some of those places end below the work area. The size was
+checked at 150% and 200% (qa6); the place never was. The popups were not a sibling: they already
+keep themselves inside the app's window, never the screen, and were half hidden only because the
+window was.
+
+**Fix:** once, when the window first shows, it is moved up or left just as far as it reaches past
+its monitor's work area, and left where Windows put it when it fits (`_keep_window_in_work_area`).
+It is measured and moved in Windows' own coordinates, which agree with the work area's whether or
+not Windows scales the app (Sharp text on or off). qa6 checks the arithmetic, the move made once,
+and on Windows a real move of one pixel; mutants WA01–WA05.
+
+**Takeaway:** a window's size and its place are two answers. A window fitted to the screen is only
+half placed until something checks where it landed.
+
+### Wave 5: the desktop findings the phone's port had kept
+
+*([0.102.556](../CHANGELOG.md#0102556--2026-11-23) · 2026-11-11 · found reading what the
+phone's issues log still held open about the desktop, before the audit's pull request)*
+
+**Symptom:** a page of two tables pasted from Word or a browser came in with the second table's
+bold on the wrong letters: "Gym" in a cell arrived as bold on "| G", and with each table after it
+the styles slid further. Four smaller things sat beside it. Title Z–A put the untitled notes
+first. Find stepped through a table column by column. The Insert table grid lit one square for a
+two-column table. A table inserted right above another left two empty lines between them.
+
+**Mechanism:** none of the five was new. Each was found in October while porting the desktop's
+code to the phone, where a function is read closely enough to answer as it answers; the phone
+was written right, and the finding was written down in the phone's issues log as a desktop
+finding, for its own repository. The desktop's register never received them, and no round of the
+final audit looked: each round attacked the fixes and the areas it was given, and these were
+already known somewhere else.
+
+- The paste: `align()` gave each padding edit a running sum of the lines before it, read after it
+  had re-padded them, so every table after the first was counted in the changed text, and
+  `shift_spans()` judges every offset in the text as it came. `renumber()` counted the same way;
+  nothing showed only because the editor drops its shifts and moves its styles itself.
+- Title Z–A reversed A–Z's whole key, and the mark that sinks an untitled note with it.
+- Find sorted a table's cells by the grid's one line, then the column: never the row.
+- The grid was drawn from its second column, the first a table can have.
+- The insert added a second line break when a table sat below, though the break that ends the
+  cursor's line already makes the empty line between them.
+
+**Fix:** `align()` and `renumber()` take each line's start before they change anything, as
+`forget_widths()` already did. Z–A turns the untitled mark over before the reverse; Find sorts
+cells by row, then column; the grid draws every column, its first making two; the insert adds
+one break. A probe of 3,000 random pages of up to five tables found a bold off its word in 1,665
+before and in none after. Checks in test_tables, test_richtext and qa1; mutants PF01–PF06. The
+phone's list held a sixth: the calculator refusing a keyboard's `-`, `*` and `/`, which wave 2
+had fixed (`2a31b35`) without anyone telling the list.
+
+**Takeaway:** a finding written down in one repository is invisible to the other's audit. Before
+a release, read what the other app's logs still hold open about this one.
+
+### Wave 5: what a full reading found
+
+*([0.102.556](../CHANGELOG.md#0102556--2026-11-23) · 2026-11-11 · ten read-only readers over
+both apps' code and documents, before the audit's pull request; every finding checked in the
+code before it was believed)*
+
+**Symptom:** nothing reached a person's notes, but five things could. The Share panel could show
+a new note already ticked, and Generate code carried it unchosen. With the calendar's History
+open, ◀, ▶ and Today moved the month behind it, seen only on the way back. Paste as plain text
+closed every run of empty lines to one and cut each line's end. A file removed from a note was
+deleted before the save that stopped naming it, so a save the disk refused left the note naming
+a file no longer there; deleting from the Trash for good, by hand or at the start, did the same
+to trash.json. A bulk export that failed halfway left half a file, and cleared the selection.
+
+**Mechanism:** old shapes, each fixed once on one road and waiting on the next.
+
+- State kept by a note's id across a session. The selection had learned that a delete frees the
+  highest id and the next new note takes it; the Share panel's ticks and History's open groups
+  had not.
+- A file deleted before the write that stops naming it, on four roads: Remove, Delete
+  permanently, Empty trash and the start's purge.
+- The keys had been taught to page History instead of the month behind it; the buttons beside
+  them had not.
+- A promise the body did not keep: `reflow_wrapped()` said a block that is not a column comes
+  back as it went in, and rebuilt every block it read.
+- The bulk export wrote in place, where the single one wrote beside and moved in.
+
+**Fix:** ticks and open groups are kept by `_order_identity` (the uid). The buttons leave History
+first, as a History row's date and the reminder bar already did. The rejoin keeps every blank
+run, and every block that is not a column, as captured. A removed file waits in `_files_to_drop`
+until a save lands; the Trash is written before any file goes (`_trash_written`,
+`purge_expired_trash(write=...)`), and a refused write deletes nothing, said. One writer,
+`_write_export_file`, serves both exports, and only the notes that failed stay ticked. Checks in
+qa1, qa3, qa6, qa7, test_richtext and test_data_safety; mutants RF01–RF09, with A08 and
+SF03–SF06 re-aimed. The readers' one grave claim, a hung mutant leaving its suite running beside
+the next, was refuted in the code: on Windows every run's own job ends its children with it.
+
+**Takeaway:** a fix found on one road is a list of roads to walk. And a reading by agents is worth
+what its checking is worth: every claim was read in the code before it went on the list.
+
+### Wave 6: the lows, fixed before the stores
+
+*([0.102.556](../CHANGELOG.md#0102556--2026-11-23) · 2026-11-12 to 15 · the full reading's
+findings of low severity, which the audit's rule leaves for a wave of their own; the owner chose
+to fix every one before the stores, or say why not)*
+
+**Symptom:** each rare, none losing a note as a person uses the app. A title typed as
+"Note title..." was saved empty, and wiped at the next click into it; a search for "Search
+notes..." searched for nothing. An export that failed on its own as the window closed was said at
+the next start as one the close had cut short. An old notebook's one-time cleanup was marked done
+when its write had failed, its new ids alive only in the running app. A duplicate offered to put
+the original's older words over itself (Restore previous). A day off the schedule moved to the
+Trash went in twice when the app had stopped between the Trash's save and the notes'. A pin or a
+tick written by hand as "false" or "no" counted.
+
+**Mechanism:** six old shapes, each its own class.
+
+- A state told by its look: the four grey hints were recognised by their words, so the person's
+  words equal to them were taken for the hint.
+- A record written as the wrong kind: the close knew "stopped by me" and "failed by itself"
+  apart, and wrote both down as the first.
+- A write's answer ignored: the cleanup carried on as if its write had landed.
+- A copy that copies what is not the note's: the rescue copy belongs to the edit that made it.
+- Two writes in an order chosen for safety (the Trash first), with no guard for the step being
+  taken again after the first landed alone.
+- Truthiness standing for a flag: `bool()` reads any word as true; the phone reads only `true`.
+
+**Fix:** the field keeps whether its hint shows (`_hint_shown`, `show_hint`, marked before its
+words go in), and a ninth rule in `tools/check_one_definition.py` refuses a comparison with a
+hint's words in the shapes it names, proved on them at every run (a hint held under another
+name is past any pattern). The close records `export_failed` with its error. The cleanup
+works on copies and is kept only when the write lands. The duplicate leaves `_prev` with the
+original (the owner's choice; the phone already did). The Trash skips a day it already holds,
+content for content. `normalize_note`, `normalize_template` and the signatures read `is True`.
+Checks in qa1, qa3, qa4, qa5 and test_data_safety; mutants SN01–SN09, with WS36, WS41, WS48 and
+RT14 aimed at the code as it is now. The tools' lows went the same way: `build_msix` asks the exe
+its version, `check_guest` sees the shapes a container is started in here, `run_tests` leaves no
+`__pycache__` behind.
+
+Two lows were read and left, with the reason. The qa seed's guard beside an empty notebook: the
+scratch marker, the app's own resolver, the run's empty homes and the deny rules already stand in
+front of it, and one more guard would stop the suites that run one after another in one folder.
+The site's missing third-party notices: the site ships nothing it did not write.
+
+**The round that attacked these fixes** found what they had not reached, all of low severity on the
+desktop, each fixed the same day: the app's with a check and a mutant (SN10–SN17), except the date
+picker's write, which nothing can see today; the tools' by probes of the forms they missed.
+
+- Two more writers into a hinted field (the list's search sent to the History, a day picked in the
+  date picker) left the hint's mark, and an untitled note's state put back kept a long title's
+  counter beside the hint.
+- The cleanup's copy of the notes was kept at every launch while the file stayed held. Removing it
+  showed that copies named by the second wrote over one made the same second, an unreadable file's
+  `_corrupt_` copy among them; each now takes a name not yet used (`paths.unused_path`).
+- A backup's "Add a copy anyway" carried the original's rescue copy, the seam the duplicate had.
+- An export's error without words (a `MemoryError`) read as success, and one that failed just
+  before Windows ended the session was never said.
+- A day the Trash already held kept that entry's first clock, sooner than the question promised;
+  the clock starts again (`renew_in_trash`).
+- Three of the sentences above promised more than their tools did: `check_guest` missed
+  `docker-compose up`, `restart`, `unpause` and a split list, the ninth rule missed membership and
+  `startswith`, and `run_tests`' own import still wrote `__pycache__`. Each now does what it says.
+  And `build_msix` refuses an exe built before the code last changed: dist/ held 0.100.524's build
+  from before these fixes, under the number they have not bumped yet.
+
+Two of that round's lows were read and left. A cleanup whose notes write lands while
+`settings.json` is held at that moment re-points the open note wrongly at the next start: the
+wrong note opens, nothing is lost, and keeping the cleanup's mark anywhere but settings would be a
+new format. And `move_notes_to_trash`, stopped between its two writes, can leave a note in both
+files, a second identical row the next time it is deleted: no loss, and matching every delete
+against the whole Trash could merge two deletions a person meant apart.
+
+**The second round** found one medium, in the test plan (case 1059's precondition named a question
+that never came, now true), and the export's three records still out of step, all of low severity:
+the session-end fix itself dropped the export, so a session whose question was cancelled kept a
+frozen bar, never said the failure, and told the next start of a sign-out that never came; an
+export still writing at the question that failed after it had its word taken back before its
+error was read; one finished just before the question was recorded as nothing. Now the session's
+end records each as the close does and keeps the export for its poll, the poll takes back any of
+the export's words (only "export" was), and a failure's word stays, as a failure, until its
+message has been read. The cleanup, rerun at every start while `settings.json` refused its mark,
+still kept a copy of a notebook it no longer changed; a cleanup that changes nothing keeps none.
+An import still running past the close's wait is named with what it copied and unpacked, so the
+next start takes them out. `check_guest` and the ninth rule were widened again, lower case so that
+"keep Docker up to date" is not a command. `build_msix` also watches the icons and the licences
+the spec ships. Left: a start whose three reads are refused just before the holder lets go calls
+a held file damaged, its notes kept in the `_corrupt_` copy.
+
+**The third round** found two of the second round's fixes wrong, and one old road. "Changes
+nothing" was judged against the notes as read, not against the file: a file holding a field the
+read drops, or a body written as a list, was rewritten without it and its one copy removed. It is
+judged against what the file holds now. The rewritten `check_guest` pattern had dropped
+compose's middle word (`docker compose run`, `["docker", "compose", "up"]`), and the ninth rule
+missed `elif`, `assert`, `lambda` and `self.SEARCH_PLACEHOLDER` while taking a docstring for a
+comparison: each now proves itself on a list of the shapes seen so far, at every run, so a
+rewrite that drops one fails the gate. A partial export's word was taken back before its message,
+the flaw the second round fixed for failures; it is kept the same way. And closing the app
+during a big export holds the window about half a minute (a wait since September; Windows shows
+it Not Responding), while the word 0.94.382 leaves for the next start was written only after the
+wait, so a close ended there said nothing and left the unfinished `.tmp` for good. The word is written before the wait, with the
+file's state at that moment, so the next start also tells an export that landed after all
+(said finished, where "export again" would have offered to replace the only copy of a session's
+notes). A file an import was copying when the process ended is named while it is written, and a
+session's word says Windows "began to" sign out, true too of one the person cancelled. Left: one
+`backup_cut_short` word at a time, so in a run that could not read the notes, a kept import's word
+can be written over by an export's, its copied files orphaned; and the cleanup, rerun while
+`settings.json` refuses its mark, keeps a copy whenever a delete since has renumbered the ids.
+
+**The fourth round** found the third's checks weaker than their names. The check that the close
+writes its word before the wait read the word only after the wait returned, so a word written
+after it passed too: it is read as the wait begins now, and SN25 moves the write after the wait,
+as its name says. Two checks faked "still writing" on a live worker, which could finish between
+that line and the settle; the worker is finished first. The landed checks lacked the usual case,
+an older backup of the same name replaced (SN30). In the test plan, cases 1063 and 1065 still
+expected "Windows signed out", and case 1067's automation named the check that could not see the
+wait; both are true now, case 1067's steps say "Sign out anyway", and the wait is said as about
+half a minute (30 seconds, then up to 5 more while the export answers its stop). A template not
+kept still said "signed out" (SN31). The ninth rule also sees the hints' own words written out
+("Search notes...", "DD.MM.YYYY"), and `check_guest` a list built in pieces, a placeholder among
+the flags and a shell's line continuation, while "with docker, run ..." in prose is no longer a
+command. The start's sentence for an export that landed no longer says its message went unshown,
+untrue of a session ended with the message up. Left: a file holding a key twice loses the first
+value when the cleanup rewrites it (the read keeps the last; only a hand edit writes one); an
+export that landed unseen leaves "Last exported" at the older date; an import gets no word before
+the close's wait (its stop answers within one chunk, but not inside a large file's flush to disk,
+which can hold the window for seconds; a process ended there leaves the copied files unnamed); an
+import stopped by a sign-out then cancelled is said at once and again at
+the next start; an export to a stick unplugged before the next start is said cut short; and a
+docker command run through a name that does not say docker passes `check_guest`.
+
+**The fifth round** found nothing of medium severity on the desktop, as the first round had not;
+the three between had each found one. Fixed all the same: `check_guest`'s pattern could try a line of many hyphenated flags
+every way, for minutes (a gate that would hold the paid CI job to its limit); a flag and its
+value are taken once now, the lines that took it minutes are among its prose, and a line
+continuation counts only at a line's end, so Markdown's `docker` in backticks is no command. It
+also sees cmd's caret and a quoted value with a space, and leaves `DOCKER + ["volume", "create"]`
+alone. An import gets its word before the close's wait, as an export does (SN33), since a large
+file's flush to disk can hold that wait for seconds; and the check of the sentence for an export
+that landed reads the sentence's end (SN32). Left: a backup word said at a start whose
+`settings.json` writes are held is said again at the next; an import's word is taken back only
+after the merge's redraw and cleanup, so a window ended in between says nothing was kept of
+notes the file holds (importing again skips them); an import that failed on its own, still
+waiting for its poll when a session ends, is said cut short, its reason unsaid; a start after an
+update that cannot read the notes says both that the list is empty and that the notes came
+through the update; and docker commands put together in steps (`cmd += ["run"]`) or through a
+verb held in a name still pass.
+
+**The sixth round** found one medium, older than the wave, in the test plan: case 660 asked
+whether the next start's silence about an import cut short was fine, while since 0.94.382 that
+start says it (case 663); it points there now. The rest was low. The fifth round's list built in
+pieces had stopped seeing a flag, `container` or compose's flags before the verb, which the
+pattern before it saw; they are back, with `DOCKER + ARGS + ["run"]` and `--context="ci"`, a
+word like "volume" still not one. A new line counts only after a comma or a continuation, and a
+continuation only after a space, so wrapped prose and Markdown's `docker` at a line's end are no
+command; a quoted flag can no longer be read as the one before's value, which doubled the work
+with each; and a line of thousands of "docker" no longer costs the square of its length (a name
+taken once, at most 24 flags in a chain). The session's end names an import's copied files
+before its join, as the close does since the fifth round (SN34), and the close names them
+whether the import was done or not, through its cleanup (SN23 widened): a process ended there
+left them unnamed. A new case says so in the plan. ARCHITECTURE no longer says an import is not
+waited for, nor that only the settle writes the word; USER_GUIDE says a stalled stick holds the
+close up to half a minute; the log's second round now names the medium it had. Left: an import
+that fails on its own in the moment before the close is said cut short, its reason unsaid; and
+an export's target on a share that stalls is asked its time before the close's word is written.
+
+**The seventh round** gave one agent the test plan alone, case by case against the code, and
+it found eight mediums, every one older than the wave: a step that opened the notebook where the
+.exe has not kept it since 27 October (case 554), a completion message said to name the
+categories it only counts (258), new notes said to come in whichever answer while Cancel brings
+none (271), an Update said to leave the category and comments alone while it writes them (269),
+the Restore previous question quoted without the sentence that case's setup adds (370), import
+messages said to name a menu path that only the export's do (971), a "Settings → notes" that
+does not exist (997), and a close said to finish the write it stops after half a minute (244).
+Each is true now, with the lows beside them: a label, a sidebar's width, checks and mutants named
+wrong, and mutants run when a case was written but never kept in the catalogue, said so. In the
+code, all low: a file the session's end named as ".part", still flushing, was renamed after and
+stayed for good; its own name is taken out too, unless a note uses it (SN35). The start takes
+the word back only once it is said: taken first, a start frozen asking a share that is gone, and
+ended there, lost it (SN36). `check_guest` sees flag values as f-strings or calls, flag lists
+joined on, six joins, and bash's continuation with no space, while a brace no longer crosses a
+line. Left: a start whose `trash.json` is held may take out a file only the backup's Trash used,
+in the moment between a merge and its word taken back; and the import's free-space refusal opens
+with "That file couldn't be read as a backup" (case 657 asks the owner's eye on it).
+
+**The eighth round** took that last one up as a medium, rightly: a nearly full disk is an
+ordinary road, and the backup was sound. A refusal for no room is its own kind now
+(`BackupRefused`), said as that alone (SN37, SN38), and a disk that fills up during the unpacking
+is said as that too (unguarded until the ninth round). The plan's reader went on to the Notes, Settings and Attachments cases and
+found nine mediums, all older than the wave: a name field reached through a "Your name" section
+and a Save button neither of which exists (84); a delete question said to quote the days, which
+only the selection's question does (312, and 671's step); Undo said white on a green banner (283);
+the shortcuts page's first words and a group's name from before 299765b (215, 733); a Restore
+pressed on a row an Undo had already taken away (426); a sort by "Recently created" that never
+existed (1017); two bars where there are three (353); and a banner quoted without the note's
+title (984). Each is true now, with mutants named wrong, renumbered or never kept said so. In
+the code, all low: `check_guest`'s joined lists could split a name every way, and took
+`["--tls", "volume"]` for a flag and its value; their items need commas and take no values now,
+a continuation needs an indented next line (so a Markdown backslash line break before text at
+the margin is not one), and a flag's value no longer swallows bash's backslash. DR121 no longer compiled since the seventh
+round; it is aimed again. A word another program wrote with a NUL in a name no longer stops
+every start, and a name with ":" (a file's stream) is never taken out. Left: an import's word is
+taken back only after the merge's redraw and cleanup (said as nothing kept, if the window is
+ended in that stretch); and a start frozen on a share that is gone freezes again at each start
+until one is waited out.
+
+**The ninth round** found four of the eighth round's own rewrites still untrue, as mediums: the
+selection's status line, said to quote the days, names none (312), and 671 quoted the single
+delete's line on the selection's road; 353's title still said two bars; and the banner is teal on
+four themes, not two (283). The plan's reader went on to the Editor and Recurrence cases and found
+eighteen mediums, all older than the wave, most of them from before day mode hid a day's date and
+repeat: a day's save said to ask a question it never asks (377), a day's Every and date changed by
+hand (473, 468, 483) or its repeat turned off (547), "(this day)" beside its date (638), a mixed
+size said as "Default" (906), Ctrl+Shift+V said to bring in all of a long paste, where it keeps the
+same ceiling (557), the "(earlier text)" notes said on the status line, where a banner of their
+own says them (934, 936, 941), a removed day said to come back by Undo alone, where four roads
+that rewrite the series bring it too (282, 285), an Undo pressed after another banner replaced it
+(931), a palette kept open by a click that closes it (327), a paste refused on the title the case
+started from (916), a Reset the menu does not offer that day (451), and a start message still
+called a low after it was fixed (949). Each is true now, with the lows beside them, and the
+sixty-one rows of those two areas naming mutants the catalogue does not keep, or keeps for
+others, say so. In the code, all low: a damaged deflate stream, an encrypted entry or an unknown
+compression said the import had failed "unexpectedly"; they are a file that could not be read
+now (SN40). The full disk's words are guarded (SN39); Windows' two other codes for a full disk
+(39, 1295) were mapped too, but a failed write never carries them, so they reach only a folder
+the unpacking cannot make (said so by the tenth round). A word another program wrote could still
+name a note's file through an alias (a trailing dot or space, or another case); those two were
+closed, and the tenth round found two more (SN41, SN42 since aimed again). `check_guest` sees cmd's
+caret and PowerShell's backtick going on at the margin again, and a list of spaces no longer
+costs the cube of its length. Left: bash's backslash with its next line at the margin, and a
+Markdown list item's backslash break, read the other way; a close whose read hangs on a share
+that is gone leaves the process, and its lock, until the read times out (a relaunch says it is
+open, with no window); a `settings.json` on a full disk raises a banner at every write, which can
+take a delete's Undo; and no gate compiles the mutants, so one can break unseen, as DR121 did.
+
+**The tenth round** found nothing above low in the code, and nine old cases in the Tables,
+Calendar, Checklist and Notes list areas that a person could not walk or would fail an app that
+is right: a day's save question that day mode took away (375, and 552 following a row merged
+into another), a "Jump to" button that is the month's title, which jumps on Go (51), four markers
+where a day keeps three (417), a header row the toolbar's table does not have (674), captions
+centred under tables left where they were (232), a checkbox cell's editor said to show the box it
+opens without (192, 579), and markers said white on every painted day, where the paint decides
+(413). 552's road, the Undo offered again after going back on the question it asks first, had no
+check since day mode removed the question it was checked on; qa5 checks it on the date's question
+now (DR227). Mutant ids the catalogue does not hold are no longer looked for one area at a time: a
+sweep of the whole plan found eleven more rows, and nine rows name ids kept for other mutants;
+each says so. In the code: the alias guard missed a name cut from ".part" that ends in a dot or a
+space, and Windows' 8.3 short names (`202611~1.BIN`), both still able to take a note's file on a
+word another program wrote. Three guards had each missed one alias; the cleanup now asks the disk
+for the file's own name (`os.path.realpath`) and keeps it if a note uses that name, which closes
+every alias Windows resolves (SN41, SN42, Windows only, as on Linux each alias is another file).
+`check_guest`'s joined list was still quadratic over a run of spaces with no "]"; its spaces are
+possessive now. Left: a read that fails mid-unpack is said as an unreadable file with the system's
+errno text, which misnames a pulled stick or a gone share (older than the wave); an import whose
+worker failed while its poll waited behind a dialog, then cut short by a sign-out, never says its
+own failure (export keeps the two apart); and a disk filling during the copy phase skips files in
+silence, said only as "File missing" when one is opened.
+
+**The eleventh round** attacked the owner's new contract first: a note keeps the fields this version
+does not know (D2, approved on 13 November). It held on every road a note takes, but on five edges.
+A backup's Update wrote over a field of the same name, and Restore previous could not put the
+note's own value back, which by the owner's rule is a loss, if on a rare road: the rescue copy
+keeps the note's own under `_unknown` now, and Restore previous puts them back as they were (UF10,
+UF11, UF13). A note holding only such a field read as empty, and the first start's cleanup deleted
+it (UF09). An Update added the backup's fields without the bounds, which the next load then applied
+by name; they are held at once. True and 1 signed alike, where the phone tells them apart (UF12).
+And a crafted list of millions was walked before it was refused; it is refused by its count. D2
+covers a note's top level, as approved: a field a newer version adds inside a checklist item, an
+attachment or the repeat rule is still shaped away, which ARCHITECTURE, CODE_TOUR and the phone's
+DATA_FORMAT had promised otherwise and now say. qa5's check of the Undo offered again could read
+the delete's own banner; it takes the offer as a click does. The plan's reader went through the
+last sixteen areas, so every case of the plan has been read once since the wave began, and found
+ten mediums: a first start said to open on an empty list where the welcome note waits (263), the
+Duplicates buttons' looks of before (329, 330), four selection actions where there are five (293),
+the folder message's old words (703), "(earlier text)" said on the status line (937), a start's
+message called a banner or a line (929, 173), a template used over an edited note said to ask
+where it asks nothing (240), and Ctrl+S in the template editor said to save the note behind it
+(1022); and eight rows naming a mutant or a suite that does not guard their case. Each is true
+now, with the lows. Left: an Update's question never offers a note whose only change is such a
+field (it cannot say what the field means), so an older desktop keeps its own value until a real
+change brings the backup's; and the tenth round's three.
+
+**The twelfth round** found the rescue copy's record held through every chain it tried (an Update, a
+load, Restore previous and back, the Trash, a turn-off, a big delete), and lows at its edges: the
+signature told true from 1 but not an empty object from an empty list (both kinds tagged now,
+UF15); a copy whose own 1 the backup wrote over as true counted as spent once the words were put
+back, so that 1 went with it, and a copy the backup only added a field to could never be spent,
+Restore previous offered for good (a copy is held now when the note holds each of its own fields
+again, kinds told apart, UF16; the phone the same, AS731). Its second reader read the user guide,
+the privacy policy and the README whole against the code, the first time since the wave began,
+and found three untrue sentences: a toolbar of four groups that has five, a calculator history
+said to keep the session's sums where opening another note empties it, and "headings" (README and
+the site's page), a style the app does not have; and the Share panel's search, which reads
+checklists and folds accents, said to read less. The plan's 329 compared Clean up ALL's outline to
+the selection bar's Trash, which is flat; it is Empty trash's. Left: own fields pushed out at the
+bounds live in the rescue copy alone until another Update replaces it (more than 32 such fields);
+and the import calls a note whose only change is such a field "already here, unchanged".
+
+**The thirteenth round** found the twelfth's own fix had opened a loss, graded high by the owner's
+rule. The spending rule, which rightly lets a field the backup added not count, was also the
+question Restore previous asked of what it replaces. But the restore puts back the copy's fields
+alone, so the field the backup added is exactly what the restored version lacks: with an older
+backup's words held in the note's, nothing else seemed lost, no copy was made, and the field was
+gone. The two questions are each other's reverse, and each now has its own: the restore keeps in
+its turn every field the note holds that the copy does not hold the same (UF18, UF19, and qa5
+presses the button). The phone the same. A half of the twelfth's mutant survived: without the list
+tag alone, true signed as the list ["bool", 1] (checked now, UF17). And the phone's round
+confirmed both ways what its ninth had left: a code whose prefix a chat app's wrapping broke went
+to Python's lenient decoder here and to the strict one there, each reading what the other refused;
+both now read from the prefix the wrapping hid as from a whole one (SN43). Its second reader read the
+texts not yet read against the code: the welcome note held; RELEASE_WINDOWS asked for Sandbox
+proofs of the package with the Store's identity, which the three sandbox scripts could not give,
+their certificate and package name the test identity's (they read it from the package's manifest
+now), and said the package's version need not match the app's, where `build_msix.py` packs the
+app's own; the screenshots' README dated retakes that did not happen and missed two that did; and
+the calculator history, said to last while the note is open, empties whenever the note is loaded
+again (Restore previous, another day of a series, an import's Update).
+
+**The fourteenth round** found the thirteenth's fixes held (seven thousand restores fuzzed, two
+thousand damaged codes read against the phone's rule), and the rule for a hidden prefix too wide:
+words saying "NOTE 1:" were called a damaged code to send again, and on the phone, shared in,
+refused with no note made. A hidden prefix counts now only when the code it leads to reads (SN46).
+One medium older than the wave: Restore previous asked "as it was before it was updated" of every
+copy holding more than text, and asked it again over the copy a restore keeps, the updated
+version itself, the reverse of what the button then did; it names the previous version now, as
+the button does, on both apps (SN47). Its second reader read the screens of Settings and the
+dialogs, the first time: the name said "Saved automatically" when a full disk refused it, the
+sidebar keeping the old one (said not saved now, SN44, SN45); the light/dark switch promised the
+last theme used, which it remembered only while the app was open (kept across starts now, with
+the owner's yes, in two settings of its own; SN50, SN51); and lows: messages said on the status
+line alone, behind Settings (on the banner now, SN48), a Trash held since the start refused as a
+full disk (SN49), Appearance's "instantly" over Sharp text's next start, a template's pencil
+called Rename, Duplicates said to ignore case in a checklist, and "up to N could be removed" where
+a group ticked whole goes whole.
+
+**The fifteenth round** found the fourteenth's fixes held, and its second reader read the other
+screens (the calendar, the note list, files, the calculator, spelling) for the first time: History
+filtered by a search or a year counted "1 edited day" of a series with three and said every other
+day shows the series content (it counts the rest now, "1 of 3", SN55); the calendar's quick look
+called a note holding only a checklist, a table or files "(empty note)" under the chips that named
+them (SN56); and the word on notes restored or imported where the list hides them named the first
+one's folded group for all, Show all unfolding that group alone (all of them now, SN53, SN54; the
+phone the same). The lows: a day colour put back from the Calendar said on the hidden status line
+(SN61), the reminder bar keeping the count it was drawn with (counted again each minute, SN57),
+Sharp text and the name's preview said saved or shown when the disk refused them (SN58, SN59), a
+newer version's theme name written over by the switch (SN52), a list in "theme" stopping every
+start, and a hidden prefix calling a newer version's code "no share code" (SN60). The decode's
+words now send a code's sender to Settings → Backup, the place both apps have, not to an Export the
+phone lacks. And the turn-off line said "not the series" of a copy that keeps the series when the
+note repeated before the Update: it says the version it kept before, nothing more.
+
+**The sixteenth round** found the fifteenth's fixes held (twenty thousand banners and fifteen
+hundred series fuzzed, none told differently), and its second reader read the words written in
+the entry file itself, the last of the screens: Back to Calendar went to the Calendar after "Go
+back and fix it" was answered, the one caller that read no answer (SN62); the notice after an
+update said the notes came through, and sent the person to an Export of nothing, over a notes file
+that start could not read (SN63); the Update question promised Restore previous, and warned OLDER,
+of a note that differs by a file alone, which takes the file and keeps no copy (SN64); "Saved
+template" over a refused write (SN65), and an import's "Also restored" over files not written;
+"Already here, unchanged" said the backup holds nothing the device lacks, where it holds a field
+a newer version wrote (SN66); a category Undo said nothing was left with the notes still there
+(SN67); and the save's "Saved at", written before the write, stayed over a refused one (SN68).
+The lows: Sharp text's and Spelling's dropdowns kept the refused choice (SN69), the days off the
+schedule and the moved ones counted only from the rows listed (SN72), checks for "theme" read
+as text and the reminder bar going with the last note (SN70, SN71), and "Every week, 1 times",
+which the phone's reader found on both apps (SN73).
+
+**The seventeenth round** found three of the sixteenth's sentences true on the road they were
+written for and not on the next one: "Already here, unchanged" named a newer version's fields of
+a share code, or of an older backup, where only this device held them (the import's own fields are
+said now, `unknown_fields_lacked`; SN74); a refused save kept the save's words to put back, and
+"Auto-saved" came back over "Not saved" once the date was fixed (SN75); and an import's "Also
+restored 2 categories" stood beside "The calendar day markings could not be written", the
+categories in the same refused file (SN76). The lows: the Trash window's dropdown kept a refused
+choice (SN77); the update notice offered, as a safety net, a copy of a notes file that start could
+not read (SN78); History's note spoke of left-out days only when edited ones were (SN79), with the
+moved and the bounded series' off-schedule days left out given checks of their own (SN80, SN81);
+Spelling's put-back and a template Save refused after a cancelled sign-out (SN82, SN83); and,
+from the second reader of ARCHITECTURE and CODE_TOUR, an old notebook adopted over this folder's
+readable settings.json with no copy kept, now copied aside first as the other road does (SN84).
+Left that round, with a reason the next one undid: a backup's note that differs by a file alone
+is asked about before the editor's last words are saved, so typing in it just before the
+question, then Update, replaced those words the question said it would not touch. The reason
+given, that Restore previous brings them back, left out that the Update's copy took the place
+of an earlier one the note still held.
+
+**The eighteenth round** found nothing of medium severity on the desktop, the wave's first such
+round. Its first reader fuzzed History's counts and probed every road of the seventeenth's
+fixes; its second checked, on the desktop, each rule the phone had just learned in the
+desktop's name. The lows: the low above, asked again now once the flush has saved those words
+(SN92); a settings file held at the start, its defaults said to stand all run, read for real
+once the hold ended, the Trash then purged by the real window (SN85); advice to choose a Trash
+window over a settings file that refuses the choice, and a delete for good promising files the
+run keeps (SN86, SN87); an import's "could not be written to disk yet" of a file held, which no
+later write reaches (SN88); categories brought back at a start over a refused write, said again
+at every start without why (SN89); "Note updated" in green before a write the hold refuses; an
+old notebook adopted at each start that went no further, leaving one more copy of its own
+settings each time, and, the copy aside failing, bringing its Trash under this folder's window
+(SN90, SN91). Left: on a full disk the error banner of a refused setting takes the place of the
+put-back's own word within a frame; it says the file was not saved, so nobody is misled.
+
+**The nineteenth round** found nothing of medium severity either, the second such round in a row,
+which by the owner's rule would have ended the desktop's loop; its lows were fixed and given a
+round of their own to be attacked, which reopened it (below). Its second reader checked every claim of rounds one to eighteen
+against the code and found all of them still true; both readers found the neighbours of the
+eighteenth's fixes. The re-ask after Update's flush now also asks again when that flush made
+the backup's version OLDER, or made a rescue copy the Update would replace, and a share code's
+Update the same (SN93, SN94, SN95); Remove attachment no longer promises a stored copy gone in a
+run that keeps every file (SN96); over a held settings file, the Trash window's dropdown puts the
+choice back at once instead of asking first and refusing after (SN97), the welcome note's Show
+opens the one it brought back instead of adding another (SN98), and the start's line names no
+one cause where three can hold the file; Restore previous and a share code's Update were to
+leave "Not saved" standing over a refused write (the editor's reload wrote over it, found by the
+twentieth round); and the old notebook's templates still come in when
+only its Trash must wait (SN99). Left: from source only, the reclaim's own road (case 1) still
+brings an old Trash in when this folder's settings could not be copied aside; the built app never
+takes that road.
+
+The phone's seventeenth round, reading the desktop for its own rule, found one more of the
+desktop's: only the settings file was held after a read the system refused. The notes, the Trash
+and the templates, refused three times at the start by another program holding them, were then
+copied aside as if broken, and when the copy's read got through (the program letting go in that
+moment) a good notes file was set aside, the app started empty, and its first save went over the
+good file. A refused read holds those three as well now, never copying them aside, and the start
+says another program may be holding the file (SN100). Rare (the hold has to end between the third
+try and the copy), but the same mechanism the phone had just fixed, so fixed here too.
+
+**The twentieth round**, attacking the nineteenth's fixes, found one of high severity on a rare
+road, so the loop goes on. With the Trash file held at the start (its read refused three times,
+the rule above), the Trash shows empty, so a shorter "Keep deleted notes for" asked nothing, and
+the next start removed the old notes and their attached files without a word. A failed copy
+aside led there before; since the rule above, every refused Trash read did. While the Trash is
+held its length cannot be changed now: the choice is put back at once, with the reason (SN101).
+The lows: the editor's reload wrote "Last updated" over Restore previous's "Not saved", and
+every other change that writes the notes and then says what it did (Pin, Duplicate, Move, Put
+back, the code and backup imports among them) said it over a refused write; each says "Not
+saved" there now, and a check reads the source so that no method can throw the save's answer
+away and then speak (SN102, SN103, SN104; one level of helper was out of its sight, found by
+the twenty-first round). A welcome note uid that is not text stopped Show
+(SN108); a number of more than 4,300 digits in the notes, Trash or templates file stopped the
+start instead of being copied aside as damage (SN105); and the Trash and the templates held
+after a refused read had no check (SN106, SN107). Left: a toast with an Undo ("Day moved", "Note
+moved to Trash") still shows over a refused write; a toast does not take the status line's
+place, and that line says "Not saved" beside it.
+
+**The twenty-first round** found one of high severity on a very rare road, and two of medium.
+With the Trash held at the start, a backup import of an older backup, in which a note now in
+the Trash was still live, gave the imported copy the same attached file, since the Trash it
+could not read named none; Remove attachment on that copy then deleted the file the trashed
+note still names. A run that did not read the Trash, held or set aside damaged, now deletes no
+attached file at all, as one that did not read the notes (SN109, SN110). Over a held Trash or
+templates file, Settings said "Trash is empty", "No templates yet" and "You don't have any
+templates" of files that hold them: each says the file could not be read this time now, and
+nothing is lost (SN111, SN112). And the one-time cleanup, kept waiting by the mark that the
+Trash's length is unknown, ran again on months of notes once a length was chosen over a damaged
+settings file, merging look-alikes: choosing it now records the cleanup as done (SN113). The
+lows: the settings kept for a refused read were the dict handed out, so a refused change lived
+on in it and the next write that landed kept it (kept as text now, SN114); a format span whose
+style is a list stopped every start (SN115); a template saved or deleted over a refused write
+closed as if done (the list goes back, the editor stays, SN116; the delete's own check came with
+the twenty-second round); a day moved, moved back or
+sent home said so over its helper's refused write, and opening any note wrote "Last updated"
+over notes not saved (the opening says "Not saved" while any are, and the source check now
+reads one helper deep, SN117, SN118); "Not saved" stayed up after a later write landed, until
+another change spoke (a write that lands takes it back, SN120); the start called a refused notes read
+a broken file, and a damaged one whose copy failed a held one, and lowered "Recently deleted"
+(SN119); the pre-update copy tried once while the read after it tries three times; the Trash
+page's subtitle advised a choice its dropdown refuses (SN121); and a backup import still adopted its
+longer Trash length over a held Trash. Left: a version's first start whose notes file is held
+throughout makes no pre-update copy and records the new version; that run writes nothing over
+the notes, which wait whole for the next start (an export then holds only the session's notes,
+and says so).
+
+**The twenty-second round** walked the writers of the Trash, the templates and the settings, as
+the two before had walked the notes', and found one of high severity on a very rare road: a
+backup import brought the backup's Trash in without the backup's longer Trash length when the
+settings were held at the start or that length's write was refused, and the next start's 30
+days removed what the backup had kept, with its files. Those entries now stay in the backup,
+said in "Import complete" (SN122, SN123); and none go into a held Trash, where in memory alone
+they showed under the page saying it could not be read (SN124). Its mediums: Save as template
+over a refused write kept the template on screen alone, hiding a held file's words (put back,
+SN125); a template written as Windows signed out, refused, went unsaid and its editor closed
+unasked once the sign-out was cancelled (the list goes back, the next start says why, SN126);
+Statistics said 0 templates and 0 in the Trash over held files (a dash, SN127); and Remove
+attachment gave the notes file as the reason a copy stays where the Trash was the one unread.
+The lows: "Not saved" taken back by a write that landed even when it was the editor's own "Not
+saved yet" (only the notes write's words go now, SN128); an interrupted import's files deleted in
+a run that did not read the Trash (SN129); a day's colour or markers said put back over a
+refused write (SN130); and the template delete's put-back had no check (SN131). Left, each with
+its reason: the theme and the editor font show a refused choice until the next start, which the
+banner names; a category renamed or deleted over a refused Trash or templates write restores
+those entries under General; Restore over a refused Trash write leaves the entry in both files,
+the designed duplicate at worst; and a refused write of the cleanup's own mark runs it again
+at the next start, with its copy made and said.
+
+**The twenty-third round** found the twenty-second's high again on a road its fix did not
+cover: a backup from a notebook whose Trash length was unknown (its settings once unreadable)
+carried no length, so its old trashed notes came in under this computer's 30 days and the next
+start removed them with their files. The class is closed now rather than the road: each of a
+backup's trashed notes comes in only if the length this computer's next start purges by keeps it
+(the backup's where it is taken, this computer's own otherwise, none known over held settings),
+and the rest stay in the backup, said with the length in "Import complete" (SN132, SN122, SN123).
+Its mediums: a sign-out's word that a template was not kept outlived a later sign-out whose write
+landed (taken back now, and the word and its reason written in one write, SN133); a backup's
+templates refused by a held templates file stayed listed in memory alone (put back, SN134); and
+a backup's note filed under a category its settings lack, left out of the export or made while
+settings were refused, came in under General unsaid (its category adopted as the start adopts
+it, SN135). The lows: an interrupted import's word cleared on a start that kept every file only
+because the Trash was unread; the session-only export's advice to reopen, untrue of a notes file
+set aside damaged; and a qa5 check that listened for a warning through a stand-in that could not
+hear it. Left, each with its reason: a Trash or templates file set aside damaged travels in a
+backup as its damaged bytes, which the import skips (the copy aside stays here, as the start
+said); a run whose Trash is unread keeps every file it would delete, orphans that a later run
+does not take; and the close's words reach the next start only through a settings write, which
+a held settings file refuses (that start already said nothing is saved).
+
+**The twenty-fourth round**, one agent on the twenty-third's fixes, found nothing of high
+severity in the code. Its mediums were in the documents: test plan case 1076 named a check by
+its old name, and a mutant, SN124, that the twenty-third's own fix had left alive (the backup's one
+trashed note, deleted months before, was now left out by the length alone, so the held Trash's
+guard went unwatched; a recent entry watches it again); and USER_GUIDE said a backup brings "any
+category its notes are filed under", untrue of its trashed notes and of a name past the ceilings.
+The lows: a backup's trashed note under a category only the Trash uses came in under General
+(adopted now, SN139), and a name a ceiling refuses went to General unsaid (said with the
+backup's own refused names, SN141); of two identical entries in a backup's Trash, the older, left
+out, took the newer with it, uncounted (SN140); the twenty-third's fix to the session-only
+export's advice covered a damaged notes file copied aside, not one whose copy failed (SN138); the
+start keeping an interrupted import's word over an unread Trash, and a sign-out's template
+put-back, had no check (SN136, SN137); and that round's three mediums had no rows in the test
+plan (1077 to 1079). Left, each with its reason: "Also restored" names categories, day markings
+or trashed notes beside the line saying they could not be written to disk, true of this run, as
+the theme's refused choice is; and day markings taken over held settings show on the calendar
+this run, said not written.
+
+**The twenty-fifth round**, one agent again, found nothing of high severity in the code; its
+medium was a sentence of USER_GUIDE, which said every trashed note stays in the backup when this
+computer's settings "could not be read". True of a settings file Windows would not let the app
+open; of one damaged and set aside, the trashed notes come in, and none is removed until a length
+is chosen. It says both now. The lows: twins in a backup's Trash under a category only the Trash
+uses were signed under General before the name was adopted, and both came in, as the phone's did
+(each is signed as it is kept now, SN144); a name refused both by a backup's settings and on its
+notes could have been counted twice (watched now, SN142); the map written again after the Trash,
+landed, left "the categories could not be written" standing (taken back, SN145); the session-only
+export over a damaged notes file whose copy aside failed no longer pointed to the backup that
+alone holds the session's notes (it says Import brings them in), and its advice for an older
+notebook not brought in had no check (SN143); and, the phone's round showed, a category renamed
+or deleted over settings held this run moved every note before the list of categories was
+refused, so the old name came back empty at the next start, and a deleted one too (refused before
+anything moves now, and said, SN146, SN147; case 1080). Left, each with its reason: a trashed
+note whose category the map's second write failed to keep comes in under that name and, the
+backup imported again, is skipped as already here (restored, it files under General; very rare,
+and nothing is lost); and a name refused by a ceiling on a note that is then skipped as unchanged
+is still counted among those that could not be added (true of the backup; it needs a name over 80
+characters).
+
+**The twenty-sixth round**, one agent, found nothing of high severity in the code; its mediums
+were two sentences of USER_GUIDE: that a rename reaches every template and Trash entry (not one
+in a file that could not be read this time, which keeps the old name), and that re-importing a
+backup never doubles the Trash (an entry here under a name this computer's map lacked, signed
+under General, was not known again once the backup's twin had adopted the name). Both are true
+now: the guide names the held files, and the backup's trashed notes have their categories
+adopted before anything here or there is signed (SN139, SN144). The lows: the twenty-fifth's
+refusal looked at the settings alone, and a rename over a notes file held this run wrote the new
+name while the notes kept the old one (the notes' hold refuses it too now, SN146, SN147, SN151); the
+list's own write went unchecked, so a moment's refusal by a sync tool moved the notes under a name
+the list never kept (the list is written first now, and a refusal puts it back and says so,
+SN149, SN150); and SN146 could not fail cleanly, its check breaking on the row the mutant had
+deleted (the rename now runs before the delete). Left, with its reason: the phone refuses an
+added or recoloured category over held settings, where this computer keeps it for the session
+and the start already said no setting is saved; nothing is lost either way.
+
+**The twenty-seventh round**, one agent, found one medium in the code, older than the wave: a
+backup's trashed note whose attached file a note here uses comes in on a copy of that file, so
+it is signed under the copy's name, and every later import of the same backup brought it in
+again with another copy; USER_GUIDE's "never doubles the Trash" was untrue of it. An entry that
+matches one here in all but its files' stored names is now matched by those files' names and
+bytes, and stays out (SN154); the phone had the same road and the same fix. The lows: USER_GUIDE
+said a category cannot be renamed when the settings or notes "couldn't be read", true only of a
+file Windows would not let the app open (a damaged one set aside is not held); the held-category
+check left the notes' own save question unanswered, and no mutant took away the notes half of
+the refusal alone (SN151); and a delete whose notes the Trash refuses, putting the list back, and
+the length's filter on a backup's trashed notes' categories had no check (SN152, SN153). Left,
+each with its reason: after the list lands, a refused write of the notes, the Trash or the
+templates leaves that file with the old name until its next save lands, said by the save's own
+words (the phone puts every holder back instead, but for a delete that has already sent its notes
+to the Trash; nothing is lost either way); at a start, a name
+past the ceilings goes to General as it always has, only a newer version raising them would
+meet it; and a day's own category, put back by "Day removed"'s Undo after that category was
+deleted meanwhile, brings the name back, as it does on the phone (seconds-wide, and no note is
+lost).
+
+**The twenty-eighth round**, one agent, found the twenty-seventh's medium again on the notes'
+road, also older than the wave: a backup's note whose file this Trash held came in on a copy of
+it, and at the next import, matched by its identity, its files were compared by stored name, so
+it was asked about as "edited elsewhere" at every import and each Update added one more copy.
+A file is lacking now only when no file of the note here has its stored name, or its shown name
+and bytes (SN155). The lows: the question whether a backup of look-alikes brings anything more
+still asked by stored name, offering "the rest of this import" of nothing (SN156); and SN144 had
+no case to fail, its road needing a twin under General beside one here under a name the map
+lacked (the check has that twin now). Left, each with its reason: a file opened from its note and
+saved over in another program, or read refused for a moment, makes the next import bring the
+Trash entry again on another copy (the bytes no longer match; nothing is lost); and the bytes are
+compared on the window's own thread after the progress bar, slow only for very large files.
+
+**The twenty-ninth round**, one agent, found nothing of medium or high severity: the first round
+since the twentieth to come back clean. Its lows were fixed all the same: the check for a note on
+a copy imported twice answered "add" to every question and never walked the Update it was about
+(it answers "Update it" now); the question whether a backup of look-alikes brings anything more
+counted its trashed notes over a held Trash or held settings, where the merge brings none
+(SN157); and, the phone's round showed, this Trash's entries were matched loosely in their raw
+shape, so an older writer's label ("photo.jpg" over a .png) never met the backup's shaped one
+(shaped now, SN158). Left, each with its reason: that question still counts a trashed note past
+this computer's Trash length as more (the result says it stayed in the backup), and does not
+count one whose category only the merge's adoption would add beside a General twin here (Cancel
+then keeps it in the backup; both rare, nothing lost); a read refused between the question and the
+Update can make them disagree about a file (nothing is lost); and the count of notes that "took
+attached files" is made from the files to adopt, not from the copies made, so a copy refused on
+a full disk is counted (as the phone counts it).
+
+**The thirtieth round**, one agent, found nothing of medium or high severity either: with the
+twenty-ninth, two clean rounds in a row, and the desktop's loop ended by the owner's rule. Its
+lows were fixed: the question whether a backup brings more still counted a template over a
+templates file held this run, which the merge puts back (SN160), and only the Trash half of the
+held test had a check (the settings half has one now, SN159); and the twenty-ninth's "Left" had
+one case backwards (corrected above). Left, with its reason: a hand-edited template with no name,
+or day marks on a date that does not exist, are counted by the question differently from what
+the merge takes (only hand-edited files reach it; nothing is lost).
+
+The phone's twenty-eighth round, reading this app for parity, then found a medium here, so the
+loop opened again: one import that updates a note and skips a look-alike of that note as
+updated (edit a note on the other computer, Duplicate it, attach a photo to the copy, back it up)
+dropped the photo. The question about look-alikes asks of the notebook the updates will leave,
+but the note each one looks like was found in the notebook before them, so there was none; the
+phone, finding it after, gave the photo to the updated note. The note each key finds is now
+worked out as the updates will leave it (`_twins_after`, SN161), the first in the file winning
+as on the phone (the desktop gave a file to the last of two look-alikes, the phone to the first;
+SN162), and the files go after the updates, so a file an update brings is not given twice and
+the counts are the phone's (SN163, from the next round). The backup still held the photo;
+nothing else was lost.
+
+**The thirty-first round**, one agent, found nothing of medium or high severity in this app (its
+medium was the phone's: notes answered "Add it as a new note" put to the look-alike question
+again, fixed there). Its lows, and the phone round's parity reader's, were fixed. The twins are
+worked out with the keys, before the question: after it, a note typed into while it waited (its
+autosave runs) had another key and the file offered for it was dropped (SN169); and the giving
+after the updates has a check of its own, which nothing guarded (SN163). The question whether a
+backup brings more now asks each part as the merge takes it, as the phone's does: a template
+with no name counts (it comes in "Untitled template", SN164), none past the cap (SN165), no
+trashed note older than this computer keeps the Trash (SN166), a name only the backup's Trash
+uses does (the merge adopts it before it signs, SN167; `would_adopt`), and a day's mark only on
+a real day in a colour kept (SN168). Left, with its reason: over held settings a backup's
+category or day marks are counted as more here and not on the phone, as this app keeps them for
+the session and the phone stops the import at that write.
+
+**The thirty-second round** found that last fix short on one road, made by it: the question
+asked the backup's trashed notes by this computer's Trash length, while the merge first takes
+the backup's longer window (where none was chosen here) and keeps them by that. A backup whose
+new notes all looked alike and which brought only such entries was offered no Skip, and the
+default Cancel left them behind (the backup kept them). The round's agent graded it low; the
+phone round's parity reader graded it medium, as the twenty-eighth round graded the same
+mechanism on the phone, and the stricter grade is the one counted, so the loop goes on. The
+window the merge takes is worked out in one place now (`_backup_trash_window`), by the merge and
+by the question (SN170; TW18, TW19 and DR10 re-aimed at it). Left, with its reason: a twin
+already holding 200 files is offered Skip and said to take files it cannot (the phone the same,
+very rare, nothing lost).
+
+**The thirty-third round** found the code true and the user guide not: since 27 October it said
+the backup's Trash length comes along whenever none was chosen here and the backup's is longer,
+where the import takes it only when the backup also brings trashed notes to keep by it (a
+computer set to keep 90 days, its Trash empty at the export, restored onto a fresh one, keeps 30
+here). The sentence says so now. Left, with its reason: when the window's own write is refused
+at that moment, the question has offered Skip by the backup's length and the merge keeps by this
+computer's, so Skip may bring nothing (the harmless way only; the result says what stayed in
+the backup).
+
+**The thirty-fourth round** found that sentence still short on two rare roads, graded low by its
+agent and counted medium here, as an untrue sentence in a document the release relies on: a
+length an earlier backup's import set counts as set, so a second backup's longer one does not
+come; and the backup's length comes when its Trash is not empty even if none of its notes is
+kept. The guide says both now. Test case 1076 asked for a 365-day Trash the app does not offer
+(90 now, the longest it does) and did not say what to answer when the two notebooks' welcome
+notes are asked about. Left, with their reasons: a file the person deletes for good while an
+import is read or waits on a question may still be named by a note the import brings (the file
+just deleted on purpose; the backup keeps it, and a second import puts it back); and a template a
+newer version wrote loses the fields this one does not know, on both apps, which is the owner's
+question about fields a newer version wrote, put to her.
+
+**The thirty-fifth round** found case 1076's precondition still in the guide's old words ("never
+chose how long the Trash keeps notes"), which a notebook whose length an import set fits, and
+there Skip is not offered: it says "no Trash length ever set here (by you, or by a backup's
+import)" now, and how to have a note deleted 31 to 90 days ago. A backup's trashed notes whose
+Trash write was refused for a moment stayed listed for the session, and were gone at the next
+start unless a later delete or restore that session wrote them, where its templates are put
+back: they are put back too (SN171). The owner answered the
+templates question the same day: a template keeps the fields a newer version wrote, bounded as a
+note's (`KNOWN_TEMPLATE_FIELDS`; `normalize_template`, SN172), and the templates editor's save
+carries them over from the template it edits (SN173); case 1084 walks it by hand, and the phone
+does the same.
+
+**The thirty-sixth round** found the decision holding on every road, and case 1084 calling itself
+"Automated" where no check carries such a field through its export and import (a medium, in a
+document the release relies on): it says "Automated in part" now, with what to answer when the
+welcome notes are asked about. The lows: a put-back entry whose file a note here used had been
+given a copy that nothing named after (recorded now among the import's own copies, which its
+end removes when unused; SN174); qa6's check read only the kept field, not the edit; the put-back
+had no case (1085). Left, with their reasons: categories adopted for put-back entries are kept
+and counted (the phone writes settings first and does the same); day markings over a refused
+settings write stay for the session (round 24 left it); and a template replaced by name, on the
+person's Replace, takes its newer fields with it on both apps, as "Replace the old template with
+this one" says.
+
+**The thirty-seventh round** found the fixes holding and, reading every case's automation column
+from 1059 on against the checks it names, two claiming more than they check (mediums, in a
+document the release relies on): case 1069 named only checks that ask the core's functions,
+while its steps save from the editor and carry the note through an export and an import, which
+no check walks (it says "Automated in part" now, and names those steps as the hand's); and case
+1079 promised "also restored 2 categories", a count no check read (qa3 reads it now, SN175). The
+lows: SN104 kept a check's old name, so the runner would have called it survived; case 1085's
+precondition asked for a trash.json a notebook where nothing was ever deleted does not have;
+case 1067's label said "Automated" where its own sentence leaves the forced end to the owner; and
+the How to use tab and the excerpt did not say what "Automated in part" means.
+
+**The thirty-eighth round** found the fixes holding and, reading the automation column of cases
+800 to 1058, the same class as 1069's (a medium, in a document the release relies on):
+seventeen cases (816, 818, 841, 843, 846, 861, 939, 942, 943, 944, 946, 948, 949, 960, 973, 976,
+991) said "Automated" while naming only unit suites that ask the core's own functions, and some
+"Hand check optional", where their steps press the app's buttons. Each says "Automated in part"
+now, and that its hand check is the one that walks the steps in the app. The lows: fifteen labels
+said "Automated" over a sentence leaving a part to the hand, and five said "Automated in its
+core", a label the How to use tab does not define (all "Automated in part" now); 815 did not say
+its probe ran once and its story by hand; 985 named WS22, which guards another question's default
+(no kept mutant guards this one's, it says now); 865 and 891 still asked for the Sandbox runs of 9
+and 12 November, which were made; 1039 and 904 quoted what prints differently.
+
+**The thirty-ninth round** found those fixes holding and the class still open (mediums): five cases
+of round 38's own range (936, 954, 972, 989, 1046) and ten of cases 550 to 799 (554, 584, 630, 632,
+669, 696, 726, 756, 783, 797) said "Automated" naming only unit suites, some "No hand check
+needed" or "Optional hand check", over steps that press the app's buttons. So the class was swept
+across the whole plan by a scan, not a block at a time: every case whose first line said
+"Automated" while naming no qa suite, no story and no gate was read, those cases 1 to 549 included,
+and each one whose steps a person can take says "Automated in part" now, with its hand check named
+(the scan read first lines; three such lines below them, found the round after, say so too). A case no person can
+set up keeps "Automated", which the How to use tab now defines there: the suites check the rule,
+and the app's own half is walked by no one. The lows: eleven labels over a sentence leaving a part
+to the hand (557, 566, 590, 707, 719, 720, 745, 762, 779, 785, 790), and labels the tab did not define ("Partly automated", "Automated with a stand-in",
+"Automated for ...", "Held in", "Walked by script", cases 909 to 920 with no label at all), say
+"Automated in part" or "Automated"; the tab defines "Walked by" a story, the other words for
+"Manual only", and the eye's part; 590 no longer says no qa script restarts the app; 602 no longer
+says the Sandbox plays a first start (its runs seed the welcome as offered); 632 counts twelve
+icons; 667 named its stand-in for the app's details (and said no check reads the real line, which
+was untrue: qa6 reads it from the running app, as it says since the round after); 704 names its
+Sandbox runs of 9 and 12 November and that they are made by hand; 712 and 783 name the suites
+their mutants are judged in; 815 and 1038 say what is left to the hand.
+
+**The fortieth round** found the sweep holding and two cases, read against their checks, claiming
+a restart no check walks (mediums): 81 (a group still folded after the app is reopened: qa6 folds
+it and reads settings.json, and no suite builds an app over it) and 133 (the default font kept
+after a restart: no suite reads it back). Both say "Automated in part" now, the restart left to the
+hand. The lows: lines saying "Automated" over a part their own words left to the hand ("partial",
+"the manual half", "is yours", a real mouse, clipboard, wheel or keyboard) in 128 to 539 say "in
+part"; "no qa script restarts the process" (305, 306, 312) was untrue, as round 39 found of 590;
+three lines below a first line the scan skipped; "Already automated" in 186 and 250; old
+instructions to field-check the 0.71 and 0.73 builds on rows passed on 0.84.341; and 260, 667 and
+276 understated what is walked (qa7's emptied note, qa6's details line, the travel story's
+restart), as they say now (258 was set to say qa3's import walks it, which the round after found
+untrue: its check empties the notebook first). Left, with its reason: the cases whose steps
+restart the app and whose checks were not read for a restart, and the plain "Automated (qaN)"
+rows of cases 1 to 231, were not read against their code; the next round reads each.
+
+**The forty-first round** read those 129 cases against their checks' code, one line each, and found
+about thirty claiming more than their checks walk (mediums): restarts no check makes (159, 160,
+206, 207, 211, 312, 313, 336, 420, 439, 451, 466, 527, 857, 899), notes "closed and reopened" while
+the checks read the open editor (516, 520, 525, 531, 532, 533), parts of an expected result no
+check reads (17, 22, 29, 33, 38, 40, 51, 82, 89, 186, 200), 258's import, whose check empties the
+notebook first, and 214, whose Pass names a build later than its date. Each says "Automated in
+part" now and names what is left to the hand; so do the lows where a check stands in for a start
+on the running app (170, 338, 663, 670, 721, 739, 750, 766, 820, 863, 896, 897), the side
+messages no check reads (129, 163, 212, 219, 1072), and the start over an edited file, the
+double-click snap and the open note's edit that no check makes (122, 150, 980). 7 and 133 name the checks
+that do read what they said none reads, and the How to use tab says what the checks of a row no
+person can set up stand in for.
+
+**The forty-second round** read 199 more cases against their checks' code and found fourteen
+mediums of the same kind (27, 45, 66, 114, 134, 177, 178, 239, 241, 242, 248, 341, 348, 350): a
+colour set in the code rather than through the picker, a template changed in memory rather than
+through Settings, a copy's stored text edited rather than its cells, a .txt export standing for
+three. Each says "Automated in part" now and names what is left to the hand, as do sixteen lows
+whose own words left a part to the hand or whose check stands in for the route (118, 120, 216,
+237, 238, 324, 327, 352, 381, 384, 387, 399, 404, 410, 537, 540). 214 names the suite each of its
+mutants is judged in; 207 names the check that reads its step 3; 721 and 739 say "Automated", as
+the tab has rows no person can set up say it.
+
+**The forty-third round** read cases 560 to 829 (192) against their checks' code and found
+fourteen mediums of the kind (562, 592, 613, 619, 633, 634, 640, 660, 706, 708, 723, 792, 810, 825):
+a summary, a window widened again, a fill or a banner no check reads; a rename re-made inside the
+check rather than pressed in Settings; a note seeded already changed rather than changed in the
+editor; a page of 1,000 rows where the case presses Show more; an export's end put in place by
+hand. Three of them said more than their checks do in so many words (619 named mutants that guard
+other buttons; 633 "walks this end to end"; 640 "a restart" that is a file read back), as did a
+low, 560 ("each form", where qa5 types six). Each says "Automated in part" now and names what is
+left to the hand, as do nineteen lows; 239 names the check that round-trips its code at the core.
+
+**The forty-fourth round** read cases 830 to 1083 (196) against their checks' code and found
+thirty-seven mediums of the kind: steps no check walks (831, 832, 840, 850, 940, 961, 963, 965,
+994, 998, 1004, 1006, 1045, 1047, 1071, 1074, 1076), results no check reads (835, 852, 881, 932,
+969, 975, 1002, 1023, 1029, 1051, 1073, 1075, 1083), and a state the checks seed before the part
+they read (844, 908, 934, 955, 958, 1070); and 995's expected result promised Ctrl+Z undoes typing
+in a title, which keeps no undo. Each says "Automated in part" now and names what the checks are
+known not to reach, as do the lows (102 rows in all); 995 expects what the app does. The How to
+use tab and the excerpt now say "Automated in part" names what the checks are known not to
+reach, and the hand check walks the case whole: a list of what is left can be shown incomplete,
+never complete, so it no longer promises to be whole.
+
+**The forty-fifth round** read the 172 cases below 450 still called whole a second time, by a
+stricter rule (a step walked only when its control is pressed), and found 102 short of it. The
+qa suite calls the app's own functions far more than it presses controls, so the owner decided
+on 14 November what a walked step is: a check walks a step when it presses the control or its
+key, or runs the very command that control runs; a case is "in part" where the check stubs a
+question the case reads, seeds a state the case makes, skips a step or leaves a result unread.
+By that rule ninety-seven of the 172 say "Automated in part" now and name what the checks are
+known not to reach (a card or a cell no check reads, a question stubbed, a selection or a fold
+seeded, a step skipped); the rest, short only of the press, stay whole. Seven said more than
+their checks do in so many words (2 "read back off the note list", 19 "under 5s" for a bound of
+30, 36 "the section's own button", 71 "asked once" where none passes too, 369 "the real import
+box", 377 "presses both shortcuts", 407 the travel story's keys), and say what is true; the How
+to use tab states the rule.
+
+**The forty-sixth round** read the cases 450 to 799 still called whole a second time, by the
+owner's rule, and found the most of them short of it: the checks answer the steps' questions in
+code (Yes, "Only this day", the scope), lay in code the states the steps make (an order, a
+selection, a tick, a style, a banner), stand in for a step (the autosave's call for leaving the
+note, the stored copy read for Restore previous pressed), or leave a result unread. Ninety-two
+more say "Automated in part" now and name what the checks are known not to reach; 377's question
+title, 995's delete and typing, 571's "pixels", 690's "types a search" and 536's "real Ctrl+X"
+say what is true.
+
+**The forty-seventh round** read the last 181 cases still called whole a second time, by the same
+rule, and found 138 short of it: a question answered in code, a selection, a style or a file laid
+in code, a search or a find set rather than typed, a bare label standing for the dialog it
+belongs to, a note dropped from the list where the case moves it to the Trash. 137 say "Automated
+in part" now (one was already), and name what the checks are known not to reach. Under every row
+that is "in part", the merged lines that still said "Automated" (43) say "in part" too, since
+their checks share the row's fixture; 377, 462, 470 and 676 name the steps their checks lay in
+code. With this round every desktop case still called whole has been read twice against its
+checks' code.
+
+**The forty-eighth round** read the 160 cases still called whole a third time and found the
+reason so many fall short: every qa file answers the app's messages in code (show_info,
+show_warning), and qa3 and qa7 answer every Yes/No question in code, so a case whose steps read a
+message or answer a question is walked only in part by the owner's rule, and several of them are
+roads to deleting or replacing for good (9, 13, 281, 426, 268, 371, 421). Seventy-two more say
+"Automated in part" now and name what the checks are known not to reach; among them a stub that
+would answer silently the very question 425 promises is never asked, an Undo called past the
+banner that 301, 311 and 1028 promise is pressed, and + New Note's own function, which 3's check
+does not call. The How to use tab says that every qa file answers the app's messages in code
+(qa8 its information messages; its warnings and errors only on its other app instances, as the
+round after found). The lows: five rows no person can set up say their stand-ins are walked by
+no one; 649 and 930 say what is true.
+
+**The forty-ninth round** read the 88 cases still called whole and found sixteen short of the
+rule (mediums), one of them a check's own fault: qa6's "clicking a statistics chip does not change
+the filter" clicked the first frame it found, the Total notes tile built before the category
+pills, so a click put back on a pill would have passed. It aims at the category's own pill now,
+and mutant SC01, a pill's click put back, fails it. The other fifteen stub, seed, skip or leave a
+part unread (a merge's carried bold, a row inserted above an ordinary row, the cells beside those
+cleared, a template's delete question, a start's notice for a held settings file, a code inserted
+rather than pasted) and say "Automated in part" now; 1066's expected result no longer says a start
+drops a field the app does not know, which it keeps since 14 November. The lows: 4 and 2 name +
+New Note's own function, and 339, 534, 722 and 866 what their checks leave.
+
+**The fiftieth round** read the 69 cases still called whole and found ten short (mediums). Four
+checks fell short themselves: the statistics check clicked the pill's frame, which a click on the
+name or the count never reaches, and read the frame's cursor alone; the session-end
+export, the start that could not bring an older notebook in, and the backup refused after an
+unreadable start read their message's first words and never the reason or the ask it promises.
+Each check reads all of it now: every part of the chip is clicked and its cursor read (mutants
+SC02 and SC03, a click and a hand cursor put on the name), and the three read the reason, "close
+Note Organizer and open it again" and the why (SN176, DR228, DR229). 806's steps clicked Use
+template and pressed End, which a picker opened by a click never receives, so a person following
+them would have recorded a Fail: its steps and 854's open the picker from the keyboard now, and
+806 says "in part", as do 813 (the day scrolled in code), 747 and 765 (nothing typed before the
+click) and 876 (the dates put in by code). The lows: 1015 says "in part" (Settings already
+closed when the check runs the button's command); 722 says its
+preview is walked by no one, and qa3's check name says what it reads; 759 names qa5's check of the
+start notice; a comment in test_data_safety no longer says the read drops a field it keeps.
+
+**The fifty-first round** found the four strengthened checks holding, and six mediums. 806's and
+854's new steps Tabbed from the note into the comments box, where Tab types a tab (the user guide
+says so): a person following them would have typed tabs into the note's comments, saved. They
+Ctrl+Tab out of the comments box too now. 760's steps promise a held settings file too, which no
+check held: a first start whose settings could not be copied could have brought the notes in
+without them, the old Trash then under the default window. test_data_safety holds it now
+(mutant DR230, the notes let in without their settings). 1065's reason was read for one order
+only: the failure after Windows' question keeps its reason in the word now, read while the
+message is up (SN177). 483, 563 and 754 say "in part", 754 with steps a person can take (case 717
+twice). The lows: the statistics check reads that a chip's click leaves Settings open and the
+grid's cursor too (SC04, SC05); test_data_safety reads that a field the read does not know stays
+in the notes, as its comment says; 760's, 849's and 1065's expected results and 880's steps say
+what is true.
+
+**The fifty-second round** found the fifty-first's fixes holding, and swept the 60 cases still
+called whole for words the app shows that no check reads: three mediums. A notes file another
+program holds for the whole start is said with its cause, but the tail every such notice carries,
+"will not save anything over it in this session" and the ask to open the app again, was read only
+on the other branch, and a pair of parentheses is all that gives it to this one: qa5 reads it on
+this one now, the ask with it (mutant DR231, the parentheses gone). An import cut short and then a start that cannot
+read the notes: the unpacked folder goes at that start already, which no check read and 862's
+expected result put at a later start; qa3 reads it now (SN178, the removal held back with the
+files) and the result says so. 1061 promises a notice no check reads and says "in part". The
+lows: 1065's word keeps the session's end while its message is up (SN179, a word written afresh);
+1066 quotes its check's new name; 1068 names the checks that read what its next start says and
+takes out.
+
+**The fifty-third round** found the fifty-second's fixes holding, and read a tenth of the 814
+cases called "Automated in part" (82; first written 816 here, as the round after counted): six said what is not true (mediums). Their "Left to the
+hand" named one part and left out others no check reaches: 230's view after a cell's edit, a drop
+and a column's drag; 244's second Export refused; 384's wheel, the check moving the list in code;
+597's Align left, the menu's Table right on page and the toolbar's Centre, each stood in by
+another; 766's Excel paste and its status line, where it also claimed a stored file read; 1054's
+note never opened, its earlier version seeded. Each names what its checks do and every step left
+now. Twenty-two lows named a state set in code, a question answered in code or a step skipped, each on
+the way to a step their rows did name (102, 127, 154, 187, 257, 269, 291, 304, 399, 412, 448, 471,
+557, 613, 706, 740, 814, 857, 982, 1002, 1044, 1083), and 862's expected result counts the Trash
+among what the start must read.
+
+The loop was not converging: a tenth of the "in part" cases held six omissions, so the 814 held
+about sixty, with no change in the app. The owner's rule of 15 November grades an omission in a row
+already "in part" low, since the row already sends the hand to walk the case whole; a case called
+whole that is not, a claim that something is read when it is not, a step or result untrue of the
+app, and a label that tells her she may skip a check stay medium. Graded so, the fifty-third round's
+six were four lows and two mediums (766, which claimed a stored file read, and 597, which claimed
+the menu's road and the window's directions read). The How to use tab and
+docs/TEST_PLAN_EXCERPT.md say that what an "in part" row names is a guide rather than a full list.
+
+**The fifty-fourth round**, graded so, read another tenth of the "in part" cases (81) and found
+three mediums and a class. 597's corrected cell said its check centres the cells, where it
+right-aligns them in a check named for centring; 324's merged case said Cancel closes both bulk
+popups, where on Export the check reads only that Cancel is there and closes it with Escape; 309
+said its check proves the latest of several removals is the one offered, where no check removes
+more than one and reads which. And thirty-seven "in part" rows told the owner she may skip the hand
+check ("Hand check optional", "only if something looks off", "a race: optional"), where the How to
+use tab says the hand walks such a case whole: each of those labels is gone (thirty-six more, said
+in other words, went in the round after, and the rest in the two rounds after that). About thirty lows, omissions of this kind, wait for the
+lows pass.
+
+**The fifty-fifth round** found the fifty-fourth's three fixes holding, and the label class open:
+forty-two "in part" lines still told the owner she may skip, in other words ("A hand check is a
+choice", "Worth one try on the .exe", "By hand only if wanted"), and three preconditions too
+("Optional", "Only if you want to try it by hand"). Thirty-six of those lines went (six were left,
+and went in the round after); where the words said why a hand
+check is hard, the reason stays ("Tight by hand", "Holding the file needs PowerShell"). Its tenth of
+the "in part" cases (82) found six more mediums: 246 said its read-only folder is set up in code,
+where the checks point the Trash into a missing folder and call the failure's callback; three
+merged cases were called whole that are not (414's 355 and 356, a day of one note and one point
+right-clicked; 426's 14, its question answered in code; 240's 32, the same); 19 said its note
+reopened whole, where the check reads 50,000 of 52,000 characters; 560 said qa5 types six forms,
+where it puts them in the field in code. Each says what is true. About thirty-five lows wait for
+the lows pass.
+
+**The fifty-sixth round** read everything still called whole (59 cases and 15 merged ones) and
+the fifty-fifth's fixes. The label class narrowed (its last forms went in the round after): six "in part" lines left ("a choice, not a duty",
+"A hand check on the exe is a choice"), a NEEDS YOUR EYE "only if you write in Turkish", two
+preconditions and six steps marked "Optional" or "If you can" each say what to do now, and 602's
+precondition no longer offers the Sandbox, which never plays that first start. 264's and 266's
+steps said the case cannot be built by hand while their cells left its import to the hand: they
+imported a code a script makes (the round after found no such script kept, and returned them to
+"Not a hand check"). 414's 355 and 356 read the day's menu by a "day" entry a repeating
+note's own menu also carries, and say so; 459's and 566's kept reasons named one stand-in where
+the checks have three. And nineteen called whole are not: eleven merged lines (74's 109, 215's
+360, 268's 94, 289's 86 and 88, 357's 401, 362's 20, 415's 50, 421's 427, 422's 23, 436's 53) and
+eight cases (46 a second app beside the first, 727 the warning's words, 836, 853, 868 and 883 the
+clipboard filled in code, 879 and 1058 the read asked in code), each "in part" now with what it
+leaves. docs/TEST_PLAN_EXCERPT.md quoted cases 9, 38 and 15 as "Automated", which the plan has
+said "in part" for some rounds: it quotes them as the plan does.
+
+**The fifty-seventh round** found the fifty-sixth's fixes holding but for three, and eight
+mediums. A sweep of every column for the skip wording found more of its forms (the round after found the last): "worth doing once",
+"worth a look", "worth a glance", "Worth a hand check", "Optionally", "only if you run a tool", "if
+you have one", 276's "hand-check only if something looks off" (on a story that types its edit in
+code and never reads "Add as a new note"), and ten lines' "the rest is worth a manual pass"; each
+says what is left to the hand now. Rows no person can set up had left parts "to the hand" (264 and
+266, whose code no kept script makes; 727, 750, 780, 1061; and 769 and 792, which the round after
+found a person can set up): by the How to use tab's own words for such rows, those parts are walked
+by no one. 706's step sent the owner to a nearly full USB stick, which never fails a save (the
+built app keeps its notebook in the profile wherever it runs), and 657's to a small disk, where a
+backup imports fine: both named the system drive (706's wrongly, as the round after found). 362's
+merged 208 was called whole on a table laid in code; 362's step asked for a title the editor stops
+at 200; 28 named qa9, which never opens this list; 768 said qa6 pastes for real, where the
+clipboard is filled in code. Each says what is true. docs/TEST_PLAN_EXCERPT.md calls case 43 a
+visual check now automated, and titles case 38 as the plan does.
+
+**The fifty-eighth round** found five of the fifty-seventh's fixes short, and four mediums more.
+A nearly full system drive fails a save only once its free space is less than notes_data.json
+(the round after corrected "fails no save"): the save fails only where writing its temporary file
+or replacing the old one does (core/storage.py), so 706's steps make notes_data.json read-only,
+which fails the replace, and say what to type and answer. 276's merged 273 was still
+called whole on the story's edit typed in code. The skip wording's last forms ("the rest is worth
+eyes", "Hand check recommended", "NEEDS YOUR EYE once") are gone. 792 and 769 can be set up by a
+person, a 400-row table pasted (the most the app draws as a grid) and a name of several lines
+pasted into Save as template's box: their steps are a person's now. 806 to 814 (but 811, which
+the round after reached) left to the hand steps on lists no kept backup or code makes: those are
+walked by no one, while 803's and 807's
+long-item variants, which a person can paste, say so. 294 said qa4 proves every tick box's well,
+where the note card's box, drawn on a canvas, is read by no check; 43 (and the excerpt) said the
+same of the Group by category box, where its mark is what is judged; 118 said the autosave around
+an export is covered, where no export is started. Each says what is true.
+
+**The fifty-ninth round** found a bug in the app. A table grown past the size drawn as a grid says
+"A table this large is shown as its text, so the note stays quick to open", and the "Auto-saved"
+its own edit sets off wrote over those words half a second later, unread. They are held against
+it now, as a cut paste's words are, and a qa6 check reads them after the autosave (mutant RV11);
+708, 766, 792 and 835, which left the line to the hand, name the check. The plan had more wrong:
+after Tab adds a row the caret is in its first cell (792 said the end of the cell being edited);
+a short name of several lines is drawn on one line with no '…' (769 said every one is cut); the
+limit an Enter inside a cell crosses is the grid's height, 30,000 px, not its 400 rows (835),
+whose steps press it one line at a time now; 792's 400 rows hold at most seven columns, under the
+3,000 cells drawn. 718 can be set up by a person, with
+notes_data.json made read-only, and gives the steps. 811 was still called whole, and it and 821,
+822, 827, 839 and 845 left to the hand parts of lists no kept backup or code makes: those were
+called walked by no one (the round after found 821's to 845's lists can be typed, a letter and
+Enter each, and gave their parts back to the hand). A read-only folder fails neither 212's export
+nor 246's saves, each written beside its file and replaced: 212 made the backup file read-only
+(which Windows' own Save dialog refuses, as the round after found), 246 the notebook's files.
+
+**The sixtieth round** found the fifty-ninth's app fix short on one road: on one day of a
+repeating note the save says "Auto-saved <day> only", which wrote over the table's words just as
+the plain "Auto-saved" had, and over a cut paste's. That line is the day's own reassurance and is
+held back like the other now; "follows the series again" and the date and repeat kept the
+series' still write (a qa6 check on a day, mutant RV12). The plan: 212 holds the first backup open
+from PowerShell, which fails the export's replace where Windows' Save dialog took no read-only
+file; 766's 250 rows of two- or three-line addresses are still drawn as a grid at 100%, so its
+cells hold four lines; lists of 1,000 checklist items (803, 821, 822, 827, 839, 845) can be typed,
+a letter and Enter each, and leave their parts to the hand; and the rows on a file another
+program holds (759, 761, 786-788, 796, 800-802, 820, 847, 1057, 1061) said such a file is beyond
+the hand, where case 1075 already holds one from PowerShell: each gives that recipe now, and 1047
+makes its save fail with 706's read-only file. (The round after found the recipe wrong for four:
+1057's and 1061's hold refused the read their cleanup needs, and 800's and 847's export read a
+file still held.)
+
+**The sixty-first round** found the sixtieth's app fix holding and the plan short again. 1057 and
+1061 hold notes_data.json with a share of 'Read' now, which lets the start read the file and
+refuses its replace, so the cleanup makes its copy, fails its write and takes the copy out, as the
+rows say; 800 and 847 let templates.json go before the export that should read it (yet the
+template their steps saved is refused for the whole run, as the round after found). Every hold is
+kept in a variable ($f), so PowerShell does not close it when it tidies up. Lists the plan called
+beyond the hand (810 to 814) a person makes by doubling a test notebook with its own backup ("Add
+copies anyway", twelve rounds for 4,096 notes); 721's backup with a Trash of 7 days is two clicks in
+another notebook; 722's damaged Trash is trash.json edited in Notepad; 374, 741 and 862, called
+whole, said "not by hand" of what the plan sets up elsewhere. 794 was called whole on counts of
+walks, with nothing timed. 298's check posts a note's menu, not the calendar day's; 369 and 636
+read the note in memory, not the file; 607 expected the dark red Delete that 613 made quiet.
+
+**The sixty-second round** found the sixty-first's holds right by a probe (a share of 'Read' lets
+the read through and refuses the replace) and 800 and 847 still wrong: a templates file held at
+the start refuses every template's save for the whole run, so the template their steps made is
+"Not saved", and the backup holds the file's templates once it is let go, none while it is held.
+They say so now, and that their checks set in memory a template no road can make. Five rows
+called whole were not: 862's checks seed the import's word and stub the held file, 374's clean a
+pair built in memory, 741's load the file with no window, and 1055's and 1068's call the close's
+settling on a seeded state. 885's step needs another program holding the sign-out, which Windows
+needs before it shows "apps are preventing sign-out". A probe found every share mode refusing a
+replace onto a held file, so 786's read refused mid-session with a save that lands is beyond a
+hand's hold, and says why.
+
+**The sixty-third round** swept the rows called whole on files held, writes refused, sign-outs,
+starts and imports, and found nineteen whose checks stub the hold, set it in memory, seed the
+state or call a handler where the case presses a button: by the owner's rule of 14 November each
+is "in part" now. Where a person makes the case with the plan's own PowerShell hold (759, 761,
+787, 788, 802), the steps are the hand's; where only a crafted file, a hand-edited one or a moment
+no hand can time makes it (730, 738, 742, 760, 849, 880, 1056, 1060, 1063, 1065, 1066, 1077), what
+is left is walked by no one, by the owner's second rule of 15 November. 763 and 875 had ordinary
+roads, a sign-out cancelled at Windows' screen and a notebook made on 0.97.405: they give them. 9
+read the note list in memory, and says so. (760 and 1077 have a long road of the plan's own too,
+a PowerShell hold, low by the owner's rule, as the round after found.)
+
+**The sixty-fourth round** read the checks of the rows called whole that no round had read, and
+found three that call a key's or a click's handler where the case presses it (137's Backspace,
+433's notes opened by a call, 541's template editor opened in code), and the last three whole rows
+no person can set up (672, 698, 795) leaning on a How to use sentence that called such rows whole:
+the sentence now calls them "in part", as round 63 had made their twelve siblings. 795 had an
+ordinary road after all, a GIF whose frames say 10 ms, which many GIFs carry. 785 claimed Ctrl+N and
+a sign-out walked, where its check runs + New Note's command and calls the session's end.
+
+**The whole plan, read again (its first half).** At the owner's word the plan was read once more
+case by case, ten reviewers on ten ranges. The first five (cases 1 to 593) found some forty rows
+still untrue, each of a kind met before: steps a person cannot take as written (a Cancel that is
+No, a group to open that is drawn open, half a table selected as text where its rows are hidden, a
+skipped day restored where its toast's Undo is the only road, a question the autosave answers
+before a menu is reached); expected results the app does not show (the calculator's Insert typing
+the whole formula, a damaged code's own words, the drag's wait, three markers drawn where they fit,
+Ctrl+T swapping across the caret, a reminder bar shown once a day); preconditions that do not make
+what the steps need (a category of one's own, an edited day, a short note's copy, an earlier
+version made by a delete rather than an Update); and rows called whole or walked whole on checks
+that stub, seed or read a proxy (70, 489, 588, 277, 278, 364). Each says what is true now.
+
+**The whole plan, read again (its second half).** The other five ranges (cases 594 to 1085) were
+read on a cheaper model, at the owner's word after the week's usage ran high, each finding checked
+in the code before it was written. They found some twenty rows more, of the same kinds: a
+coloured button's words named by theme where the app picks them by the fill (606), the editor's
+quiet Delete judged as the Trash's red one (611), a limit named without its number (623, 827's
+1,000, 933's 2,000), a table's separator line counted with its rows (737, 792), a box's words said
+under the template editor's heading (749), the checklist drawn in chunks of 32 (804, 805), a road
+the template editor's question or a hidden Calendar closes (863, and 1004, 1021, 1022, where the
+rounds after found an import started first an ordinary road), and setups no hand makes that now
+say so (743, 771, 1049).
+
+**Rounds 65 and 66** attacked those rewrites. 452 had an ordinary road after all, a repeat turned
+off on an edited series waiting unsaved until the note is left; 289 and 439 used the note list
+and its cards under Settings, which hides the whole notebook, the list inside its Notes tab; 1004,
+1021 and 1022 are reached by an import of a large backup started first, the template editor
+opened while it unpacks, and give that road, untried by any check; 957's Ctrl+Z is pressed in
+Settings. A reviewer's claim that the sidebar's Import code stays on screen under Settings was
+checked in the code and found untrue.
+
+**Rounds 67 to 70.** 880's label was untrue: any folder zipped in Explorer is unpacked, then
+refused, an ordinary road. Round 68 found nothing of medium severity. Round 69 swept the plan for
+two classes no round had read whole: the words an expected result quotes as the app's (each was
+found shown at its step), and steps needing what the precondition does not make. It found 261,
+which replaced a short body and so kept no copy for Restore previous, and 272, which imported a
+code made after its edit and so found the note unchanged. Round 70 found the same in 960, 280
+and 277: an import of a note left as the code or backup holds it asks "Already here, unchanged",
+never Update.
+
+**Rounds 71 to 75.** Round 71 found the same in 952 and 960, and two results the app does not
+show (421's Cancel, 587's Skip). The rewritten recipes then had their own words tested: the
+first import of a backup asks "Import notes" before anything, a series made with no text has no
+word to change, and the welcome note's text changed after 0.97.405, so a backup's welcome note
+looks like nothing here and asks no "Possible duplicates". A sweep for the phone's last finding
+found four rows naming the day's bar on a day with no note (563, 774, 782, 724). Rounds 74 and
+75 found nothing of medium severity, the second reading together all 22 rows the rounds after
+the whole plan had rewritten: the desktop's loop ended there.
+
+**The release's Linux run** (19 November, on 0.101.540) failed one check of qa5: after a day's
+autosave the line still said "Only this day: 12.10.2026", where "Auto-saved 12.10.2026 only"
+was due. The status line's hold (`_box_words_until`, a cut paste's words, a cancelled import, a
+big table's) was kept by the clock alone. Words written over the held ones left it nothing to
+keep, yet the next "Auto-saved" was still withheld until the clock ran out, and the day's own
+"Auto-saved" had become such a reassurance on 15 November. A hold an earlier section left had
+run out on Windows, which runs qa5 slower, and not under Linux. Any words but a reassurance now
+end the hold, as they already ended the claim of the words on what a save left out; the banner
+had it right from the start, its reassurance yielding to what the banner shows. qa6 checks the
+hold with its clock set ten minutes ahead, so only the rule can end it in time (mutant RV13).
+
+**The release's whole catalogue** (19 to 21 November, on 0.101.540, about 25 hours) gave 1,382
+of 1,389 verdicts as expected; RT02 runs only on Linux. Each of the seven had been killed when
+written; a later fix of the audit had quietened it, and no app behaviour was wrong. Four checks
+no longer reached their guard, because a newer road answered the same case first. A notes file
+refused at the start is held on its way in (14 November), so the hold for a damaged file that
+cannot be copied aside went untested (DR35). A held settings file returns at once at every
+later read, so the run's "first read only" flag decided nothing the check could see (DR57). A
+held Trash's entries are put back by the Trash's own write, so only their categories still
+showed the guard missing (SN124). A long category name sat in the backup's settings as well as
+on its note, so the notes' own refusal was never counted (SN141, and its Trash sibling, which had
+no mutant: SN180). Two promises gained a second road. The close writes the export's word before
+it waits (CN01), and an import names the `.part` it is copying so the close's cleanup takes it
+away (ST06). Each of those mutants now takes both roads away. And SA04 had been written as
+`True or ask(...)`; once the delete moved into the condition, it read `True or (ask and delete)`
+and deleted nothing. Each was proved on its own mutant (qa/README, "A check aims where its
+guard alone stands").
+
+**Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
+is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
+open behind the block: at the thirty-ninth round the plan's automation claims were read all at
+once, by a scan, and the rounds after it read what the scan cannot judge.
+
+### Ctrl+T and the tags Tk shares
+
+*([0.102.556](../CHANGELOG.md#0102556--2026-11-23) · 2026-11-21 to 22 · a deferred low of the
+full reading (case 480), fixed in the lows wave by the owner's choice; twelve rounds of review
+on it)*
+
+**Symptom:** Ctrl+T with the caret just after a bold word swapped its last letter with the plain
+one after it, and the bold letter came back plain.
+
+**Root cause:** Tk's own swap (`tk::TextTranspose`) deletes the two characters and inserts them
+again with no tags given, so they wear only the tags both neighbours share. Every tag the
+neighbours do not share was lost on the pair: the letters' formatting, and at a line's start
+its paragraph tag, from which Tk reads the line's indent and the app's resync reads it again.
+
+**Fix:** `_transpose_keeping_styles` makes the swap, in the note and in a table's cell: each
+character keeps its own formatting, two of one line keep the line's indent and alignment, the
+selection and every other tag as Tk gives them, the caret after the pair, one undo step.
+
+**What the rounds found, each a check and a mutant:** the cell, the same Tk swap, missed by the
+first sweep; a cell's alignment on its first two letters; the selection kept; a line's first two
+letters losing its indent for good, as the resync reads it from the first letter alone. Two of
+the agent's own steps were wrong: a guard refusing a swap beside an emoji, measured on Tk's places read one by
+one, where the swap's own `-1c` and `-2c` step over an emoji whole (it shipped for a round, and
+went); and a reading of a mutant's survival as "the release mends both", where the runner had
+counted one check of two. The emoji guard that stays covers a caret parked inside an emoji,
+where a mark splits it and `-1c` lands on a half.
+
+**Takeaway:** measure the road the code takes, not one beside it: an index read directly is not
+an index reckoned by `-1c`. And a fix of a round's lows is code too: every line added to one
+without its own check was the next round's finding.
+
+### The panel's fifth meeting: what using the apps found
+
+*([0.102.556](../CHANGELOG.md#0102556--2026-11-23) · 2026-11-22 to 23 · the review panel's
+fifth meeting, the first whose readers also used the apps, each in a throwaway copy, the phone on
+an emulator; the owner chose to fix all it found but one)*
+
+**Symptom:** eighteen things across the two apps, none losing a note, each met by pressing the
+buttons. On the desktop:
+
+- Generate code made its code below the editor's fold, with nothing said.
+- At the window's smallest size, 640 by 600, the editor was cut off behind a sideways scrollbar.
+- Ctrl+F's bar covered the top half of the category button.
+- A note's own Delete asked "Are you sure?" without saying the note goes to the Trash, where the
+  ticked notes' Delete said so.
+- "Note moved to Trash · Undo" stayed over Settings, and after the note was restored there.
+- An unreadable notes file was met with "or ask for help", in an app that sends nothing.
+- The same file attached twice made two copies; an empty file went in without a word.
+- A Tab typed in a note was a tab, with nothing saying Ctrl+Tab moves on.
+- "30 day(s) left", and "Added 0 note(s)" in the very message the changelog said counted
+  properly.
+
+The phone's readers found their own, and four of them were on the desktop too. A "|" typed in
+a table's cell became "/" without a word. A backup that was not one said "zip END header not found". A
+note brought back by a backup while it sat in the Trash was in both places, with only "Added 1
+note". The Undo of "Moved to Trash" opened the note even when it had not been open.
+
+**Mechanism:** three shapes, each met only by using the app.
+
+- **A result made out of sight.** The code, the editor at its narrowest and the category under
+  the bar were all drawn; each lay where the person was not looking. Reading the code finds what
+  is drawn, not where.
+- **Words that keep back what happened.** A question that does not name the Trash, a library's
+  error passed on as it came, a "/" put in place of a "|" in silence, a "(s)" for a number the
+  app already knows.
+- **An offer older than its subject.** The Trash's Undo was made when the note went in, and was
+  not asked again when the note came back out by another road.
+
+**Fix:** each with a check and a mutant (PW01–PW54). Generate code scrolls its code into sight.
+The window is never narrower than it can show: 900 wide with the sidebar, 640 with it hidden
+(`_fit_window_floor`). The page makes room at its top while the find bar is open
+(`_fit_find_room`). The note's own Delete names the Trash and its days. The banner's Undo is
+taken down once its note leaves the Trash elsewhere, and opens the note again only if it was the
+open one. A broken notes file points to Settings → Backup → Import. The same file picked again
+asks first, and an empty one is said. The first Tab typed into a note says once how to move on.
+The "|" kept as "/" is said, once each time the cell is opened. A file that is not a whole backup
+and a full disk are said in words. A note brought back that is in the Trash too is said to be.
+Every count's noun takes the form its number needs (`storage.count_noun`), and a tenth rule in
+`tools/check_one_definition.py` refuses a "(s)" in the app's words. One thing was left by the
+owner's choice: "Continue without it", filled red, in the question about part of a note not
+saved, where Enter gives the safe answer.
+
+**What the rounds found:** the loop closed at the fifth round, the fourth and fifth finding
+nothing of medium severity.
+
+- The "|" word came again at every autosave, not once.
+- A share code bringing a note that is in the Trash had been missed: the backup's sibling.
+- A file attached onto a full disk said "[Errno 28]", and left its half copy, named by nothing.
+  A duplicated note's copy of its files did the same.
+- The ticked notes' question said one note's file goes "with them", and "trash" where the
+  note's own Delete now says "the Trash".
+- One of two older notes in an import was "1 of them are OLDER".
+
+Two of my own steps were wrong. I committed the first two fixes before running the static
+gates. And the attach question's fix broke `test_data_safety`, whose stand-in for the window
+lacked the new method: I had run the suites the change touched, not that one, and the full
+suite found it. One finding was the play kit's, not the app's: notes typed just before closing
+seemed lost, because the kit built the window without its close handler. Fixed in the kit, the
+same steps saved.
+
+**Takeaway:** a reader of the code finds what it says; a person using the app finds where it is
+said. The rounds before had read this code and probed what they suspected of it. The first
+readers told to use the app as a person does, and to look at its window, found a result out of
+sight, an offer older than its subject, and sentences that keep back what happened.
 
 ## Tk & platform gotchas
 
@@ -2590,6 +6039,132 @@ still.
 
 **Takeaway:** a label whose text can come and go sizes its row by what it says at the moment;
 give it the height of its tallest state, or the layout moves with the words.
+
+### The app the keyboard could reach only half of
+
+**Symptom:** in the final audit before publishing, an agent walked Tk's own Tab chain on every
+page and listed what a mouse could press that Tab never reached. The list was long: all thirteen
+dropdowns (Text size, the app's one setting for reading, among them), the colour and emoji
+pickers, a category's rename, colour and delete, the eight theme tiles, the alignment buttons,
+the sidebar's arrow, every day of the calendar, and the delete toast's Undo, gone after eight
+seconds. Where Tab did go, it often went out of sight: at the window's opening size it landed on
+Save and Delete below the fold, and on sixty Trash controls, with the view standing still.
+
+**Root cause:** four things, one of them Tk's and three the app's. A control the app draws — a
+canvas, a label, a frame of labels — was given a mouse binding and nothing else: no `takefocus`,
+no key. A popup is a window of its own, and Tab never leaves the window it is in, so even a
+picker made of real buttons was out of reach once open. Tk's Tab moves the keyboard and never the
+view, and the pages here are frames drawn on canvases. And then, found only by a photograph of
+the emoji picker: **Windows draws no focus colour round a label.** Tk said the keyboard was on
+the second emoji, its `highlightcolor` was the ring's, and the picture showed nothing; it draws a
+label's resting colour, `highlightbackground`, and only that.
+
+**Fix:** once, in the helpers every popup and drawn control goes through. Two bind tags, bound
+once: Space and Return press a drawn control, and the arrows, Home and End walk a popup's choices
+by where they stand. A popup asked for from the keyboard takes it, on its current choice, and
+gives it back to its opener when it closes, by any road; a click's popup leaves the keyboard
+where it was. A press that draws its page again puts the keyboard back where the control stood.
+The calendar's month has its own ring and arrows, as the note list has. What Tab lands on is
+scrolled into sight. And the ring is both border colours while the keyboard is on a control, in
+the theme's text colour, which the contrast gate now measures (the accent the checklist's ring
+wore is under 3:1 on two light themes).
+
+**How it is held:** qa6 walks every page — the notes page, the calendar with a day open, History,
+each Settings section — and fails on any widget a click acts on that is neither a Tab stop nor
+inside one. It is the class's check rather than a list of the instances, so the next control
+drawn with a mouse binding alone turns it red. Each route has its own checks and mutants (KF, KD,
+KP, KB, KC in `tools/mutants.json`).
+
+**Round 2, the fix's neighbourhood walked a day later:** six more, each fixed as a class. A popup
+with no choices landed on the ✕ its header builds first, so a space typed into a new template's
+name closed the editor; it lands in its first box to type in now. Every "Show N more" left the
+keyboard on the window, about a hundred Tabs back: Tk's own buttons take Space through their
+class binding, which never reached the put-it-back step, and run the command 100 ms after the
+key. The binding is wrapped once, and a template checklist's tick box was found on the same road.
+Keyboard shortcuts, all labels, could not be scrolled at all; Page Up and Down, the arrows, Home
+and End scroll every Settings section. The click counter never counted a left click, because Tk
+runs only a tag's most specific binding. The reminder bar's ring kept an old theme's colours, and
+a banner hid the Undo the keyboard was on without moving it. Mutants KR01–KR12.
+
+**Round 3** *(2026-10-28)*: an attachment could not be opened from the keyboard at all. Its name
+was a label bound to the mouse, and qa6's walk passed it because the tab strip, an ancestor, is a
+Tab stop, though no key of the strip's reaches into a page. The name is a drawn control now, and a
+picture's preview opened from it takes the keyboard on Close, shuts on Escape, and gives the
+keyboard back to the row. The walk no longer counts the tab strip as "inside", and its notes page
+carries attachments. Mutants RT05, RT06. The wrapped Space handed the keyboard on only when the
+button was destroyed, and a button its own press hid — Share and Import's Close, the day's ✕, the
+Trash's bulk delete, Settings, Back to Notes — kept it out of sight; hidden now counts as gone,
+as it already did for the app's drawn controls. Mutant RT07. And round two's own fix for the hidden
+Undo sent the keyboard to the note list even while the list was put away by its arrow: Tk only
+notes a request for a hidden window, and the keyboard stayed on the Undo. qa3 had counted the
+request, not asked where the keyboard was; it lands on the arrow now. Mutant RT08. Worst of the
+round: a click on ⚙ Settings from the editor takes no keyboard, so it stayed in the note, out of
+sight. The new Page Down did nothing there, and Tab, Space, Backspace and Ctrl+V edited the note,
+which was saved. Settings now takes the keyboard from the page it hides onto the section's entry
+and gives it back on the way out, a box out of sight is no longer "a box being typed in", and the
+note list put away by a click on its arrow hands the keyboard to the arrow. Mutants RT09–RT12.
+Last, the look after Space waited 100 ms for every Tk button, though a tick box runs its command
+at once: a Tab inside those 100 ms after ticking a template's item went to the editor's ✕. A tick
+box is looked at the moment it is pressed. Mutant RT20.
+
+**Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
+focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option
+saying what to draw, were both true while nothing was drawn — look at the picture.
+
+### The list that ended in the middle
+
+*(2026-10-28 · found by the final audit's fifth break-it round, which attacked round four's fixes
+by name; the owner chose a list that scrolls to its end over pages)*
+
+**Symptom:** a note's checklist of 1,000 short items, scrolled to its end, showed items 781–785.
+The template picker with 1,000 templates showed "Template 811" at its end, and End put the
+keyboard on "Template 999", which nobody could see. Settings → Templates, the only place a
+template is deleted, ended at about the 712th. The scrollbar reached its end each time. At 225%
+it happened from about 345 checklist items, and with long items from a few dozen. Nothing was
+removed, but Space ticked an item nobody could see, and words typed into the template editor's
+Add box, scrolled out of reach, were saved.
+
+**Root cause:** every long list was one frame placed on a canvas as a window item, and the canvas
+scrolled it. Tk works out where a window item stands relative to the view in a 16-bit short
+(`Tk_CanvasWindowCoords`), the same on every system, and X keeps a window's place in 16 bits as
+well. However far the canvas scrolled, the frame went up at most 32,768 px. Round four had limited
+how tall one widget is drawn; nothing limited how far a frame is scrolled. The same shape stood in
+the template editor, Recently deleted and Share after enough "Show more", Duplicates (one note
+copied a thousand times is one group), a day's notes, the calendar's History (its pages of 50,
+each series unfolded to up to 50 days) and the calculator's history.
+
+**Fix:** a row stack (`RowStack`; see
+[ARCHITECTURE](ARCHITECTURE.md#a-long-list-is-built-in-chunks-it-places-itself)) builds the rows
+into chunk frames of a few rows and places each chunk itself: near the view at its true place,
+the rest parked out of sight above it. The canvas still scrolls, so the scrollbar and the wheel
+are untouched, and a scroll lays out nothing. Two things the first design missed were found
+before code: chunks as window items are unmapped out of view, and Tab skips what is unmapped
+(measured: from the last row in view it went back to the first); and a parked chunk's
+`winfo_y` is its parking place, so bringing a row into sight and the arrows' order ask the
+stack where a chunk stands. A row cannot change its parent in Tk: a checklist item moved over a
+chunk's edge is made again in the other's place. Every list draws exactly as before: each
+drawn widget's place and size, compared with the old code's at 100% and 225% in the Linux
+image, came out the same.
+
+**Two more, found by the checks on Windows:**
+- **Windows keeps a place on the screen in 16 bits.** Parked 32,000 px below a canvas 1,143 px
+  down the screen, a chunk's rows passed 32,767 and Windows pinned them there: back in view, the
+  last of a day's thousand notes stood 376 px above its chunk instead of 318 below. X keeps a
+  place in its parent, so Linux never showed it. Chunks are parked 20,000 px above now (and
+  beside the view as well since
+  [round six](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it)).
+- **Each drawn tick box repainted the two images every box shares**, and each paint redrew every
+  box made before it: Share with 2,500 notes, every page shown, took 150 s on Windows before and
+  after the stack, 3.2 s once the images are painted only when missing (a theme switch paints
+  them again).
+
+qa2 builds each of the ten lists past 32,767 px, refuses to judge one that is not, and asks for
+its last row at its end, pressed or ticked from the keyboard; mutants RW01–RW18, with Q12, O16,
+RU26 and RU27 re-aimed.
+
+**Takeaway:** a widget's place has a limit as well as its size, and not the same one on every
+system. A list that grows is built in pieces that each stay inside every limit, and whatever
+reads a position asks where the pieces really stand.
 
 ## Editor & input interaction
 
@@ -5192,6 +8767,182 @@ later", with one that a block is still on its way in just after a scroll.
 **Takeaway:** a photograph proves only what was on the screen when it was taken. A page that
 changes with scrolling or time has to be photographed in the state a reader meets it — and the
 behaviour that changes it needs checks of its own, not the photograph's silence.
+
+### A year read as a list number
+
+*(2026-11-21 · found in the site's photographs, before an upload)*
+
+**Symptom:** on the website's "How it's tested" page the first paragraph broke in three: "978
+cases on 14 November", then "2026. I walk it" set apart, then the rest. "How it's built" broke the
+same way at "27 October / 2026. Ready". On GitHub both read whole. The second was in no photograph;
+comparing every page before and after the fix found it.
+
+**Root cause:** the site draws the documents with a Markdown renderer of its own
+(`site/build.py`). A source line wrapped just before a year began with "2026. ", and the renderer
+started a numbered list wherever a line began with a number and a full stop: here, a list counted
+from 2026. GitHub follows CommonMark, where a numbered line may break into running text only if its
+number is 1. The two wraps had been in the documents since 2 November.
+
+**Fix:** the renderer keeps that rule, under a paragraph and inside a list item's wrapped words; a
+list after a blank line still starts where its number says. Seven cases of what GitHub draws are
+held at every build (`RENDER_CASES`), and the build stops on any it draws otherwise; taking out
+either half of the fix fails it. The two pages were the only ones that changed.
+
+**Takeaway:** a renderer of one's own agrees with the reader's other renderer until a line begins
+with something the two read differently. Hold it to the cases where they can part, not to the
+documents that happen to agree.
+
+### The test that took the computer down
+
+*(2026-10-29 · found by the owner: an NVIDIA error on her screen while the final audit's mutants
+ran)*
+
+**Symptom:** the owner saw an error from her graphics software and pressed OK. Windows' logs told
+the rest. For twelve minutes the computer was out of memory: the desktop window manager, which
+draws the screen, crashed and restarted, several services stopped, the AI agent's own process
+died, and Windows deleted the shadow copies of C: -- its restore points and the "Previous
+versions" of files -- because the disk could not keep up. No file of hers was touched; the
+restore points were lost.
+
+**Root cause:** one test process. Windows' low-memory report named it: a `python.exe` holding
+43 GB, with the Android emulator's 6.7 GB beside it. Round six's interface fixer ran mutants that
+make a long list's chunks a billion rows each, so that the list is one frame again; its new qa2
+checks sized their fixture from that very number, and began building two billion rows. Nothing
+held a test to less than all the memory the machine had, and three heavy jobs -- mutants, an
+emulator walk and a suite -- ran at once.
+
+**Fix:**
+- `tools/guest.py`: every runner (`run_tests.py`, `mutate.py`, the story scripts,
+  `run_coverage.py`, `bench.py`, `pre_push_check.py`) calls `guest.settle()` first. On Windows a
+  job object holds each process to 4,096 MB of committed memory and a run's processes together to
+  8,192 MB, and ends them with the runner; elsewhere RLIMIT_AS holds each process to 8,192 MB of
+  address space. A test past it gets MemoryError and fails alone. A run ends by printing the most
+  any process took: 134 MB in the first full run under it, thirty times under the ceiling.
+- A gate, "a test run is a guest" (`tools/check_guest.py`): it finds every runner and fails one
+  that does not settle, and proves on the machine that a process past a 256 MB ceiling fails while
+  one under it runs. Both parts were watched failing with their defence taken away.
+- The qa2 fixtures read a chunk's size from the list but build no more than 64 rows to one.
+- `mutate.py` refuses a flag it does not know: `--help` had started the whole catalogue.
+- Moving the scratch to the other drive was tried and taken back: that drive is exFAT, a check of
+  NTFS's `Zone.Identifier` stream failed there, and the notebooks the tests stand in for live on
+  NTFS.
+- A working rule in [qa/README](../qa/README.md#running-anything-here): one heavy job at a time.
+
+**Round seven** *(2026-10-29, the same day)*: the final audit attacked the fix, and found it held
+only where someone had remembered it.
+
+- *One heavy job at a time* was a sentence. Each run made a job of its own, so two runs at once
+  were allowed 8 GB each on a machine with about 4 GB free, and the figures were the incident's,
+  not the need's. A run now takes the machine's turn: an OS lock in the temporary folder, freed
+  when the run ends however it ends. A second run waits, naming the first, and what a run starts
+  shares its turn. The ceiling is 1,024 MB a process and 2,048 MB in all; in a full run the
+  largest process took 135 MB, and all of them together 146 MB.
+- *On Linux* the ceiling was 8,192 MB of address space, above the Docker VM's whole 2.8 GB, so a
+  runaway met the kernel's OOM killer first: SIGKILL, no footer. It is never more than half of
+  what the box has now. In a 512 MB container a child touching 700 MB got MemoryError; under the
+  old figure it was killed. A full Linux run holds under it: its largest process used 141 MB.
+- *A killed docker client* leaves its container running: the Linux suite ran on in the VM, unseen,
+  beside the next run. `tools/linux_ci.py` is the one door, a named container with memory, CPU
+  and time limits and docker's init, which ends itself when its input closes because the runner
+  has gone. Killed outright, the runner left nothing: its container was gone 0.6 s later.
+- *The gate* picked runners by the word `sys.executable` and took `guest.settle()` anywhere in
+  the file, so three tools that build the whole app on the owner's screen passed with no ceiling.
+  It finds runners by what they do now and walks their paths in the syntax tree; thirteen mutants
+  of its rules and three of `guest.py` each fail it.
+- *Three photographers of four* trusted `-topmost`. One shutter (`_qa_support.photograph`) now
+  asks which window is on top across the box, before and after the copy, and refuses the picture
+  when one is another program's. With that question taken away, a window another process kept on
+  top was in "a picture of the app".
+- *Hangs* had no bound in the travel story, the coverage run and the mutant runner, whose own
+  timeout ended the catalogue with a traceback. Every child has a timeout; a hang is a verdict,
+  HANG, and the run goes on.
+- *Leftovers*: killed runs left their copies in the temporary folder, and the suites wrote zips
+  there under fixed names. A scratch folder carries a marker naming its run and a later run
+  removes the dead ones; the suites get a temporary folder of the run's own.
+
+**Round eight** *(2026-10-30)*: the audit attacked the turn, the ceiling and the door, and found
+the one thing a guest must never do, done on every run.
+
+- *A test read the owner's notebook.* `test_data_safety.py` started the app in its folder with
+  no notes file and no reclaim marker, under the owner's own environment. The app took it for the
+  first start after the move and copied `%APPDATA%\NoteOrganizer` -- the built app's notebook
+  until 2026-10-27, a copy of hers -- into the suite's folder: notes, settings, Trash, templates,
+  every attached file. On every Windows run of the suite, of mutants and of coverage. Nothing was
+  written back; a killed run left the copy in the temporary folder. The qa scripts were safe by
+  their seed, two tools by an `APPDATA` of their own; nothing made it a rule. `guest.settle()`
+  now gives every run `APPDATA`, `LOCALAPPDATA` and `XDG_DATA_HOME` of its own, empty, and the
+  gate starts a run under a stand-in notebook and fails if the app's first start brings any of
+  it in. The test is seeded too.
+- *A script that trusted where it ran.* The Store package's sandbox test, run on this computer by
+  mistake, would have trusted a test certificate and written over the old notebook. It refuses
+  to run anywhere but inside Windows Sandbox now.
+- *The site's browser walk* started Edge with no turn, no ceiling and no time limit, out of the
+  gate's sight because the gate read only Python. It starts only through a Python door that
+  settles, whose job ends Edge's whole tree, and the gate reads scripts in every language.
+- *The Linux door* mounted the whole working tree, git-ignored files included. The container
+  sees a copy of what git tracks, with no network; a run on Windows keeps 3 GB free under it.
+- *The sweep* deleted a scratch folder's marker before failing on its read-only files, leaving a
+  folder no later sweep would touch. It clears them first now, and marks again what resists.
+
+**Takeaway, round eight:** a guest never opens the owner's cupboards, even to look. Where the
+app finds a notebook is decided by the environment, so the runner decides the environment, for
+every process it starts, and a gate proves it with a stand-in.
+
+**Round nine** *(2026-10-30)*: the audit attacked round eight's doors and found two that a
+sentence called shut.
+
+- *The sandbox guard was an OR.* It refused only when the account was not the sandbox's AND the
+  script did not sit at `C:\pkg\` -- so started from a `C:\pkg` on this computer it ran, and
+  round eight's "refuses anywhere but inside Windows Sandbox" was not true as written. It asks
+  for both now: this computer has a disabled `WDAGUtilityAccount` of its own, so neither the
+  name nor the path alone is proof. The gate no longer looks for the account's name in the
+  line: it reads the guard in a shape it can evaluate without running anything, asks it for a
+  user here at `C:\pkg` and for the sandbox's own start, and checks PowerShell agrees.
+- *The Linux door leaned on the ignore list.* Its copy was "what git tracks and would add", and
+  `.gitignore` missed the files the app keeps aside: a Trash or settings saved as unreadable, a
+  save or a copy in progress. The copy is what git tracks, whatever the list says; the
+  container's own filesystem is read-only, `/tmp` aside.
+- *The suites by hand.* The gate let them off because "a runner starts them", and nothing made
+  it so: started by hand or by CI, a suite ran with the person's `APPDATA`. Every suite now
+  settles as its first act, sharing a runner's turn when one started it, and refuses without
+  `tools/guest.py`.
+
+**Takeaway, round nine:** a guard is proved by asking it the question it exists to answer, not by
+finding the right word in it; and an exemption granted because "something else does it" holds
+only where that something else is made to.
+
+**Round ten** *(2026-10-30)*: the audit attacked round nine's doors and found the guard the
+documents call the last line of defence looking in the wrong folder.
+
+- *The guards looked beside themselves.* Since 2026-10-08 the owner's checkout holds no notebook:
+  a git-ignored `notebook_location.txt` beside the entry file names the folder a source run
+  opens, her own. `test_data_safety.py`'s guard looked for a notebook beside the test, found
+  none, seeded an empty one and let the test go on; the app it started opened the folder the
+  file names. Run in the checkout with CI's own marker (`NOTEORG_SCRATCH=1`, as `tests.yml`
+  runs it and as a person reproducing a red would type it), or in a copy of the whole folder,
+  it deleted that notebook, wrote over its Trash and replaced its settings -- shown in the
+  Linux image with a stand-in, the control without the file left as it was. A guest's homes do
+  not reach it: the line is a path, or starts at `%USERPROFILE%`. The qa seed and three tools'
+  copies of it asked the same wrong question, and the copies read an unreadable notebook as
+  empty. Every suite now refuses beside an app whose `notebook_location.txt` names a folder,
+  and every seed -- one definition, `_qa_support.seed_here`, the tools' too -- writes only where
+  the app's own resolver says the app will open, and only when that is the folder it runs in.
+  The gate stands the checkout in, the file naming a stand-in notebook by its path and through
+  `%USERPROFILE%`: each suite's opening must refuse, the notebook byte for byte as it was.
+  `initialise(app_dir=...)` still reads the file there: a test plays the real start in a folder
+  of its own, and a guard asks the resolver the same question.
+- *The gate read PowerShell its own way.* Code after a block comment's `#>` ran before the guard
+  it approved, and a curly quote, at which PowerShell ends a string, was part of its "literal"
+  -- which it then handed to PowerShell to evaluate, so reading a file could run one.
+  PowerShell's own parser, which runs nothing, reads each sandbox script too: nothing before the
+  guard, no `#requires`, `using` or `param` block. Only the literals' values reach PowerShell,
+  every quote it knows doubled.
+- *The Linux door followed links.* A tracked name replaced by a link or a junction carried what
+  it pointed at into `/repo`. Such a name refuses the run.
+
+**Takeaway, round ten:** a guard asks the question the thing it guards will ask, of the same
+code. "Is there a notebook here?" became the wrong question the day the app stopped keeping its
+notebook here.
 
 ## Smaller lessons, moved out of the code
 

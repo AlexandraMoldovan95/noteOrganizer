@@ -1,0 +1,30 @@
+# lows-r1-phone, on Sonnet: the lows wave's first round
+# started 2026-11-21 22:59 UTC
+
+You are an adversarial reviewer. Attack the fixes of a "lows wave" on an Android notes app (Kotlin, Jetpack Compose), repository D:\Projects\androidVersion, branch audit/a-val6. Your job is to find what is wrong in them, not to praise them. You change nothing: read only.
+
+## What to attack (read each with `git -C D:/Projects/androidVersion show <commit>`)
+- 328b102 held files: eight messages (three in strings.xml, five in Notebook.kt, Files.kt, Settings.kt) now say "until the app is closed from the recent apps and opened again"; DATA_FORMAT and ISSUES_LOG say why; mutant AS867 re-aimed.
+- 1a026e6 test plan: 142 corrections in 120 rows of qa/NoteOrganizer_Android_TestPlan.xlsx, meant to make untrue rows true.
+- 0023450 docs and gates: tools/check_note_shape.py's last line when the desktop is absent; docs/STATUS.md; qa/README.md's sentence on the "Not a hand check" labels.
+- 953b9c3 screenshots: tools/emulator/take_screenshots.py gains a "12-writing" shot (tap_end, the keyboard kept, night mode for the dark pass), a three-column table in its seed; docs/screenshots/README.md and the README's gallery.
+
+For the plan commit, list its changed cells with:
+`py -I <scratchpad>\lows\plan_diff.py D:/Projects/androidVersion qa/NoteOrganizer_Android_TestPlan.xlsx 1a026e6`
+(prints each changed cell before and after). A row can be read whole with `py -I <scratchpad>\build524\dump_cases_phone.py 6,7`.
+
+## What to look for
+- The held-file words: is "closed from the recent apps and opened again" true (what ends Files.holdWrites' hold; does swiping from Recents end the process on Android 8 to 17; is there a sibling message, in strings.xml or the code, still saying the old words or the same thing another way; any walk check or test quoting the old words)?
+- The plan rows: is each new sentence true of the app? Verify quoted words against app/src/main/res/values/strings.xml and the code, controls named against the screens' code, walk parts and tests named against tools/emulator/walk.py and app/src/test, mutant ids against tools/mutants.json, preconditions now written (do they make what the steps need, and can a person make them as written?), steps that still cannot be done. Read at least every changed STEPS and EXPECTED cell, and a sample of the rest.
+- The tool changes: take_screenshots.py's new paths (night mode restored in every exit; the keyboard wait; tap_end's tap landing in the field), check_note_shape.py's three exits.
+
+## Severity (the project's rule)
+- HIGH: notes or files lost or damaged.
+- MEDIUM: a fix that does not hold, a regression, a check that does not guard what it claims, a plan step that cannot be done as written or an expected result the app does not give, a quoted word the app does not say.
+- LOW: wording, an omission in an "Automated in part" note, a long by-hand recipe a row calls not practical (the owner ruled those LOW). The phone keeps a strict rule: a row covered only by unit tests stays "in part" — not a finding.
+
+## Rules
+Read only: Grep, Read, git show/log/diff, and the two scripts above with `py -I`. Never run gradle, adb, the emulator, walk.py, mutate.py or take_screenshots.py.
+
+## Report
+Numbered findings, most severe first, each: severity, where (commit, file:line or case), what is wrong, the evidence, what would fix it. Then a "Verdict per fix" line for each commit (holds / does not hold). Then a "Not covered" section: what you did not read or could not settle.

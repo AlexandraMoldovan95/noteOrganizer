@@ -1,64 +1,34 @@
 """How rich-text formatting is stored on a note, and kept sane.
 
-WHAT THIS MODULE IS FOR
------------------------
-A note's ``formatting`` field is a flat list of spans::
-
-    {"start": 0, "end": 5, "style": "bold"}
-    {"start": 6, "end": 9, "style": "highlight", "value": "#fff3b0"}
-
-``start``/``end`` are CHARACTER OFFSETS into the note body, not Tkinter's
-own ``line.column`` indices. That is deliberate: offsets are plain data
-that survive being saved to JSON, shared as a code, and reloaded into a
-window of a different size, whereas line/column positions shift the
-moment the text wraps differently.
-
-:func:`normalize_formatting` is the gatekeeper. Anything that is not a
-valid span is dropped rather than repaired, so one bad entry from an old
-file or hand-edited JSON cannot corrupt the editor.
-
-TWO KINDS OF STYLE
-------------------
-* :data:`KNOWN_FORMAT_STYLES` - on/off styles needing no extra data.
-* :data:`VALUE_FORMAT_STYLES` - styles carrying a colour, which must also
-  have a valid ``value``. A colour span without one is discarded.
-
-Why ``bold_italic`` is its own style rather than two overlapping spans is
-a Tkinter constraint, explained in the comment just below.
+A note's ``formatting`` is a flat list of spans --
+``{"start": 0, "end": 5, "style": "bold"}``, a colour or a font with a
+``value`` -- whose offsets are CHARACTERS into the body, not Tk's
+line.column, so they survive JSON, share codes and a window wrapped
+differently. :func:`normalize_formatting` is the gatekeeper: a span that is
+not valid is dropped, never repaired. Three kinds of style: on/off, colour
+(a hex value) and font (a size or family from the app's own lists). The
+walk through it is in docs/CODE_TOUR.md.
 """
 
 import bisect
 import heapq
 import re
 
-# Tkinter Text tags that both set the widget's font option don't compose —
-# only one wins — so bold+italic together has to be one precomputed
-# compound font, same as a real font would have a distinct bold-italic
-# variant rather than layering two independent effects.
+# Tk tags that both set the font do not compose -- one wins -- so bold and
+# italic together are one style, as a real font has its own bold italic.
 KNOWN_FORMAT_STYLES = {"bold", "italic", "bold_italic", "underline", "strike"}
 
-# text_color/highlight carry a "value" (a hex color) instead of being plain
-# on/off styles. Unlike bold/italic, foreground/background are independent
-# Tk tag options — they don't fight the font option the way bold and italic
-# do, so no compound-tag scheme is needed for these two.
+# A hex colour in "value": foreground and background are separate Tk tag
+# options, so these two need no compound tag.
 COLOR_FORMAT_STYLES = {"text_color", "highlight"}
 
-# Size and family also carry a value, but they *do* fight the font option --
-# the same collision that forced "bold_italic" to exist. Every combination of
-# weight, slant, size and family therefore resolves to one composite tag; see
-# font_tag_for. They are stored as separate spans regardless, so the four
-# properties stay independent in the note and only meet at render time.
+# Size and family DO fight the font, so each combination with weight and
+# slant is one composite tag (font_tag_for); stored as separate spans, they
+# meet only when drawn.
 FONT_VALUE_STYLES = {"font_size", "font_family"}
 
-# Everything that carries a "value". Kept as one name because most callers
-# only need to know whether a span has one, not what kind.
-VALUE_FORMAT_STYLES = COLOR_FORMAT_STYLES | FONT_VALUE_STYLES
-
-# A curated list rather than whatever the machine happens to have installed.
-# Notes travel -- as share codes, as backups, between machines -- and a font
-# the reader does not have is silently swapped by Tk for something else, with
-# nothing to say the note is no longer showing what it was written in. These
-# ship with every Windows install.
+# Curated, not what this machine has: notes travel, and a font the reader
+# lacks is silently swapped. These ship with every Windows install.
 FONT_FAMILIES = (
     "Segoe UI",
     "Arial",
@@ -70,71 +40,23 @@ FONT_FAMILIES = (
     "Courier New",
 )
 
-# Columns can only line up in a face where every character is the same
-# width. Both of these ship with Windows; the first the system actually has
-# is the one used, and a table falls back to the note's own font rather than
-# to something the reader does not have.
-# Windows first (Consolas ships everywhere the app does), then the
-# families a Linux CI runner actually has -- without them the table
-# face silently fell back to the editor's proportional font there.
+# A table's columns line up only in a fixed-width face: the first one the
+# system has -- Windows' first, then a Linux CI runner's, where the table
+# fell back to the proportional font.
 MONOSPACE_FAMILIES = ("Consolas", "Courier New", "DejaVu Sans Mono",
                       "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono",
                       "Courier")
 
 FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 
-# The most styling spans one note may carry — an anti-bomb ceiling, NOT a
-# performance promise. A crafted share code with 100,000 spans is a few KB
-# of pasteable text; saved first and re-rendered on every launch, it was
-# the same make-the-app-unopenable class as the checklist bomb, one field
-# over. The ceiling sits far above real content (measured: a 3,000-char
-# body wearing 10,000 spans still opens in ~4 s on a fast machine —
-# unpleasant, alive), because a Word-paste of a long styled document
-# produces THOUSANDS of legitimate spans and truncating those would be
-# visible data corruption. What the ceiling deliberately does not fix,
-# recorded in docs/archive/COVERAGE_LEDGER.md, not papered over: the editor
-# reads formatting back 5-6 times per note-open, each read costs
-# O(ranges x body length), and a single-line body with a few thousand
-# spans hangs Tk's layout below ANY sane cap.
+# The most spans one note may carry: an anti-bomb ceiling, not a speed
+# promise -- far above a long styled Word paste, which truncated would be
+# corruption. How the ceilings were measured: docs/ARCHITECTURE.md.
 MAX_FORMATTING_SPANS = 10000
 
-# How much styling may pile onto ONE LINE.
-#
-# MAX_FORMATTING_SPANS above counts a whole note and is set high on
-# purpose, so it cannot be the defence here: what makes Tk give up is not
-# how many spans a note carries but how many tagged ranges land on a
-# single line. Measured on this app, opening one note (3,000-char body):
-#
-#     2,000 spans spread over 10 lines ......... 0.28 s
-#     2,000 spans on ONE line .................. did not finish in 75 s
-#       500 overlapping spans on one line ...... 0.30 s
-#     1,000 overlapping spans on one line ...... did not finish in 75 s
-#       500 on one line + 500 crossing it ...... 1.07 s
-#
-# Two shapes hang, and neither is exotic: short overlapping spans of
-# different colours or sizes piled on one line, and spans that each run
-# from somewhere in the body to its end, so they all lie over the last
-# line without starting on it. Both fit inside a share code of a few
-# kilobytes, and a pasted note is SAVED before it is ever drawn -- so
-# such a note took the app down on every launch after, exactly the
-# make-the-app-unopenable class as the checklist bomb.
-#
-# Hence two budgets, because one alone is walked straight through:
-#
-# * MAX_SPANS_PER_LINE bounds how many spans may COVER any one line --
-#   counted by coverage, not by where a span starts. Counting starts was
-#   the first version of this clamp, and a note whose spans each began on
-#   a different line and ran to the END of the body dodged it completely:
-#   five spans started on any given line, and the last line wore all
-#   2,000. It still did not finish in 75 s.
-# * MAX_LINE_RANGES bounds the note's TOTAL, because per-line alone is
-#   not enough either: 500 spans over a 400-line body is only 500 spans,
-#   under any per-line ceiling, and still asks Tk for 200,000 ranges.
-#
-# The pair is pinned to the last measured-alive row above: 500 covering
-# one line and 20,000 in total is exactly that 1.07 s note. Real notes
-# are nowhere near -- 300 bold words across 300 lines is 300 ranges, and
-# a heavily styled long document a few thousand.
+# What Tk pays for is tagged ranges on ONE line and drawn in all: spans
+# COVERING a line (not starting on it), and the note's total -- pinned to
+# the last measured-alive note (ISSUES_LOG: "The ceiling that counted the wrong thing").
 MAX_SPANS_PER_LINE = 500
 MAX_LINE_RANGES = 20000
 
@@ -147,17 +69,10 @@ def _is_valid_hex_color(value):
 def clamp_spans_per_line(body, spans):
     """Drop the styling spans that would pile too deep on one line.
 
-    Takes an ALREADY-normalized span list plus the body those offsets
-    point into, and returns it unchanged unless one of the two budgets
-    above is broken -- which no note a person writes can do. See
-    MAX_SPANS_PER_LINE for the measurements, and for why one budget is
-    per line and the other covers the whole note.
-
-    Trimming here rather than at the point the spans are drawn is
-    deliberate: the editor reads a note's formatting back OUT of the text
-    widget when it saves, so a note drawn without its tags would be saved
-    without its spans. Refusing the data at the door keeps that
-    round-trip honest -- what is kept is what is shown is what is saved.
+    An ALREADY-normalized list and its body in; unchanged unless one of the
+    two budgets above is broken, which no written note does. Trimmed here,
+    not where spans are drawn: the save reads formatting back out of the
+    widget, so what is kept is what is shown is what is saved.
     """
     if not isinstance(spans, list) or not spans or not isinstance(body, str):
         return spans if isinstance(spans, list) else []
@@ -167,10 +82,8 @@ def clamp_spans_per_line(body, spans):
     if not breaks:
         return spans[:MAX_SPANS_PER_LINE]        # one line, one budget
     kept, covered, drawn = [], {}, 0
-    # Lines already carrying their full share, kept sorted so a span can
-    # ask "do I touch one?" without walking its whole range. That answer
-    # is what keeps this loop linear: a span either is refused in one
-    # lookup, or it is cheap to count because none of its lines are full.
+    # Lines at their full share, sorted: a span asks "do I touch one?" in one
+    # lookup, which keeps the loop linear.
     full = []
     for span in spans:
         start = span["start"]
@@ -195,8 +108,9 @@ def clamp_spans_per_line(body, spans):
 def normalize_formatting(value):
     """Coerce a note/template's formatting list to valid spans, silently
     dropping anything malformed (bad type, unknown style, out-of-order or
-    non-integer offsets, or — for text_color/highlight — a missing/invalid
-    hex value) rather than ever letting bad data crash the editor."""
+    non-integer offsets, for text_color/highlight a missing or invalid hex
+    value, for a size or family one not in FONT_SIZES / FONT_FAMILIES)
+    rather than ever letting bad data crash the editor."""
     if not isinstance(value, list):
         return []
     spans = []
@@ -204,6 +118,10 @@ def normalize_formatting(value):
         if not isinstance(span, dict):
             continue
         style = span.get("style")
+        # A name only: a list or object here is unhashable, and the set test
+        # below stopped every start (hand-edited, or a newer version's).
+        if not isinstance(style, str):
+            continue
         start, end = span.get("start"), span.get("end")
         if not (isinstance(start, int) and not isinstance(start, bool)
                 and isinstance(end, int) and not isinstance(end, bool)
@@ -237,19 +155,11 @@ def normalize_formatting(value):
 
 
 def _fold_bold_with_italic(spans):
-    """Where a bold span and an italic span cover the same characters, one
-    bold_italic span there instead: the two are Tk tags that both set the
-    font, which do not compose, and italic -- made after bold -- won. Bold
-    italic text pasted from a web page, or from the app's own copy (which
-    writes it as <i><b>), was drawn italic alone, on every open, while the
-    toolbar lit Bold and the note saved it bold.
-
-    One sweep over the two styles' ends, and the list as it was when
-    nothing overlaps. When something does, the list comes back in the
-    order the editor reads spans back in (merge_spans): the folded pieces
-    put after the rest made a note saved the old way differ from its own
-    reading at once -- unsaved, and saved again on leaving with no edit,
-    its "Last updated" moved."""
+    """Where bold and italic spans cover the same characters, one
+    bold_italic span there instead: as two font tags, italic won, and pasted
+    bold italic was drawn italic alone. Unchanged when nothing overlaps;
+    otherwise in merge_spans' order, or a note read back differed from its
+    own save and its "Last updated" moved with no edit."""
     marks = sorted((s[edge], s["style"], step)
                    for s in spans if s["style"] in ("bold", "italic")
                    for edge, step in (("start", 1), ("end", -1)))
@@ -280,10 +190,7 @@ def _fold_bold_with_italic(spans):
 
 
 # ---- Naming the tags the editor applies ----
-#
-# These three were on the app class and are pure string work: no widget, no
-# state. They decide what a Tk tag is *called*, which is why they sit beside
-# the span format they name rather than in the editor that applies them.
+# Pure string work, beside the span format they name rather than in the editor.
 
 _WORD_CHAR_RE = re.compile(r"\w", re.UNICODE)
 
@@ -311,16 +218,10 @@ def color_tag_name(style, hex_color):
 
 
 def font_tag_for(is_bold, is_italic, size=None, family=None):
-    """The single tag carrying this whole font combination, or None.
-
-    Two Tk tags that both set the widget's font option do not compose -- one
-    simply wins -- which is why bold and italic together needed a compound
-    tag rather than two independent ones. Size and family set the same
-    option, so all four have to resolve to one name.
-
-    With neither size nor family the historic names are returned unchanged,
-    so notes written before this existed keep tagging exactly as they did,
-    and the plain "bold" tag stays the one the toolbar reads.
+    """The single tag carrying this whole font combination, or None: weight,
+    slant, size and family all set Tk's one font option, so they resolve to
+    one name. With neither size nor family, the plain names, so older notes
+    tag as they did and "bold" stays the tag the toolbar reads.
     """
     if size is None and family is None:
         if is_bold and is_italic:
@@ -337,21 +238,11 @@ def font_tag_for(is_bold, is_italic, size=None, family=None):
 
 
 def resolve_font_runs(spans, text_length):
-    """Work out where a composite font tag is needed, and which one.
-
-    Returns ``(start, end, is_bold, is_italic, size, family)`` for each run
-    that carries a size or a family, weight and slant folded in from
-    whatever bold/italic spans cover the same characters.
-
-    Only those runs. Bold on its own still uses the plain "bold" tag, which
-    keeps two things true: a note that never touches size or family tags
-    exactly as it always did, and the toolbar can go on asking "is this
-    range bold?" by looking for that tag.
-
-    One sweep over the span boundaries, in order, carrying what covers the
-    stretch to the next one. Every span used to be checked at every
-    boundary: one font size in a note of 8,000 styled words cost 1.7 s at
-    every open, every Enter in a numbered list and every font change.
+    """Where a composite font tag is needed, and which one: ``(start, end,
+    is_bold, is_italic, size, family)`` for each run carrying a size or a
+    family, weight and slant folded in. Bold alone keeps the plain tag.
+    One sweep over the span boundaries -- every span checked at every one
+    cost 1.7 s an open on 8,000 styled words.
     """
     spans = normalize_formatting(spans)
     affects_font = {"bold", "italic", "bold_italic"} | FONT_VALUE_STYLES
@@ -370,10 +261,9 @@ def resolve_font_runs(spans, text_length):
         ending.setdefault(span["end"], []).append(index)
     points = sorted(m for m in marks if 0 <= m <= text_length)
 
-    # What covers the stretch from one boundary to the next: how many bold
-    # and italic spans, and the sizes and families as heaps on their place
-    # in the list -- the last one listed wins, as when every span was
-    # checked in turn. One that ended is let go when it reaches the top.
+    # What covers each stretch: bold and italic counted, sizes and families
+    # as heaps on their place in the list (the last listed wins); one that
+    # ended is let go when it reaches the top.
     bold = italic = 0
     sizes, families = [], []
     runs = []
@@ -411,25 +301,11 @@ def resolve_font_runs(spans, text_length):
 
 
 def split_toolbar_rows(items, available, max_rows=3):
-    """Deal toolbar controls into rows no wider than *available*.
-
-    *items* is ``[(width, is_divider), ...]`` in the order they appear;
-    the result is a list of rows, each holding indices into *items*.
-
-    Pure arithmetic, deliberately: which control lands on a row boundary
-    depends entirely on the font, so testing this through real widgets
-    tests whatever font the machine happens to have. The bug this exists
-    to prevent -- a divider making its row too wide -- showed up on a CI
-    runner and not on the machine it was written on, purely for that
-    reason.
-
-    A divider that falls at a row break is dropped rather than carried
-    over. Starting a row with a vertical rule reads as a mistake, and
-    keeping it on the row it overflowed is what made that row too wide.
-
-    The last row takes whatever is left even if it no longer fits: there
-    is nowhere else to put it, and a control that is hard to reach is
-    still better than one that is not there at all.
+    """Deal toolbar controls, ``[(width, is_divider), ...]``, into rows no
+    wider than *available*: a list of rows of indices into *items*. Pure
+    arithmetic, as through widgets it tested the machine's font. A divider
+    at a break is dropped, not carried; the last row takes what is left,
+    as a control hard to reach beats one that is not there.
     """
     rows, used, index = [[]], 0, 0
     for i, (width, is_divider) in enumerate(items):
@@ -437,10 +313,8 @@ def split_toolbar_rows(items, available, max_rows=3):
             index += 1
             rows.append([])
             used = 0
-        # Stated once, as a property of the row rather than of the break:
-        # checking it only at the break missed the case where a divider was
-        # dropped there and the *next* divider then found an empty row and
-        # opened it.
+        # A property of the row, not of the break: checked at the break, the
+        # NEXT divider found the emptied row and opened it.
         if is_divider and index and not rows[index]:
             continue
         rows[index].append(i)
@@ -449,13 +323,9 @@ def split_toolbar_rows(items, available, max_rows=3):
 
 
 def merge_spans(spans):
-    """Join spans that touch and say the same thing.
-
-    Reading the widget back gives one span per tag range, and a composite
-    font tag is split wherever bold or italic starts or stops inside it --
-    so a single size across a paragraph can come back as three or four
-    pieces. Left alone they would be written to the note that way, and split
-    again a little further on the next save.
+    """Join spans that touch and say the same thing: read back, a composite
+    font tag comes in pieces wherever bold or italic starts or stops inside
+    it, and the pieces were saved that way, split further at every save.
     """
     by_style = {}
     for span in spans:
@@ -505,7 +375,6 @@ def parse_font_tag(name):
         if size not in FONT_SIZES:
             return None
     return flags[0] == "1", flags[1] == "1", size, family
-    return None
 
 
 def tag_to_spans(tag, start, end):
@@ -534,15 +403,12 @@ def tag_to_spans(tag, start, end):
     return spans
 
 
-def is_format_tag(name):
-    """True for a Tk tag that carries CHARACTER formatting.
-
-    A plain style, a colour (``text_color_``/``highlight_`` and a valid
-    hex), or a composite font -- exactly the tags the editor reads back as
-    the note's spans. The one answer for code that has to move or restore
-    formatting tag by tag instead of through the span list; a tag list
-    written out by hand at each such place is how a new kind of tag gets
-    carried by one of them and silently dropped by the next.
+def is_format_tag(name, fonts=True):
+    """True for a Tk tag that carries CHARACTER formatting: a plain style, a
+    colour with a valid hex, or a composite font -- the tags read back as
+    spans. The one answer for code moving formatting tag by tag, as lists
+    written out by hand dropped a new kind of tag. *fonts* False leaves the
+    composite fonts out.
     """
     if not isinstance(name, str):
         return False
@@ -552,27 +418,12 @@ def is_format_tag(name):
         prefix = style + "_"
         if name.startswith(prefix):
             return _is_valid_hex_color("#" + name[len(prefix):])
-    return parse_font_tag(name) is not None
+    return fonts and parse_font_tag(name) is not None
 
 
 # ---- Bullet and numbered lists ----
-#
-# A list line carries its marker in the body text: "• milk", "1. milk". The
-# alternative -- drawing the marker without storing it -- was considered and
-# rejected. Formatting is stored as character offsets into the body, so a
-# marker that exists on screen but not in the body would put every offset
-# after it out by the marker's length, on every line, forever. Keeping the
-# body and the widget identical means the offsets need no translation at all.
-#
-# ``paragraphs`` on a note records line-level formatting -- what a whole line
-# looks like, as opposed to the characters inside it, which ``formatting``
-# covers. Today that means which lines are list items:
-#
-#     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"}]
-#
-# The marker is derivable from the text, so this looks redundant -- but it is
-# what tells the editor to give the line a hanging indent, and what lets
-# renumbering tell a real "1." from a line that merely starts with one.
+# A list line's marker is in the body ("• milk"), so offsets need no
+# translation; ``paragraphs`` holds what a whole line is (CODE_TOUR).
 
 BULLET = "• "
 # One glyph per nesting level, cycling past the third. All three are ones
@@ -607,16 +458,9 @@ def parse_list_marker(line):
 
 
 def strip_list_markers(text):
-    """Remove anything this app would read back as a list marker.
-
-    Needed by "paste without formatting". A marker in the text is what
-    makes a line a list line here, and a source that writes its own bullets
-    into the plain-text copy it offers -- many do -- would otherwise give
-    exactly the formatted result that was asked to be left behind.
-
-    Only markers this app recognises are removed. A line starting "- " or
-    "* " keeps them: they are the writer's characters, and they were never
-    going to become a list.
+    """Remove anything this app would read back as a list marker -- for
+    "paste without formatting", as many sources write bullets into their
+    plain text. "- " and "* " are the writer's, never a list, and stay.
     """
     lines = []
     for line in (text or "").split("\n"):
@@ -646,17 +490,10 @@ def bullet_level_of(marker):
 
 
 def marker_for(kind, number=1, level=0):
-    """The text a list line of this kind and depth starts with.
-
-    Bullets change glyph with depth, which is free: the three glyphs are
-    ones nobody types by accident, so a line starting with one is a bullet
-    beyond doubt.
-
-    Numbers deliberately do not. The obvious nested scheme -- 1. then a.
-    then i. -- is genuinely ambiguous with ordinary prose, and a note is
-    exactly the kind of document where a line can legitimately begin "a. "
-    or "i. ". Depth is shown by indentation and by the count restarting
-    under each parent instead, which costs nothing and cannot misfire.
+    """The text a list line of this kind and depth starts with. Bullets
+    change glyph with depth -- nobody types them by accident; numbers do
+    not, as "a. " and "i. " begin ordinary lines: depth is the indent, and
+    the count restarting under each parent.
     """
     if kind == "bullet":
         return BULLET_GLYPHS[level % len(BULLET_GLYPHS)] + " "
@@ -664,15 +501,9 @@ def marker_for(kind, number=1, level=0):
 
 
 def normalize_paragraphs(value, line_count=None):
-    """Drop anything that is not a usable paragraph entry.
-
-    The same gatekeeper idea as :func:`normalize_formatting`: one bad entry
-    from an old file or hand-edited JSON should be discarded, not repaired
-    into something that half-works.
-
-    Only non-default properties are kept, so a line that is a plain,
-    left-aligned paragraph produces no entry at all rather than a row of
-    defaults in every note's JSON.
+    """Drop anything that is not a usable paragraph entry -- discarded, not
+    repaired, as :func:`normalize_formatting` does. Only non-default
+    properties are kept: a plain left-aligned line has no entry at all.
     """
     if not isinstance(value, list):
         return []
@@ -714,21 +545,57 @@ def normalize_paragraphs(value, line_count=None):
     return sorted(clean, key=lambda b: b["line"])
 
 
+def list_lines(paragraphs, body=None):
+    """The list lines of *body*: each line starting with a list marker, its
+    kind and the depth *paragraphs* give it (none when they give it to no
+    such line). The one look a day of a series keeps of its own -- its text
+    is plain, but a nested list's depth lives nowhere else (the owner's
+    choice). Without *body*, the list entries as they are."""
+    if not isinstance(body, str):
+        return [{key: value for key, value in entry.items() if key != "align"}
+                for entry in normalize_paragraphs(paragraphs) if entry.get("kind")]
+    lines = body.split("\n")
+    depth = {entry["line"]: (entry["kind"], entry.get("indent", 0))
+             for entry in normalize_paragraphs(paragraphs, len(lines)) if entry.get("kind")}
+    out = []
+    for number, line in enumerate(lines):
+        kind, marker, _rest = parse_list_marker(line)
+        if kind:
+            given = depth.get(number)
+            # Given none, a bullet's glyph tells its level, as the editor reads it.
+            indent = (given[1] if given and given[0] == kind
+                      else bullet_level_of(marker) if kind == "bullet" else 0)
+            entry = {"line": number, "kind": kind}
+            if indent:
+                entry["indent"] = indent
+            out.append(entry)
+    return out
+
+
+def day_paragraphs(paragraphs, body, same_body, own=None):
+    """The lines' looks a day of a series shows, *body* the day's text: the
+    series' *paragraphs* while the day shows the series' words (*same_body*),
+    its lists' depth its *own* when it keeps them; on text of its own, its
+    own list lines, or -- a day saved before it kept them -- the series' list
+    entries, by line (ISSUES_LOG: "The lows wave: a fuzz that never took the
+    road it guarded")."""
+    body = body or ""
+    if not same_body:
+        return list_lines(paragraphs if own is None else own, body)
+    looks = {entry["line"]: entry for entry in normalize_paragraphs(paragraphs, len(body.split("\n")))}
+    for entry in list_lines(own, body) if own is not None else ():
+        looks[entry["line"]] = dict(looks.get(entry["line"], {}), **entry)
+        if "indent" not in entry:
+            looks[entry["line"]].pop("indent", None)
+    return [looks[line] for line in sorted(looks)]
+
+
 def renumber(body, paragraphs):
-    """Make every numbered run read 1, 2, 3 from its own start.
-
-    A run ends at any line that is not a numbered item -- a blank line, a
-    paragraph, or a bullet -- so two numbered lists separated by text each
-    start again at one, which is what a person writing them expects.
-
-    Returns ``(body, shift)``: the rewritten body, and a list of
-    ``(offset, delta)`` describing where characters were inserted or removed,
-    so the caller can move formatting spans to match.
-
-    Nesting keeps one counter per level. Going deeper starts that level from
-    one again on every parent, so the second item's sub-list reads 1, 2, 3
-    rather than carrying on from the first item's. Coming back out resumes
-    the shallower count where it left off.
+    """Make every numbered run read 1, 2, 3 from its own start: a run ends at
+    a paragraph, a bullet at its depth, or two blank lines. One counter per
+    level, a deeper one starting again under each parent. Returns ``(body,
+    shift)``, *shift* the ``(offset, delta)`` of each marker that changed
+    length, for the caller to move the spans by.
     """
     lines = body.split("\n")
     by_line = {b["line"]: b
@@ -750,16 +617,13 @@ def renumber(body, paragraphs):
             if old_marker != new_marker:
                 delta = len(new_marker) - len(old_marker)
                 if delta:
-                    # Only a change in marker *length* moves later text.
-                    # "1." -> "2." rewrites a character without shifting
-                    # anything, and recording it would be noise the caller
-                    # then has to loop over for nothing.
+                    # Only a change of length moves later text; "1." -> "2."
+                    # shifts nothing.
                     shifts.append((pos, delta))
                 lines[i] = new_marker + rest
         elif kind == "bullet":
-            # A bullet interrupts numbering at its own depth and below, but
-            # leaves an outer numbered list alone: a bulleted aside inside
-            # item 2 should not restart the outer count at 1.
+            # A bullet ends the count at its depth and below; a bulleted
+            # aside inside item 2 leaves the outer count alone.
             blanks = 0
             for lv in [lv for lv in counters if lv >= level]:
                 del counters[lv]
@@ -767,47 +631,44 @@ def renumber(body, paragraphs):
             blanks = 0
             counters.clear()
         else:
-            # One blank line does not end a list. People space their items
-            # out, and restarting there numbered such a list 1, 1, 1. Two
-            # blank lines do end it, which is how a genuinely new list is
-            # told apart from a spaced-out one.
+            # One blank line does not end a list -- a spaced-out one read
+            # 1, 1, 1 -- two do: that is a new list.
             blanks += 1
             if blanks > 1:
                 counters.clear()
-        pos += len(lines[i]) + 1        # +1 for the newline
+        # The line as it came, +1 for the newline: shift_spans judges every
+        # offset in that text, and counted off the new markers, the styles
+        # of a long list slid off their words.
+        pos += len(line) + 1
     return "\n".join(lines), shifts
 
 
-def list_deletion_range(lines, start, end, typing=False):
-    """Where a deletion should fall when it reaches a list, or None.
+def list_deletion_range(lines, start, end, typing=False, pasted=None):
+    """Where a deletion should fall when it reaches a list, or None -- Word's
+    answer, where a marker is no character: lines joined keep the first
+    one's marker; typing over a selection ending at an item's start keeps
+    that item; a deletion reaching into a marker takes all of it
+    (ISSUES_LOG: "The marker that was only characters").
 
-    A list's marker is characters, and the editor's own deletes saw only
-    characters: two lines joined kept the second one's marker among the
-    words ("2. two3. three"), typing over whole items swallowed the next
-    item's marker ("x4. four"), and a marker selected and deleted took one
-    character of it, or all, and nothing renumbered. The answer is Word's,
-    where a marker is no character at all:
+    Args:
+        lines: The body's lines.
+        start, end: ``(line, column)``, from 0, in characters -- what the
+            key would delete.
+        typing: The selection is typed over; *pasted* is a paste's text.
 
-    - two lines joined keep the first one's marker, and the second one's
-      goes -- unless nothing of the first line is kept, when the second one
-      simply takes its place, marker and all;
-    - typing over a selection that ends at an item's start keeps that
-      item, number and all, and what is typed takes the selection's place;
-    - a deletion from just after a marker keeps it, and one reaching into
-      a marker takes the whole marker, so the line stops being an item
-      rather than keeping a broken one.
-
-    *lines* are the body's lines; *start* and *end* are ``(line, column)``,
-    lines from 0, columns in characters -- what the key would delete.
-    *typing*: the selection is being typed over. Returns the
-    ``(start, end)`` to delete instead, unchanged when only the numbering
-    needs mending, or None when no list is touched. The caller renumbers.
+    Returns:
+        The ``(start, end)`` to delete instead, or None when no list is
+        touched. The caller renumbers.
     """
     (l1, c1), (l2, c2) = start, end
     k1, m1, _ = parse_list_marker(lines[l1])
+    # A paste bringing its own marker over a selection begun at a marker takes
+    # that marker's place: kept, an item pasted over another read "3. 1. Milk".
+    own = bool(pasted) and bool(parse_list_marker(pasted.split("\n", 1)[0])[0])
+    from_marker = own and bool(k1) and c1 <= len(m1)
     if l1 == l2:
         # Within one line only its own marker can be reached.
-        if not k1 or c1 >= len(m1):
+        if not k1 or (c1 >= len(m1) and not from_marker):
             return None
         return (l1, 0), (l2, max(c2, len(m1)))
     k2, m2, _ = parse_list_marker(lines[l2])
@@ -816,41 +677,42 @@ def list_deletion_range(lines, start, end, typing=False):
         return None
     keeps_words = c1 > (len(m1) if k1 else 0)
     if k2 and c2 <= len(m2):
-        # The end is at the start of an item, before its words.
+        # The end is at the start of an item, before its words. A paste
+        # bringing its own line break takes the covered break's place: kept,
+        # a whole item pasted over another left an empty line after it.
+        upto = (l2, 0) if pasted and pasted.endswith("\n") else None
         if keeps_words:
-            return (l1, c1), (l2, len(m2))
+            return (l1, c1), upto or (l2, len(m2))
         if typing:
-            return (l1, len(m1) if k1 else 0), (l2 - 1, len(lines[l2 - 1]))
+            return ((l1, len(m1) if k1 and not own else 0),
+                    upto or (l2 - 1, len(lines[l2 - 1])))
         return (l1, 0), (l2, 0)
     if k1 and 0 < c1 <= len(m1):
         # From just after (or inside) a marker into words: the item keeps
         # its marker. From the line's very start the marker was chosen too,
         # and goes with the rest -- Ctrl+A and BackSpace empty the note.
-        return (l1, len(m1)), (l2, c2)
+        return (l1, 0 if from_marker else len(m1)), (l2, c2)
     return (l1, c1), (l2, c2)
 
 
 def shift_spans(spans, shifts):
-    """Move formatting spans by the character shifts renumbering caused.
-
-    Without this, renumbering "9. " to "10. " would push every later
-    character along by one and leave the bold in the wrong place -- exactly
-    the mismatch that storing the marker in the body is meant to avoid.
+    """Move formatting spans by the character shifts renumbering caused:
+    "9. " made "10. " pushes every later character one along.
     """
     if not shifts:
         return spans
+    # Every shift is judged against the text as it was: a running total read
+    # a later shift as before a span it had pushed past (the first cell's
+    # bold in the second). Summed off sorted totals, not walked per span.
+    order = sorted(shifts)
+    places = [at for at, _delta in order]
+    totals = [0]
+    for _at, delta in order:
+        totals.append(totals[-1] + delta)
     out = []
     for span in spans:
-        start, end = span["start"], span["end"]
-        # Every offset in *shifts* describes the text as it was, so each one
-        # has to be judged against the span as it was. Adding the deltas one
-        # at a time and comparing against the running total counted a later
-        # shift as being "before" a span it had itself pushed past: with two
-        # cells padded on one row, the bold in the first cell ended up in the
-        # second. Renumbering never showed it, because a line rarely has more
-        # than one marker widening before the same word.
         moved = dict(span)
-        moved["start"] = start + sum(d for at, d in shifts if at < start)
-        moved["end"] = end + sum(d for at, d in shifts if at < end)
+        moved["start"] = span["start"] + totals[bisect.bisect_left(places, span["start"])]
+        moved["end"] = span["end"] + totals[bisect.bisect_left(places, span["end"])]
         out.append(moved)
     return out

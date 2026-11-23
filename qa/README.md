@@ -1,7 +1,7 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~3,000 checks (the eight unit suites beside them bring the
-whole run to ~4,000), all driving the real app headlessly (Xvfb on
+Nine scripts, about 3,700 checks (the eight unit suites beside them bring the
+whole run to about 5,000; `tools/run_tests.py` counts them), all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
@@ -9,8 +9,8 @@ easier to eyeball than to automate.
 
 What all of it actually executes is measured: `py tools/run_coverage.py`
 prints the line-coverage total, the per-file table and the largest
-never-executed regions — 89% of the app's lines today, measured on
-Windows. CI measures on Linux, which runs fewer Windows-only branches,
+never-executed regions — 90.8% of the app's lines when last measured on
+Windows, on 8 November 2026 (89.2% on 3 October). CI measures on Linux, which runs fewer Windows-only branches,
 and fails a run below 80%. A line executed is not a line checked: whether
 a check bites is what the mutants answer.
 
@@ -23,21 +23,25 @@ floor in CI is the guard that runs every time.
 
 Every pull request that changes more than the documentation runs the
 static gates, the unit suites and the qa suite on Windows and on Linux,
-and measures coverage on Linux (a change to Markdown, `docs/` or the test
-plan alone cannot turn a check red, so it runs nothing);
-`py tools/run_tests.py` runs the same on a developer's machine, from a
-scratch copy outside the project. The rest runs on demand, as the table
-says.
+and measures coverage on Linux (`tests.yml`). A change to Markdown or the
+test plan cannot break the app, so it runs only the three gates that read
+them, on Linux (`docs.yml`). `py tools/run_tests.py` runs all of it on a
+developer's machine, from a scratch copy outside the project. The rest
+runs on demand, as the table says. Every workflow's token may only read
+the code (`permissions: contents: read`): nothing in CI pushes, comments
+or publishes. Every action is pinned to the commit its tag named when it
+was chosen, the tag beside it; `tools/check_workflows.py` holds both, and
+says how to move an action to a newer release.
 
 | Layer | What it is | When it runs | What it catches |
 |---|---|---|---|
-| Static gates | Nine `tools/check_*.py` scripts, seconds in all | Eight on every pull request; the link check before a push | A name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates |
+| Static gates | Fourteen `tools/check_*.py` scripts, seconds in all | Twelve on every pull request that changes code; the test plan's, the links' and the English one on every one that changes a document or the plan | A tool that starts the app or a suite before taking the machine's turn and its memory ceiling; a name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; a count of the test plan written down wrong; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates; a Pillow CI tests that the `.exe` does not ship; a workflow whose token may write, or an action not pinned to a commit; a change to the app's code that names no mutant, nor why it has none |
 | Unit suites | Eight `test_*.py`, no window for seven of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity, spelling |
-| The qa suite | Nine scripts, ~3,000 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
+| The qa suite | Nine scripts, about 3,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 396 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the ones worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 595 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 992 cases on 23 November 2026 ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -59,14 +63,14 @@ suite has had, and what each one really was:
 | Script | Primary ground |
 |---|---|
 | `qa1` | notes, categories, templates — plus the editor's heaviest surfaces: tables, rich text, the find bar, bulk actions |
-| `qa2` | recurrence, calendar, duplicates |
+| `qa2` | recurrence, calendar, duplicates — and every long list built past what one frame can scroll through, asked for its last row |
 | `qa3` | trash, sharing, import/export |
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
-| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); spelling, with a stand-in dictionary |
-| `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
+| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); every control a click acts on within Tab's reach, and what Tab lands on in sight; spelling, with a stand-in dictionary |
+| `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, opening an attachment (what opens unasked, what asks and how, the name shown), autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
-| `qa9` | the nested-dropdown-inside-popup fix |
+| `qa9` | the template editor (its tables, live preview, name conflicts, click-away), questions and popups by keyboard (Escape and Enter), Settings sections, Statistics, Duplicates, the image preview, the short window — begun as the nested-dropdown-inside-popup fix |
 
 Beside the GUI suite run eight standalone **unit suites**, each runnable on
 its own (`py test_<name>.py`, from a scratch copy like everything else):
@@ -75,7 +79,8 @@ its own (`py test_<name>.py`, from a scratch copy like everything else):
 `test_entry_module_identity` builds a window — it guards against a second
 copy of the entry module.
 
-Each script's banner carries the finer print. "Primary" matters: checks
+Each script's section comments (`# ----` headings) carry the finer print.
+"Primary" matters: checks
 about one surface deliberately live in several files — which is the
 first of two things here that are not obvious from the file names, and
 both have cost a red CI run to learn:
@@ -93,24 +98,25 @@ the one you happen to be editing:
 |---|---|
 | Bulk-action bar / selection mode | **qa1**, qa7, qa3, qa4, qa9, qa5, qa6 |
 | Theming (apply/track/toggle) | **qa1**, **qa4**, qa5, qa6 |
-| Autosave (debounce, guards, flush) | **qa5**, **qa1**, qa7, qa8, qa6, qa3, qa4, qa2, qa9 |
-| Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
-| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa7, qa6, qa9, qa3, qa8, qa2, qa5 |
-| Tables / drawn grids | **qa1**, qa5, qa7, qa3 |
-| Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
-| Templates | **qa9**, qa1, qa6, qa3, qa7, qa4 |
-| Settings panels | **qa6**, qa9, qa3, qa4, qa7, qa1, qa2, qa5 |
-| Calendar | **qa7**, qa5, qa4, qa6, qa2, qa1, qa9, qa8, qa3 |
-| Trash | **qa3**, **qa6**, qa7, qa5, qa2, qa9, qa1, qa4 |
-| Share codes | **qa3**, qa1, qa5, qa4, qa9 |
+| Autosave (debounce, guards, flush) | **qa5**, **qa1**, qa6, qa7, qa8, qa3, qa4, qa2, qa9 |
+| Editor page scroll/canvas | **qa1**, **qa6**, qa8 |
+| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa6, qa7, qa9, qa3, qa8, qa2, qa5 |
+| Tables / drawn grids | **qa1**, qa5, qa7, qa6, qa8, qa3 |
+| Find in note (Ctrl+F) / find bar | **qa1**, qa8, qa5 |
+| Templates | **qa9**, **qa6**, qa1, qa3, qa2, qa7, qa4 |
+| Settings panels | **qa6**, qa3, qa9, qa4, qa7, qa2, qa1, qa5, qa8 |
+| Calendar | **qa7**, qa5, qa6, qa2, qa4, qa1, qa9, qa8, qa3 |
+| Trash | **qa3**, **qa6**, qa7, qa2, qa5, qa9, qa1, qa4 |
+| Share codes | **qa3**, qa5, qa1, qa4, qa9, qa6 |
 | Export (files, backup) | **qa3**, qa1, qa6, qa8, qa9, qa4, qa5, qa7 |
-| Attachments | **qa7**, qa6, qa3, qa1, qa4, qa5, qa8, qa2 |
-| Recurrence / occurrences | **qa5**, qa7, qa2, qa3, qa1, qa6, qa8, qa4, qa9 |
-| Checklist | **qa1**, qa3, qa7, qa5, qa6, qa2, qa4, qa9, qa8 |
-| Formatting / rich text | **qa1**, qa3, qa5, qa2, qa6, qa9, qa7 |
+| Attachments | **qa7**, qa6, qa3, qa1, qa5, qa4, qa8, qa2 |
+| Recurrence / occurrences | **qa5**, qa7, qa2, qa3, qa6, qa1, qa8, qa4, qa9 |
+| Checklist | **qa1**, qa2, qa6, qa3, qa7, qa5, qa4, qa9, qa8 |
+| Formatting / rich text | **qa1**, qa3, qa5, qa6, qa2, qa9, qa8, qa7 |
 
 Bold = the heavy owner(s): a file carrying at least a quarter of a
-surface's mentions, or leading the next one by more than double.
+surface's mentions (and three at least), or leading the next one by more
+than double.
 
 **Regenerate it rather than editing it** — `py tools/regen_seam_map.py`
 prints the table above, plus the raw per-file counts it came from. The
@@ -131,11 +137,121 @@ real notebook (it has happened; see [CLAUDE.md](../CLAUDE.md),
 `py tools/run_tests.py` does the whole safe-scratch ritual for you and
 is the verdict that counts before a push; `py tools/pre_push_check.py`
 is the static half (the cheap gates CI runs first, compile-all
-included; its docstring lists them) you run before *every* push. The CI's **Linux leg** runs locally too, via
-Docker (`tools/linux-ci/` — build once, then
-`docker run --rm -v "${PWD}:/repo:ro" noteorg-linux-ci`), so the
-Xvfb-only behaviours that used to surface as red CI runs can be caught
-before the push.
+included; its docstring lists them) you run before *every* push. The CI's **Linux leg** runs locally too, in
+Docker, through one door: `py tools/linux_ci.py` (the image is built
+once with `py tools/linux_ci.py --build`; `py tools/linux_ci.py qa5` runs
+one script, `--script qa/probe_bar_width.py` a probe, and `--probe
+<file>` an audit's own probe from a folder below the temporary folder,
+which it sees as `/work`), so the Xvfb-only
+behaviours that used to surface as red CI runs can be caught before the
+push. Never a bare docker command of your own: a docker client that is
+killed leaves its container running in Docker's VM, out of sight, beside
+the next run. The runner names the container, gives it 1,536 MB with no
+swap, two CPUs, a time limit inside it and docker's init, removes it on
+every way out, and ends by printing its memory peak. The container sees
+a copy of what git tracks, as the working tree has it — never a file
+git does not track, whether or not the ignore list names it (a
+notebook, its backups, settings, a Trash kept aside as unreadable), nor
+what a link or a junction at a tracked name points at: such a name
+refuses the run. A new file is shown once git knows it (`git add -N`). It has no network,
+and nothing in it is writable but a `/tmp` of 512 MB held inside its
+memory, so Docker's virtual disk, which never gives space back, does not
+grow.
+
+### A test run is a guest on the computer it runs on
+
+Every runner calls `guest.settle()` (`tools/guest.py`) before it builds
+the app or starts anything. The gate "a test run is a guest"
+(`tools/check_guest.py`) finds runners by what they do — an import of
+the app, the app built, a process started — reads each one's paths with
+the syntax tree, and fails one that starts anything first. Three heavy
+jobs at once, with a runaway test among them, took the desktop down
+([the story](../docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+
+The suites are no exception. Each one's first act is its guest step,
+`as_a_guest()` in `_qa_support.py` (which `hermetic_seed()` calls):
+started by a runner, a suite shares its turn, homes and ceiling; started
+any other way — by CI, or by hand in a scratch copy with
+`NOTEORG_SCRATCH=1` set, which declares the folder a throwaway — it
+settles as a runner would, and without `tools/guest.py` beside it (or in the
+repository's `tools/`) it refuses. They were let off once, for "a runner
+starts them", which nothing made true; the gate now runs each suite's
+opening lines as CI starts them.
+
+No suite trusts the folder it stands in, either. The guards looked for a
+notebook beside themselves, while the app opens the folder a
+`notebook_location.txt` beside it names — in the owner's checkout, her
+own notebook, which `test_data_safety.py` would have deleted (final
+audit, round ten). Every suite now refuses beside an app whose
+`notebook_location.txt` names a folder, and a seed — `hermetic_seed()`,
+and `seed_here()` for the tools that photograph or measure the app —
+writes only where the app's own resolver says the app will open, and
+only when that is the folder it runs in. The gate stands the checkout in,
+with the file naming a stand-in notebook by its path and through
+`%USERPROFILE%`, and every opening must refuse with it untouched.
+
+- **One heavy job at a time, enforced.** A runner takes the machine's
+  turn: an OS lock on `noteorg-guest.lock` in the temporary folder,
+  which the OS frees when the run ends, however it ends. A second run
+  waits and says whose turn it is (`machine : waiting for run_tests
+  (pid 1234, since 14:02:11)`); after an hour (`NOTEORG_GUEST_WAIT`, in
+  seconds) it gives up with exit code 75, BUSY: try again later. What a
+  run starts shares its turn, and never waits on its parent. The static
+  gates alone (`run_tests.py static`, `pre_push_check.py`) take no turn.
+  The Android walk takes it as it starts; the Android build and the
+  emulator itself do not, and for them one at a time is still a rule to
+  keep by hand.
+- **Homes of its own.** `APPDATA`, `LOCALAPPDATA` and `XDG_DATA_HOME`
+  name empty folders of the run's own, for it and everything it starts:
+  the app run from source reads `%APPDATA%\NoteOrganizer`, where the
+  built app kept the owner's notebook until 2026-10-27, and an app that
+  starts in an empty folder copies that notebook in. One test did, on
+  every Windows run, until the final audit's eighth round. `USERPROFILE`
+  is left as it is (git and docker read their settings there), so a
+  probe of the built `.exe` still gives it a profile of its own.
+- **A ceiling sized to the need.** On Windows a job object holds each
+  process to 1,024 MB of committed memory and a run's processes together
+  to 2,048 MB, and ends them with the runner. On Linux, RLIMIT_AS holds
+  each process to twice that address space, but never more than half of
+  what the box has — in the Linux image, half the container's 1,536 MB:
+  above the box's memory the kernel's OOM killer comes first, with
+  SIGKILL and no footer. The figures are sized to measured runs, not to
+  the incident: in a full run (2026-10-29) the largest process took
+  135 MB on Windows, 146 MB all together, and 141 MB in the Linux image,
+  whose container peaked at 227 MB; `tools/bench.py` at 10,000 styled
+  notes, scrolled to the list's end, took 265 MB.
+- **Every child has a bound.** Each child process has a timeout, and a
+  hang is a named failure — HANG — after which the run goes on.
+- **A floor under the disk.** On Windows a run that takes the turn does
+  not start with less than 3,072 MB free where it writes (a whole run's
+  2,048 MB ceiling paged out, and 1 GB for Windows), and ends itself and
+  everything it started if the drive falls below that while it runs
+  (exit code 74). A full C: is where Windows deletes its restore points.
+- **Other languages go through a door.** A JavaScript file that starts a
+  process, and any shell script, under `tools/`, `qa/` or `site/tools/`,
+  refuses to start unless a Python runner that settled started it — the
+  site's browser walk through `site/tools/check_demo.py` — or, for the
+  Store package's test, unless it is inside Windows Sandbox: run by its
+  account, from the path the sandbox starts it from, both. The gate
+  evaluates that guard for a user of this computer, at the sandbox's
+  path and elsewhere, rather than look for the account's name in it; it
+  reads the script as PowerShell's own parser does (which runs nothing),
+  so nothing runs before the guard, and only the literals' values ever
+  reach PowerShell.
+- **Nothing outlives a run.** A scratch folder carries a marker naming
+  the run that made it, and a later run removes the ones whose run is
+  gone — never a folder without the marker. The suites' own temporary
+  files (fixed-name zips, `mkdtemp()` folders) go in a folder of the
+  run's own. Pictures a story keeps to be looked at go after seven days.
+- **Docker's VM keeps what it took.** After a Linux run, `wsl --shutdown`
+  hands the VM's memory back to Windows (it held 2.2 GB with no container
+  running). It stops every WSL distribution and Docker's engine with
+  them, so first check that nothing else is running there (`docker ps`;
+  `wsl -l --running`); Docker Desktop starts its engine again when asked.
+  The VM's own size is not this repository's: it is set on the machine
+  (`.wslconfig`, `memory=`), 2.8 GB here today, and a reinstall resets it
+  to half the machine's memory. `docker info --format "{{.MemTotal}}"`
+  says what it is.
 
 ## Stories: the app walked, not questioned
 
@@ -158,8 +274,12 @@ pressing the buttons they press — the note card, `📋 Generate code`, the
 dialog's own buttons — with each chapter in **its own process**, so
 "close the app and open it again" is real rather than simulated. It
 photographs the app's window as it goes (only the window: a picture of
-the whole screen took every other open window with it), and the pictures
-are meant to be
+the whole screen took every other open window with it). Every picture —
+the stories', `doc_screenshots`', `visual_scenes'` — goes through one
+shutter, `_qa_support.photograph`: cut to the window and the primary
+screen's work area, and refused, with the program named, when another
+program's window lies over it; `-topmost` alone once let an emulator into
+nineteen documentation pictures. The pictures are meant to be
 looked at: two bugs in this project were invisible in the source and
 obvious in a photograph.
 
@@ -190,7 +310,8 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs twenty-three screens — the list, the editor, the calendar,
+photographs every scene in its `SCENES` list (thirty-three on 11 November
+2026) — the list, the editor, the calendar,
 Settings sections, a light theme, and the popups, panels and states that
 releases changed — and compares each against the copy in `qa/screens/`. Those
 copies are committed, so a change of appearance shows up in a diff like
@@ -263,12 +384,17 @@ A new surface joins this list the moment it ships.
 - **Standing invariants:** plain text is the store · `core/` never
   imports tkinter · the worker thread never touches a widget · offsets
   counted in characters · any-script input · fast on weak machines ·
-  the built `.exe` and `%APPDATA%`
+  the built `.exe` and its notebook folder (the profile's
+  `Note Organizer`; `%APPDATA%` before 2026-10-27)
 
 ## House rules for new checks
 
 - A new feature's checks land **with the feature**, covering its seams
   with the old features — not after a field test finds the gap.
+- **A check this run cannot make prints `SKIP <name>`, never a PASS.**
+  A focus Windows would not give, metrics only one platform has, a
+  dictionary this machine lacks: `run_tests.py` counts SKIP lines apart
+  and names each one, so "all passing" never counts a check nobody made.
 - Every new check is **mutation-tested**: break the mechanism it
   guards, watch it fail, then trust it. Old checks go stale silently —
   see the [Issues Log](../docs/ISSUES_LOG.md), "The teeth that had gone
@@ -281,7 +407,41 @@ A new surface joins this list the moment it ships.
   script's FAILURES footer, never just grep for FAIL lines: a mutant
   that crashes the import prints no failures at all, and reads as
   "survived nothing" when it really ran nothing (this exact false-clean
-  happened here once; the runner refuses it).
+  happened here once; the runner refuses it). A mutant only one system
+  can kill says so, `"only_on"` with a note why; elsewhere the runner
+  names it ELSEWHERE and runs nothing.
+- **What a check works out before it judges must fail, not raise.** A
+  mutant that makes a helper raise, or empties a list the check indexes,
+  ends in a FAIL line and the suite goes on. qa7 worked out its frame
+  times outside any guard, qa6 clicked "the second name" in a list of
+  names found by the very keys the mutant took away, qa5 looked up a
+  note kept aside the mutant never made, and qa1 read a value the app
+  makes only when it first shows words beneath the banner; each suite
+  stopped halfway, the rest of its checks unrun (the whole catalogue's
+  run, 2026-11-10). Find what a check clicks by where it sits, not by
+  the property under test; look up with a default, `next(..., None)`;
+  read what the app makes late as the app reads it, `getattr` with a
+  default.
+- **A check aims where its guard alone stands.** A later, wider fix can
+  answer the same input first. A word qa1 copied from the middle of an
+  indented line stayed unindented by the later line-start rule, and the
+  guard the check was written for went untested. A road one system always
+  takes first hides another the same way: on Windows the formatted Cut
+  takes every Cut, so the list's own Cut runs only when another program
+  holds the clipboard, and qa1 now makes that happen. When the later fix
+  is a second road to the same promise, not a wider one, the mutant takes
+  both roads away and its note says so: the release's whole catalogue
+  (2026-11-21) found seven mutants a later fix had quietened: four whose
+  checks a new road answered first, two whose promise it now kept as
+  well, and the one below. And a mutant replaces the call it means to skip, never puts
+  `True or` before it: once the code grew `ask(...) and delete(...)`,
+  `True or ask(...) and delete(...)` skipped the delete too (SA04).
+- **A fixture never sizes itself from a value a mutant can change.** A
+  mutant made a long list's chunk a billion rows, and checks that built
+  "two chunks' worth" began building two billion: 43 GB, and the owner's
+  desktop crashed. Read the size from the code if the check needs it, but
+  cap what is built
+  ([the story](../docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
 - **A check a mutant can lead to a question records the question; it
   never waits for one.** The date checks of 0.84.338 left a note with no
   stub on `_themed_dialog`, and under a mutant that left the date out,
@@ -431,7 +591,9 @@ A new surface joins this list the moment it ships.
   in CI, the export panel's with them. A check that needs work still in
   flight holds off what would finish it (here the poll); a check about
   what the app showed records the call (the panel's `place`), not the
-  screen after an `update()`. A check about work still running when the
+  screen after an `update()`. Wave 6's export checks forgot it and failed
+  one run in three, as a crash or a red fixture: they start their exports
+  through `_fx_start_export`, which holds that first poll. A check about work still running when the
   close stops waiting holds the worker itself: qa3 wraps its file in a
   reader that waits for the stop before reading (`_Held`), a huge file
   without one. A real 600 MB file would make the check a race against the
@@ -481,9 +643,10 @@ A new surface joins this list the moment it ships.
 - **A photograph of a focus ring is a photograph of the desktop foreground.**
   Tk draws a widget's `highlightcolor` only while its toplevel really owns
   the foreground, so `focus_set()` on a card records the focus and draws
-  nothing if another process is in front. `story_look` runs PowerShell
-  between scenes to make each grab, and that process can hold the
-  foreground when the next scene starts — so the focus-ring scene lost its
+  nothing if another process is in front. `story_look` ran PowerShell
+  between scenes to make each grab (the shutter is in-process now,
+  `_qa_support.photograph`), and that process could hold the
+  foreground when the next scene started — so the focus-ring scene lost its
   ring about one run in three, 0.6% apart, reported as a change of shape.
   It passed often enough that the first sighting was written down as
   "observed, not diagnosed" and the next re-run went green — which is how
@@ -492,6 +655,13 @@ A new surface joins this list the moment it ships.
   card; the other order moves the focus off the card and loses the ring
   every time, turning the flake into a certainty. Found by opening the
   failing picture beside the reference — the ring was simply not there.
+
+  A ring can also be missing with the foreground held: **Windows draws no
+  focus colour round a label**, only its resting one. Tk said the keyboard
+  was on an emoji, `highlightcolor` was the ring's, and the photograph of
+  scene 25 showed nothing. So a check asks for the ring in both border
+  colours (qa1's emoji check), and it reads them after an `update()`: Tk
+  can report the focus before it has delivered the `<FocusIn>` that paints.
 - **A `Toplevel` parented to a widget JOINS that widget's tree, and on a
   headless display the pointer never moves.** A hover preview created as
   `tk.Toplevel(row)` appears in `row.winfo_children()`, so it lands inside
@@ -609,6 +779,14 @@ A new surface joins this list the moment it ships.
   older checks asked for the ring's *thickness* — two pixels, which every
   card has — and could not fail at all. A property every candidate shares
   cannot tell them apart.
+
+  And a check about where the list is scrolled sets where it starts. A
+  rebuild keeps the place in pixels and holds it for 0.4 s, and the next
+  rebuild inside that window carries the same target forward: qa1's
+  scroll guards passed for weeks because the list happened to be at the
+  top when they began, and failed together the day a check far above them
+  (Show all bringing a card into sight, 2026-11-03) left it 33 px down.
+  They now start from the top with no restore in force.
 - **A widget clipped by its window still reports its full height.** The
   check for the window's smallest size first asked whether the note
   list's `winfo_height()` could hold a card, and passed at the old,
@@ -640,7 +818,9 @@ A new surface joins this list the moment it ships.
   until shown otherwise.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
-  `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
+  `%TEMP%/notesorg-failure-<label>.txt` (or the folder `NOTEORG_FAILURE_DIR`
+  names: `mutate.py` gives each mutant one of its own, so two runs never
+  read each other's) and prints the path — the terminal
   shows a summary, and a summary is what a piped `tail` throws away. The
   static gates had this and the qa half did not, which is how a rare qa3
   red during a full run went undiagnosed: the names scrolled past, the
@@ -771,8 +951,8 @@ A new surface joins this list the moment it ships.
   also been scrolled to the BOTTOM, where removing a card must move the
   view. It now asserts that the list is long enough to scroll and that
   the view is away from the top *before* it measures anything. Reproduce
-  a CI-only failure locally before fixing it — `tools/linux-ci/` is one
-  docker command, and it showed both faults in ten seconds.
+  a CI-only failure locally before fixing it — `py tools/linux_ci.py` is
+  one command, and the Linux image showed both faults in ten seconds.
 - **A surviving mutant is a question, not a verdict.** When a promise is
   held by two independent mechanisms, breaking one leaves the check
   green — and the honest reading is "I broke the wrong thing", not "the
@@ -888,7 +1068,8 @@ A new surface joins this list the moment it ships.
   stdout is block-buffered on Linux, so a segfault throws away up to a
   buffer's worth of already-printed lines — the CI log's last PASS
   once pointed ~200 checks before the real crash site. Bisect crashes
-  on the Docker mirror with `-e PYTHONUNBUFFERED=1`; trust exit codes
+  in the Linux image (`py tools/linux_ci.py`, which sets
+  `PYTHONUNBUFFERED=1` in the container); trust exit codes
   and the FAILURES footer, never the visible tail of a dead process.
   `tools/run_tests.py` sets `PYTHONUNBUFFERED` for every script it runs,
   so a local run's tail is honest — that is what located the qa1 hang
@@ -1016,7 +1197,13 @@ A new surface joins this list the moment it ships.
   `<Double-Button-1>` by time and place, so any two generated presses at
   one spot are a double-click to Tk. A check about single clicks spaces
   them in place or passes `time=`; a check about double-clicks passes
-  both times explicitly.
+  both times explicitly. A held key is the same: the app never takes a
+  press of time 0 for Enter held down (`_enter_repeats`), so every other
+  check's Enter is a press of its own, and a check of a held key passes
+  `time=` to each press and release, in both of its shapes (presses alone,
+  as Windows repeats; a release and a press at one time, as X11 does),
+  and keeps them out of the run's `REAL KEYS` (below), which would take
+  them for someone typing.
 - **The names gate reads the qa scripts and the unit suites too.** A
   name borrowed from a removed block (a seed's `os`, `io`) fails the
   gate the moment the script is read, instead of halfway through a run.
@@ -1140,3 +1327,14 @@ A new surface joins this list the moment it ships.
   took the guard out survived. A check that asserts something is *not*
   there re-asserts, right before it, that the thing would otherwise be
   there (`fixture: ...`).
+- **Space on one of Tk's own buttons runs its command 100 ms later.**
+  Tk answers the key by scheduling `tk::ButtonInvokeEnd` (8.6.15 on
+  Windows, 8.6.16 in the Linux image), so a check that generates
+  `<space>` and reads the result after one `update()` reads the moment
+  before the press. Found when the first fix for "Show N more" looked for
+  the keyboard straight after the key and saw the button still standing.
+  Settle past it, as qa6's `_kr_press` does. And a widget found by walking
+  the whole Settings content may live in a section that is hidden but
+  alive (General, Appearance and the other sections built once): a check
+  of "the box on this page" found General's name box behind Keyboard
+  shortcuts. Look inside the section showing (`settings_<key>_panel`).

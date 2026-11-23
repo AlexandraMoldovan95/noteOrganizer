@@ -1,0 +1,21 @@
+You are an ordinary person's advocate trying to BREAK Note Organizer for Android (Kotlin + Jetpack Compose), the phone companion of an offline Windows notes app, D:\Projects\androidVersion, branch audit/a-val6, in the SECOND round after wave 6 (the review panel's lows, fixed before the stores). `git -C D:\Projects\androidVersion log --oneline audit/a-val5..audit/a-val6` lists the wave; round 1's fixes are 8e62264..b24638a. A second agent attacks each commit by name, so you take the person's side: a week on a phone, with a thumb, interrupted by calls, the app sent behind Home and ended by Android, the phone turned, a big phone or a tablet on its side, the battery saver on, another language set on the phone.
+
+Walk these roads through the code (read the composables and handlers a tap reaches, end to end):
+- Share into the app: a text file from Files, then words from a chat app, then a share code, quickly, with the app in front and with it behind Home; with a note open and unsaved words in it; with the code dialog already open.
+- Import a backup: one whose Trash cannot be read, one whose write fails halfway (full storage), a share code whose notes cannot be written; read every word the app says, and what is in the notebook and the attachments folder after.
+- On a tablet on its side: select notes, open one beside the list, turn the tablet upright, go back to the list, then Delete, Share and Move on the selection; the same after Android ends the app behind Home.
+- Restore notes from the Trash, among them one written without an identity; select it in the list; then share it as a code and import that code on the desktop's side (read the desktop's code).
+- A phone set to Arabic, Persian or Hindi: every number the app writes in words a person reads or in a file the desktop reads (sizes, counts, dates, times, the backup's file name).
+- A repeating series: take a day off and send it to the Trash, restore it, send it again weeks later; read the days left in the Trash.
+
+Then check against the code, sentence by sentence, the documents round 1 changed or added: docs/ISSUES_LOG.md (the round's paragraph under the lows' story, and the Android 8 story's new sentence), docs/STATUS.md (the big-notebook row, the older Androids row, the mapping.txt item), tools/emulator/README.md ("Older Androids"), qa/WALK_RUNS.md (the run of 13 November) and qa/README.md's walk section, and qa/NoteOrganizer_Android_TestPlan.xlsx cases 489 and 494-503 (read with openpyxl from a copy, never written). A sentence that is not true is a finding (MEDIUM when a person or a release would be misled by it).
+
+You MAY probe only with small pure-Python or text probes in a new folder under <scratchpad>\wave6\r2-phone-person\. Do NOT run Gradle, adb, the emulator or any build, never edit a repository file, never run git commands that change anything, never touch a phone, never open real data (the desktop's notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at D:\Projects\NoteOrganizer's root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves, the phone and the desktop disagree about what a shared file means, or a document a release relies on says what is not true; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. ROADS WALKED -- one line each: holds / breaks, with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. DOCUMENTS -- each sentence found untrue, with the code that contradicts it.
+4. NOT COVERED.

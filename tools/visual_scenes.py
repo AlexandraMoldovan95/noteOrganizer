@@ -20,32 +20,28 @@ so sub-frame flickers can escape it; that limit is honest and logged.
 
 RUNNING IT (the qa safety rule applies -- NEVER in place)
 ---------------------------------------------------------
-Copy ``note_organizer.py``, the ``noteorganizer/`` package and this
-script into a scratch folder outside the project tree, then:
+Copy ``note_organizer.py``, the ``noteorganizer/`` package, this script,
+``tools/guest.py`` and ``qa/_qa_support.py`` into a scratch folder outside
+the project tree, then:
 
     py visual_scenes.py            # still scenes
     py visual_scenes.py --burst    # burst scenes too
 
 Output lands in ``./shots``. Windows only (ImageGrab + real win32
-windows); the CI Linux job has no place here.
+windows); the CI Linux job has no place here. guest.py gives the run its
+turn and its memory ceiling before the app is built; every frame goes
+through _qa_support's shutter (a picture holds only the app's pixels).
 """
 
-# HERMETIC SEED -- same guard as the qa scripts, for the same reason.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# THE TURN, THE CEILING AND THE SEED before the app -- this builds the whole
+# app, on the screen. _qa_support.seed_here does all three, after the DPI call
+# below (it loads tkinter): see its use there.
+import os as _guest_os, sys as _guest_sys
+_guest_sys.path.insert(0, _guest_os.path.dirname(_guest_os.path.abspath(__file__)))
+if not _guest_os.path.exists(_guest_os.path.join(_guest_sys.path[0], '_qa_support.py')):
+    _guest_sys.exit('REFUSING to run: no _qa_support.py here, the shutter. Copy '
+                    'tools/guest.py and qa/_qa_support.py beside this script (see '
+                    'its docstring).')
 
 import ctypes
 import json
@@ -64,8 +60,13 @@ except Exception:
     except Exception:
         pass
 
-from PIL import ImageChops, ImageGrab, ImageStat
+from PIL import ImageChops, ImageStat
 
+# After the DPI call: _qa_support loads tkinter. seed_here settles as a guest
+# (tools/guest.py, beside it), then seeds an empty notebook here: only where
+# the app will open it, asked of its own resolver, and never beside notes.
+from _qa_support import grab as _shutter, seed_here
+seed_here()
 import note_organizer as NO
 import tkinter as tk
 from noteorganizer.core import tables as core_tables
@@ -106,9 +107,12 @@ def pump(n=6, sleep=0.02):
 
 
 def grab():
-    x, y = app.winfo_rootx(), app.winfo_rooty()
-    w, h = app.winfo_width(), app.winfo_height()
-    return ImageGrab.grab(bbox=(x, y, x + w, y + h))
+    """The window, through the one shutter: cut to the primary screen's work
+    area, and refused when another program's window lies over it."""
+    img, why = _shutter(app)
+    if img is None:
+        raise RuntimeError('NOT TAKEN: %s' % why)
+    return img
 
 
 def capture(name):
@@ -130,6 +134,14 @@ def diff_score(a, b):
 
 def burst(name, action, frames=10):
     """Frames around an action; consecutive diff scores expose transients."""
+    try:
+        _burst(name, action, frames)
+    except RuntimeError as exc:
+        log['bursts'].append({'name': name, 'error': str(exc)})
+        print('  BURST NOT TAKEN', name, exc)
+
+
+def _burst(name, action, frames):
     pump()
     series = [grab()]
     stamps = [0.0]
@@ -252,7 +264,7 @@ def s06():
     app._working_checklist = [
         {'text': 'pack the bags', 'done': True},
         {'text': 'call the venue', 'done': False}]
-    if hasattr(app, 'checklist_items_frame'):
+    if hasattr(app, '_checklist_rows'):
         app._render_checklist_items()
     if not app._checklist_open:
         app.toggle_checklist_section()
@@ -356,7 +368,7 @@ def main():
     errs = len(log['tk_errors'])
     # A scene that raised is recorded with an 'error' key — and used to
     # be invisible to the exit code, so a failed scene still exited 0
-    # and CI stayed green over it.
+    # and the run read as passed.
     scene_errs = sum(1 for entry in log['scenes'] + log['bursts']
                      if 'error' in entry)
     print(f"done: {len(log['scenes'])} scenes, {len(log['bursts'])} bursts, "

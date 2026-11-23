@@ -1,0 +1,22 @@
+You are an ordinary person's advocate trying to BREAK Note Organizer for Android (Kotlin + Jetpack Compose), the phone companion of an offline Windows notes app, D:\Projects\androidVersion, branch audit/a-val6, in the FIRST round after wave 6 (the review panel's lows, fixed before the stores). `git -C D:\Projects\androidVersion diff audit/a-val5..audit/a-val6` is the whole wave; a second agent attacks each commit by name, so you take the person's side: what someone does in an ordinary week on a phone, with a thumb, interrupted by calls, the app sent behind Home and ended by Android, the phone turned, the battery saver on.
+
+Walk these roads through the code (read the composables and handlers a tap reaches, end to end):
+- Select several notes in the list, then: search, change the sort, file one into a category, pin one, let an autosave land, rotate, go behind Home and come back after Android ended the app. Is exactly the set the person picked still picked, and does Delete / Share / Move act on exactly that set?
+- Type a name in Settings → Your name, press Home, let Android end the app, open it again; the same with the name emptied, and with the name unchanged.
+- Share a text file and then a second one into the app from another app, quickly; share one while a note is open with unsaved words.
+- Import a backup that cannot be written (full storage) or is cancelled halfway; then look at the notes and the files the notebook had before.
+- A repeating series: take a day off, put it back, take it off again; delete the series, restore from the Trash. The calendar's History with a series open while notes change.
+- A notebook written by the desktop or by hand where a tick or a pin is 1, "true", 1.0 or null: the list, the editor, a checklist's count, a template, export, words sent to another app. Tick and untick: does anything flip the person did not touch?
+- Start the app on Android 8 (the focus catcher, SDK < P): does the keyboard stay down at start, and come up when the person taps the search box?
+
+Then check the documents wave 6 added or changed against the code, sentence by sentence: docs/ISSUES_LOG.md (its two new stories), docs/STATUS.md (the new rows), README.md (the changed line), D:\Projects\NoteOrganizer\docs\RELEASE_ANDROID.md ("Rolling out, and stopping a release" -- it lives in the desktop's repository), tools/emulator/README.md ("Older Androids"), qa/README.md, and qa/NoteOrganizer_Android_TestPlan.xlsx cases 489-496 (read it with openpyxl in a probe, never write it). A sentence that is not true of the code is a finding (MEDIUM when a person or a release would be misled by it).
+
+You MAY probe only with small pure-Python or text probes in a new folder under <scratchpad>\wave6\r1-phone-person\. Do NOT run Gradle, adb, the emulator or any build (another job holds the machine), never edit a repository file, never run git commands that change anything, never touch a phone, never open real data (the desktop's notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at D:\Projects\NoteOrganizer's root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves, or the phone and the desktop disagree about what a shared file means; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. ROADS WALKED -- one line each: holds / breaks, with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. DOCUMENTS -- each sentence found untrue, with the code that contradicts it.
+4. NOT COVERED.

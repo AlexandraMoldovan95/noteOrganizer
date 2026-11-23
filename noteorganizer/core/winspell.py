@@ -1,30 +1,12 @@
 """Windows' own spell checker, reached through COM with ctypes.
 
-WHY THIS EXISTS
----------------
-Windows 8 and later carry a spell checker for every language whose typing
-features are installed -- the one Edge and Mail underline with. Using it
-means no dictionary ships with the app, nothing new to install, and the
-languages checked are the ones the person already chose for their computer.
-It is reached through the Spell Checking API, a COM interface, with ctypes
-from the standard library, so it costs no dependency.
-
-This is the platform part, kept small: open a checker per language, ask it
-which ranges of a text it calls wrong, for suggestions, and to add a word to
-the person's dictionary. What the editor does with the answers is
-core/spelling.py.
-
-EVERYTHING HERE DEGRADES
-------------------------
-Off Windows, on a Windows with no dictionary, or when COM refuses, every
-function returns an empty answer instead of raising, and the editor simply
-underlines nothing -- which is what it did before this existed.
-
-THE ONE CALL THAT WRITES
-------------------------
-Speller.add puts a word in the person's Windows dictionary, shared with
-every program that uses this checker. It runs only when someone chooses
-"Add to Windows dictionary"; tests use a stand-in, never this.
+Windows 8 and later check every language whose typing features are
+installed: no dictionary ships, nothing new installs, no dependency. Kept
+to the platform part -- a checker per language, the ranges it calls wrong,
+suggestions, a word added; what the editor does is core/spelling.py.
+Off Windows, with no dictionary, or when COM refuses, every function returns
+an empty answer. Speller.add, the one call that writes, adds to the person's
+Windows dictionary, only on "Add to Windows dictionary" -- never in a test.
 """
 
 import sys

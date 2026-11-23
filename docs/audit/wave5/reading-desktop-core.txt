@@ -1,0 +1,12 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **every file in D:\Projects\NoteOrganizer\noteorganizer\core\** (18 modules, ~10,400 lines: model, storage, paths, recurrence, richtext, tables, formatting, sharing, spelling, winspell, clipboard, themes, calculator, categories, duplicates, welcome, diagnostics, single_instance). Read ALL of them in full with the Read tool, keeping short running notes as you go.
+
+Context: Note Organizer is an offline Windows notes app (Python + Tkinter). `core/` is data and rules and must never import tkinter. docs\CODE_TOUR.md walks these modules and docs\ARCHITECTURE.md explains the design — check their claims about core against the code (you may read CODE_TOUR's core sections). Current state: APP_VERSION 0.100.513, branch audit/d-val5, the final audit is closed; we are looking for what is TRUE now, not for style. On 10–11 Nov tables.align() was fixed to count shifts against the original lines — verify it is consistent, but do not re-report the old bug.
+
+Hard rules: read only. Never edit, write, or run anything (no python, no tests, no git that changes state). Never open the real data: notebook_location.txt, any notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments/, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer. Grep is fine.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what each module owns and the main data flow.
+2. MISMATCHES — a comment, docstring or CODE_TOUR/ARCHITECTURE claim the code does not do. Each: file:line — what it says — what the code does (file:line). Concrete only.
+3. SUSPECTED BUGS — only real behaviour a person could reach (data loss, wrong result, crash, freeze), with the mechanism and the road. Mark each "suspected, not run". No refactors, no taste.
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

@@ -8,7 +8,14 @@ layer -- the app runs on Windows and this suite runs on Linux.
 Check descriptions stay ASCII-only, for the same reason test_calculator.py
 does: printing a bullet crashes a plain Windows console on cp1252.
 """
-import note_organizer as NO
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+import note_organizer as NO  # noqa: E402
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
                                         html_document, reflow_wrapped)
 from html.parser import HTMLParser
@@ -467,6 +474,15 @@ check("a numbered list is never rejoined either",
 _blocks = _wrapped(70, "    ") + "\n\n" + _wrapped(70, "    ")
 check("a blank line still separates what it separated",
       reflow_wrapped(_blocks) == ORIGINAL + "\n\n" + ORIGINAL)
+
+# Text that is not a column comes back as it went in: rebuilt, two blank lines
+# became one, the blank lines at either end went, and every line lost its end.
+_spaced = "\n\nTitle  \n\n\n\nfirst part\n \n\nsecond part   \n\n"
+check("text that is not a column keeps its blank lines and line ends",
+      reflow_wrapped(_spaced) == _spaced)
+_runs = "\n\n\n" + _wrapped(70, "    ") + "\n\n\n\n" + _address + "\n"
+check("a column between blank runs is joined, and the runs are kept",
+      reflow_wrapped(_runs) == "\n\n\n" + ORIGINAL + "\n\n\n\n" + _address + "\n")
 
 # A hyphen at the break is kept and the space dropped. "more-or-less" split as
 # "more-" / "or-less" is the case that matters: removing the hyphen made it
@@ -935,9 +951,9 @@ from noteorganizer.core.formatting import (list_deletion_range as _ldr,
                                            parse_list_marker, renumber)
 
 
-def _ld_apply(body, start, end, typed=""):
+def _ld_apply(body, start, end, typed="", pasted=False):
     lines = body.split("\n")
-    plan = _ldr(lines, start, end, typing=bool(typed))
+    plan = _ldr(lines, start, end, typing=bool(typed), pasted=typed if pasted else None)
     (l1, c1), (l2, c2) = plan if plan else (start, end)
     out = "\n".join(lines[:l1] + [lines[l1][:c1] + typed + lines[l2][c2:]]
                     + lines[l2 + 1:])
@@ -975,7 +991,23 @@ for _ld_name, _ld_args, _ld_want in (
         ("words typed over a line up to an item", ("plain words\n1. one", (0, 0), (1, 0), "x"),
          "x\n1. one"),
         ("everything selected from the first line's start", (_LD, (0, 0), (3, 7)), ""),
-        ("bullets joined", ("• a\n• b\n• c", (0, 3), (1, 0)), "• ab\n• c")):
+        ("bullets joined", ("• a\n• b\n• c", (0, 3), (1, 0)), "• ab\n• c"),
+        # A paste bringing its own marker or line break takes the place of
+        # the one it covers: kept as a letter's are, "2. 3. three".
+        ("a whole item pasted over item 2, its break and all",
+         (_LD, (1, 0), (2, 0), "3. three\n", True), "1. one\n2. three\n3. three\n4. four"),
+        ("a whole item pasted over item 2, without its break",
+         (_LD, (1, 0), (2, 0), "3. three", True), "1. one\n2. three\n3. three\n4. four"),
+        ("words and a break pasted from item 2's words to item 3's start",
+         (_LD, (1, 4), (2, 0), "x\n", True), "1. one\n2. tx\n3. three\n4. four"),
+        # ...begun at an item's marker, wherever the selection ends: over the
+        # last item, one item's words ("3. 1. Milk").
+        ("a whole item pasted over the last item",
+         ("1. one\n2. two\nafter", (1, 3), (2, 0), "1. x\n", True), "1. one\n2. x\nafter"),
+        ("a whole item pasted over one item's words",
+         (_LD, (1, 3), (1, 6), "9. x", True), "1. one\n2. x\n3. three\n4. four"),
+        ("a letter typed over one item's words",
+         (_LD, (1, 3), (1, 6), "x"), "1. one\n2. x\n3. three\n4. four")):
     _ld_got = _ld_apply(*_ld_args)
     check(f"list deletion: {_ld_name} ({_ld_got!r})", _ld_got == _ld_want)
 check("a deletion that reaches no list is left alone, as is one inside an "
@@ -1034,6 +1066,13 @@ check("rows and cells left open, as HTML allows, end where the next begins",
       == "<table><tr><td>c</td></tr></table>")
 check("a document without markers still gives its body",
       _clip.fragment_of("<html><body><p>x</p></body></html>") == "<p>x</p></body></html>")
+# ...from where its body starts: lower() made two letters of each "İ" in its
+# head, and the body was looked for that many places too late.
+_tr_doc = ("<html><head><title>" + "İ" * 30 + "</title></head>"
+           "<BODY lang=tr><p>x</p></body></html>")
+check(f"a document without markers, a Turkish title in its head, gives its body "
+      f"whole ({_clip.fragment_of(_tr_doc)[:12]!r})",
+      _clip.fragment_of(_tr_doc) == "<p>x</p></body></html>")
 
 # ---- A row of one cell is no table here: its words come alone ----
 check("one cell copied as a table pastes as its words",
@@ -1077,6 +1116,180 @@ check(f"a column of 20,000 lone cells comes out whole, its offsets moved "
       f"by halving ({_uc_took:.2f} s)",
       _uc_out.endswith("r19999\n") and _uc_out[_uc_last:].startswith("r19999")
       and _uc_took < 2.0)
+# Misnested markup: 20,000 bolds, 20,000 italics, then the bolds closed --
+# each close searched one shared list behind every open italic. 195 KB took
+# 8.9 s on Linux; the bound is wide on purpose, as above.
+from noteorganizer.core.richtext import html_to_note as _mn_read
+_mn_html = "Hello " + "<b>" * 20_000 + "<i>" * 20_000 + "world" + "</b>" * 20_000
+_mn_started = _time.perf_counter()
+_mn_text, _mn_spans, _mn_paras = _mn_read(_mn_html)
+_mn_took = _time.perf_counter() - _mn_started
+check(f"misnested markup is read in one pass ({_mn_took:.2f} s), its text whole",
+      _mn_text == "Hello world" and _mn_took < 2.0)
+# Whether a fragment holds a block tag decides whether its newlines are text.
+# "<" before a run of spaces was split every way "\s*/?\s*" could split it:
+# 8,000 spaces held a paste 4 s. Timed in this run against the same
+# run before a tag, the quickest of three each.
+from noteorganizer.core import richtext as _bt_rt
+check("a block tag is found with spaces or a slash after its '<', in any case, "
+      "and a longer name or an inline tag is not one",
+      all(_bt_rt._BLOCK_TAG_RE.search(s) for s in ("< / div>", "<br>", "</ P>", "<\n\tli x"))
+      and not any(_bt_rt._BLOCK_TAG_RE.search(s) for s in ("<prefix>", "<b>", "< x", "/p")))
+
+
+def _quickest_read(fragment):
+    best = None
+    for _ in range(3):
+        started = _time.perf_counter()
+        _mn_read(fragment)
+        took = _time.perf_counter() - started
+        best = took if best is None else min(best, took)
+    return best
+
+
+_bt_run = _quickest_read("<" + " " * 6000 + "x")
+_bt_tag = _quickest_read("<" + " " * 6000 + "p")
+check("a fragment's '<' before 6,000 spaces is read as quickly as the same run "
+      "before a tag (%.1f ms against %.1f ms)" % (_bt_run * 1000, _bt_tag * 1000),
+      _bt_run < 4 * _bt_tag + 0.25)
+
+# ---- A page past the ceiling is read only as far as the ceiling ----
+# Nothing after it is kept, and 10 MB of paragraphs was parsed to its end
+# all the same, for seconds (2026-10-28). Counted in characters fed to
+# the parser, never in time.
+from noteorganizer.core import richtext as _rtx
+from noteorganizer.core import clipboard as _clipx
+from noteorganizer.core.formatting import shift_spans as _shift
+import random as _rnd
+
+_fed = [0]
+_real_feed = _rtx._Reader.feed
+
+
+def _counting_feed(self, data):
+    _fed[0] += len(data)
+    return _real_feed(self, data)
+
+
+_rtx._Reader.feed = _counting_feed
+try:
+    _big_page = "<p>x</p>" * 1_250_000
+    _big_text = html_to_note(_big_page)[0]
+finally:
+    _rtx._Reader.feed = _real_feed
+check(f"a 10 MB page past the paste ceiling is read only as far as it "
+      f"({_fed[0]:,} of {len(_big_page):,} characters)",
+      _fed[0] < 1_000_000 and 0 < len(_big_text) <= MAX_PASTE_CHARS)
+
+
+def _shift_one_by_one(spans, shifts):
+    return [dict(s, start=s["start"] + sum(d for at, d in shifts if at < s["start"]),
+                 end=s["end"] + sum(d for at, d in shifts if at < s["end"]))
+            for s in spans]
+
+
+_sr = _rnd.Random(20261028)
+_shift_agree = True
+for _i in range(300):
+    _spans = [{"start": a, "end": a + _sr.randint(0, 9), "style": "bold"}
+              for a in (_sr.randint(0, 60) for _ in range(_sr.randint(0, 6)))]
+    _shifts = [(_sr.randint(0, 70), _sr.choice([-2, -1, 1, 3]))
+               for _ in range(_sr.randint(0, 12))]
+    _shift_agree = _shift_agree and _shift(_spans, _shifts) == _shift_one_by_one(_spans, _shifts)
+check("spans move by summed shifts exactly as they did one shift at a time",
+      _shift_agree)
+
+# renumber() reports its shifts in the text as it came, as shift_spans
+# judges them: counted off the new markers, a list of 120 items all "1."
+# put the bold of item 13 onward on the space before its word.
+_rn_lines = ["1. w%d" % _i for _i in range(1, 121)]
+_rn_spans, _rn_at = [], 0
+for _rn_line in _rn_lines:
+    _rn_spans.append({"start": _rn_at + 3, "end": _rn_at + len(_rn_line), "style": "bold"})
+    _rn_at += len(_rn_line) + 1
+_rn_body, _rn_shifts = renumber("\n".join(_rn_lines),
+                                [{"line": _i, "kind": "number", "indent": 0}
+                                 for _i in range(len(_rn_lines))])
+_rn_off = [s for s, line in zip(_shift(_rn_spans, _rn_shifts), _rn_lines)
+           if _rn_body[s["start"]:s["end"]] != line[3:]]
+check(f"bold on every item of a renumbered 120-item list stays on its word "
+      f"({len(_rn_off)} off)", not _rn_off)
+
+# The structure open at a copy's start marker: every stray end tag walked
+# the list of open ones, and 30,000 unclosed tables with as many stray
+# </td> took seconds. Counted as comparisons with the list, never time.
+_open_reader = _clipx._OpenAtMarker()
+_open_reader.feed("<table>" * 3000 + "</td>" * 3000)
+_walks = [0]
+
+
+class _CountingList(list):
+    def __contains__(self, item):
+        _walks[0] += 1
+        return list.__contains__(self, item)
+
+
+_open_reader2 = _clipx._OpenAtMarker()
+_open_reader2.open = _CountingList()
+_open_reader2.feed("<table>" * 3000 + "</td>" * 3000)
+check(f"stray end tags before a copy's marker are not looked for along every "
+      f"open table ({_walks[0]:,} walks)",
+      _walks[0] == 0 and _open_reader.open == ["table"] * 3000
+      and _clipx.fragment_of("<table><tr><!--StartFragment--><td>a</td>"
+                             "<!--EndFragment--></tr></table>")
+      == "<table><tr><td>a</td></tr></table>")
+
+# A table exported or copied: every empty cell walked its row's line for its
+# pipes, and every row walked every merge -- one row of 3,000 empty cells took
+# four seconds. Counted as walks, never time.
+from noteorganizer.core import richtext as _rtx, tables as _tbx
+_pipe_walks, _merge_walks = [0], [0]
+_real_pipes, _real_merges = _tbx.pipe_positions, _tbx.merge_map
+
+
+class _CountingDict(dict):
+    def __iter__(self):
+        _merge_walks[0] += 1
+        return dict.__iter__(self)
+
+    def items(self):
+        _merge_walks[0] += 1
+        return dict.items(self)
+
+
+class _CountingSet(set):
+    def __iter__(self):
+        _merge_walks[0] += 1
+        return set.__iter__(self)
+
+
+def _counted_pipes(line):
+    _pipe_walks[0] += 1
+    return _real_pipes(line)
+
+
+def _counted_merges(matrix):
+    spans, covered = _real_merges(matrix)
+    return _CountingDict(spans), _CountingSet(covered)
+
+
+_tbx.pipe_positions, _tbx.merge_map = _counted_pipes, _counted_merges
+try:
+    _wide_html = _rtx.note_to_html(
+        "\n".join(_tbx.format_table([[""] * 300] * 2)))
+    _wide_walks = _pipe_walks[0]
+    _long_html = _rtx.note_to_html(
+        "\n".join(_tbx.format_table([["a", "<"]] * 200)), inline_tables=True)
+    _long_walks = _merge_walks[0]
+finally:
+    _tbx.pipe_positions, _tbx.merge_map = _real_pipes, _real_merges
+check(f"a table's export finds a row's pipes a few times, not once per empty "
+      f"cell ({_wide_walks} walks for 2 rows of 300)",
+      _wide_walks <= 2 * 2
+      and _wide_html.count("<td") + _wide_html.count("<th") == 600)
+check(f"...and sorts its merges into rows once, not once per row "
+      f"({_long_walks} walks for 200 rows)",
+      _long_walks <= 4 and _long_html.count('colspan="2"') == 200)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

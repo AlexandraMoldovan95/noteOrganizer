@@ -10,7 +10,14 @@ function with no distinction made between them.
 Check descriptions are kept ASCII-only on purpose — printing the real
 '−'/'×' characters crashes on a plain Windows console using the cp1252
 codepage, unrelated to whether the evaluator itself works correctly."""
-import note_organizer as NO
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+import note_organizer as NO  # noqa: E402
 
 fails = []
 def check(name, cond):
@@ -111,6 +118,33 @@ check('whole number displays without decimal', fmt(4.0) == '4')
 check('negative whole number displays cleanly', fmt(-10.0) == '-10')
 check('fraction displays as-is', fmt(2.5) == '2.5')
 check('float noise from 0.1+0.2 displays as clean 0.3', fmt(ev('0.1+0.2')) == '0.3')
+
+# Brackets 200 deep, or a thousand signs, outran the parser's recursion: the
+# RecursionError reached the window's error toast, and the display was not
+# set to Error.
+def _deep(expression):
+    """The answer, or "raised": a raise is the failure this guards, and it
+    must be one red check, not a crash that ends the suite before its footer."""
+    try:
+        return ev(expression)
+    except RecursionError:
+        return "raised"
+
+
+# Typed on a keyboard, a sum said Error: - * x / : are the buttons'
+# − × ÷, and a comma between digits is the decimal point, as Romanian writes.
+check('a keyboard\'s - * x / : are the buttons\' signs',
+      (ev('5-3'), ev('5*3'), ev('5x3'), ev('5/2'), ev('5:2')) == (2.0, 15.0, 15.0, 2.5, 2.5))
+check('a comma between digits is the decimal point, and nowhere else',
+      ev('2,5+2,5') == 5.0 and ev('2,+3') is None and ev('1,2345') == 1.2345)
+# ...but not before exactly three digits: 1,000 is a thousand in English.
+check('a comma before exactly three digits is refused, never read as a point',
+      ev('1,000+5') is None and ev('2,500') is None)
+
+check('200 nested brackets give no answer rather than an error',
+      _deep('(' * 200 + '1' + ')' * 200) is None)
+check('a thousand minus signs give no answer rather than an error',
+      _deep('-' * 1000 + '1') is None)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

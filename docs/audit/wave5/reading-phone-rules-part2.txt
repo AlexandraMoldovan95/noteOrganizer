@@ -1,0 +1,14 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **the Android app's core rules, part 2**, in D:\Projects\androidVersion\app\src\main\java\ro\noteorganizer\app\: Exporting.kt, Tables.kt, Calculator.kt, Paragraphs.kt, Themes.kt, Normalize.kt, Backup.kt, Styling.kt, Settings.kt, Templates.kt, Editing.kt, Sharing.kt, Finding.kt, Welcome.kt, Stats.kt, Files.kt, Startup.kt, Outgoing.kt, Reminders.kt, PyText.kt, Links.kt (~8,000 lines). Read ALL of them in full with the Read tool, keeping short running notes as you go.
+
+Context: the Android app (Kotlin + Compose, 0.14.0 / versionCode 17, branch audit/a-val5) is the companion of the desktop Note Organizer (Python, D:\Projects\NoteOrganizer). The desktop's Python is the SPECIFICATION: these files port its rules (tables.py, calculator.py, formatting.py, themes.py, model.py normalize_note, sharing.py, storage.py, richtext export). Read D:\Projects\androidVersion\docs\ARCHITECTURE.md's map first (short). Where a rule looks off, compare with the desktop function it ports (grep in D:\Projects\NoteOrganizer\noteorganizer\core\). Note: on 10–11 Nov the desktop changed tables.align (shifts counted against the original lines), Find (row by row), the size grid (drawn from column 1) and its table insert (one blank line above another table) — check whether the phone's Finding.kt / Tables.kt / Editing.kt now agree or differ.
+
+Hard rules: read only. Never edit, write, or run anything (no gradle, no adb, no python). Never open real data (any notes_data*.json outside test resources, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer, D:\Projects\NoteOrganizer\notebook_location.txt).
+
+Already known, do NOT report as new: docs\STATUS.md lags behind those desktop fixes; CLAUDE.md names the desktop as 0.97.405; Editing.kt insertTable leaves two blank lines above another table (but do confirm where).
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what each file owns.
+2. MISMATCHES — a KDoc/comment the code does not do, or a rule that answers differently from the desktop's Python without STATUS.md's "differs on purpose" list naming it. Each: file:line — what it says/does — what the desktop does (file:line). Concrete only.
+3. SUSPECTED BUGS — only real behaviour a person could reach, mechanism + road. Mark each "suspected, not run". No refactors, no taste.
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

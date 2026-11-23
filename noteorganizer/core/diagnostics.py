@@ -1,13 +1,12 @@
-"""What the app may say about itself when something goes wrong, and the
-pages it opens in the browser.
+"""What the app may say about itself when something goes wrong, the pages
+it opens in the browser, and the licenses file it ships with.
 
-crash_log.txt says it, on this computer only: the version, the Windows it
-runs on, how it draws on this screen, and how big the notebook is. Never what
-the notes say, and never a path: a folder's path holds the person's name.
-
-The app connects to nothing. Feedback goes through the Microsoft Store's
-reviews, and the privacy policy is a page on Google Sites -- the browser
-opens both.
+crash_log.txt says it, on this computer only. Under each entry's dated head,
+one line gives the version, the Windows it runs on, how it draws on this
+screen, and how big the notebook is: never what the notes say, and never a
+path, since a folder's path holds the person's name. The trace below it is
+Python's own, and can hold both. The app connects to nothing: the Store's
+reviews and the privacy policy on Google Sites open in the browser.
 """
 
 import os
@@ -25,6 +24,10 @@ PRIVACY_URL = "https://sites.google.com/view/noteorganizer-privacy"
 # where people who install from a store, and never see LICENSE, read it.
 ABOUT_TERMS = ("Free software under the MIT license, provided as is. "
                "Keep a backup of your notes.")
+
+# The licenses of everything the built app carries, opened from About.
+# tools/make_third_party_notices.py writes it; NoteOrganizer.spec ships it.
+NOTICES = "THIRD_PARTY_NOTICES.txt"
 
 # The Microsoft Store's review page, once the app is published there. While
 # it is None, About has no Feedback card: reviews are the only way in.
@@ -94,11 +97,9 @@ def details():
 def append_crash_log(kind, text, folder=None):
     """Add one entry to crash_log.txt: when, what kind of failure, the
     details above on one line, then *text*. *folder* is where the log goes;
-    the data folder when not given.
-
-    Never raises -- it runs where something has already gone wrong, and a
-    start-up crash before the folder is known simply goes unlogged rather
-    than taking the crash window with it.
+    the data folder when not given. Never raises -- it runs where something
+    has already gone wrong, and a start-up crash before the folder is known
+    goes unlogged rather than taking the crash window with it.
 
     Returns:
         The log's path, or None when nothing could be written.

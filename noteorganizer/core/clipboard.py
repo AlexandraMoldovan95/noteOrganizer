@@ -1,25 +1,14 @@
 """Reading and writing the richer clipboard formats Windows keeps.
 
-WHY THIS EXISTS
----------------
-Tkinter's ``clipboard_get`` only ever returns plain text. Windows holds
-several formats at once -- copying from a browser puts ``CF_HTML``
-alongside the plain text -- and reaching those is the difference between a
-paste that keeps its bold and one that does not.
-
-It uses ``ctypes``, which is in the standard library, so this costs no new
-dependency.
-
-EVERYTHING HERE DEGRADES
-------------------------
-The app ships for Windows, but its tests run on Linux, and the clipboard
-can be locked by another program at the moment we ask. So every function
-returns None (or does nothing) rather than raising: a paste that cannot
-find rich text falls back to plain text, which is exactly what the app did
-before any of this existed. Nothing here is allowed to take the editor
-down with it.
+Tkinter's ``clipboard_get`` returns plain text only, while a browser's copy
+puts ``CF_HTML`` beside it: reaching that keeps a paste's bold. ``ctypes``,
+from the standard library, so no new dependency. The tests run on Linux,
+and another program can hold the clipboard locked, so every function
+returns None (or does nothing) rather than raising: a paste with no rich
+text falls back to plain text, and nothing here takes the editor down.
 """
 
+import re
 import sys
 from html.parser import HTMLParser
 
@@ -131,36 +120,43 @@ class _OpenAtMarker(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.open = []
+        # How many of each tag are open: asked of the list itself, every
+        # stray end tag walked it whole, and 30,000 unclosed tables with as
+        # many stray </td> took seconds to read.
+        self.how_many = dict.fromkeys(_STRUCTURE, 0)
 
     def handle_starttag(self, tag, attrs):
         if tag not in _STRUCTURE:
             return
         while self.open and self.open[-1] in _ENDS.get(tag, ()):
-            self.open.pop()
+            self.how_many[self.open.pop()] -= 1
         self.open.append(tag)
+        self.how_many[tag] += 1
 
     def handle_endtag(self, tag):
-        if tag in self.open:
-            while self.open.pop() != tag:
-                pass
+        if self.how_many.get(tag):
+            while True:
+                closed = self.open.pop()
+                self.how_many[closed] -= 1
+                if closed == tag:
+                    break
 
 
 def fragment_of(document):
     """The fragment a CF_HTML *document* marks, inside the structure its
-    markers sit in.
-
-    Excel puts the markers inside the table: around the rows, and for one
-    row around its cells -- so the fragment alone was cells with no row, and
-    a row copied from Excel pasted as loose text (2026-10-25). The table,
-    row, cell or list open at the start marker is opened again around the
-    fragment and closed after it. Formatting open there is left out: only
-    structure changes what the text is.
-    """
+    markers sit in: Excel puts them inside the table, and a row alone was
+    cells with no row, pasted as loose text. The table, row, cell or list
+    open at the start marker is opened again around the fragment and closed
+    after it; formatting open there is left out, as only structure changes
+    what the text is."""
     start, end = document.find(_START_MARK), document.find(_END_MARK)
     if start == -1 or end == -1 or end <= start:
         # Some applications omit the markers and give the whole document.
-        body = document.lower().find("<body")
-        return document[document.find(">", body) + 1:] if body != -1 else document
+        # Found where it is: lower() makes two characters of "İ", and an
+        # offset in the lowered copy fell past the tag in this one.
+        found = re.search("<body", document, re.IGNORECASE)
+        return (document[document.find(">", found.start()) + 1:] if found
+                else document)
     fragment = document[start + len(_START_MARK):end]
     reader = _OpenAtMarker()
     try:
@@ -221,14 +217,13 @@ def _put(fmt, payload):
 
 
 def write(text, html=None):
-    """Put text on the clipboard, with an HTML version beside it.
+    """Put text on the clipboard, with an HTML version beside it. The plain
+    text always goes on as well, for an application that cannot read
+    ``CF_HTML`` -- a terminal, a plain-text editor.
 
-    The plain text always goes on as well. An application that cannot read
-    ``CF_HTML`` -- a terminal, a plain-text editor -- then still gets
-    something sensible rather than markup.
-
-    Returns True if the HTML made it on; False means the text may still
-    have, which is the outcome the caller does not need to care about.
+    Returns:
+        True if the HTML made it on; False means the text may still have,
+        which the caller does not need to care about.
     """
     if not _WINDOWS:
         return False

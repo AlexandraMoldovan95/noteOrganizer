@@ -6,7 +6,14 @@ so it needs no clipboard, no window and no Windows.
 Check descriptions stay ASCII-only, for the same reason test_calculator.py
 does: printing a bullet crashes a plain Windows console on cp1252.
 """
-from noteorganizer.core import tables
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+from noteorganizer.core import tables  # noqa: E402
 from noteorganizer.core.formatting import shift_spans
 from noteorganizer.core.richtext import html_to_note, note_to_html, reflow_wrapped
 
@@ -117,6 +124,21 @@ check("and leaves everything around it alone",
 check("re-padding an already-padded table changes nothing",
       tables.align(_aligned) == (_aligned, []))
 
+# Two tables, bold in each: every offset is counted in the text as it came,
+# as shift_spans judges them. Counted off lines the first table's padding
+# had already changed, the second table's bold sat beside its words.
+_two = ("| a | bb |\n|---|---|\n| ccc | d |\n\n"
+        "| x | yy |\n|---|:-:|\n| zzzz | w |\n| Ana-Maria | 7 |")
+_two_words = ["bb", "ccc", "yy", "zzzz", "w", "Ana-Maria", "7"]
+_two_spans = []
+for _w in _two_words:
+    _at = _two.index("| " + _w + " |") + 2
+    _two_spans.append({"start": _at, "end": _at + len(_w), "style": "bold"})
+_two_out, _two_shifts = tables.align(_two)
+_two_got = [_two_out[s["start"]:s["end"]] for s in shift_spans(_two_spans, _two_shifts)]
+check(f"bold in every cell of two tables stays on its word when both are "
+      f"re-padded ({_two_got})", _two_got == _two_words)
+
 # --- pasting one in ------------------------------------------------------
 # Until this existed, td and th were neither block tags nor cells, so the
 # cells ran together: "Milk | 2" arrived as "Milk2" with the boundary gone.
@@ -136,6 +158,18 @@ check(f"a table between paragraphs keeps its place ({_t.splitlines()[1]!r})",
       and tables.split_row(_t.split("\n")[1]) == ["A", "B"])
 check("and bold inside a cell survives the trip in",
       len(_s) == 1 and _t[_s[0]["start"]:_s[0]["end"]] == "B")
+
+# A page of two tables, as Word or a browser copies one: the second
+# table's bold came in on "| G" instead of "Gym".
+_two_page = ("<table><tr><td>Item</td><td>Price</td></tr>"
+             "<tr><td>Bread</td><td><b>Cheap</b></td></tr></table>"
+             "<p>Between</p>"
+             "<table><tr><td>Day</td><td>Plan</td></tr>"
+             "<tr><td>Monday</td><td><b>Gym</b></td></tr></table>")
+_tp_text, _tp_spans, _ = html_to_note(_two_page)
+_tp_got = [_tp_text[s["start"]:s["end"]] for s in _tp_spans]
+check(f"a pasted page's second table keeps its bold on its words ({_tp_got})",
+      _tp_got == ["Cheap", "Gym"])
 
 # --- copying one out -----------------------------------------------------
 # Real markup, for the same reason a list goes out as <ul>: a word processor
@@ -243,6 +277,16 @@ check(f"and the covered positions ({len(_m_covered)})",
 _orphans, _orphan_covered = tables.merge_map([["<", "a"], ["^", "b"]])
 check("an orphan marker stays ordinary content",
       _orphans == {} and _orphan_covered == set())
+# ...and so does a "^" under a row too short to have its column: reading that
+# cell raised, and Export note and Ctrl+C with it.
+try:
+    _ragged = tables.merge_map([["a", "b"], ["^", "^", "^"]])
+    _ragged_html = note_to_html("| a | b |\n| ^ | ^ | ^ |")
+except Exception as _ragged_exc:
+    _ragged, _ragged_html = repr(_ragged_exc), ""
+check(f"a merge marker under a row without its column is content ({_ragged})",
+      _ragged == ({(0, 0): (2, 1), (0, 1): (2, 1)}, {(1, 0), (1, 1)})
+      and "<table" in _ragged_html)
 
 # The bug as reported: a spreadsheet header with rowspan and colspan sheared
 # every row under it one column left, so the symbol columns came out empty.
@@ -442,6 +486,99 @@ _pv9, _pn9 = tables.preview_text("words\n|a|b|")
 check("...while a row written without padding is still the row the editor "
       "draws", _pv9 == "words" and _pn9 == 1)
 
+
+# ---- Lining a table up never multiplies it ----
+# Padding every cell to its column's widest made the padding the widest
+# cell times the rows: one 60,000-character cell over 3,500 rows turned a
+# 162 KB paste into 210 million characters (ISSUES_LOG: "Limits that held
+# at the door but not after it"). Measured in characters, never in time.
+import random as _rnd
+from noteorganizer.core.richtext import MAX_PASTE_CHARS as _CEIL
+
+_wide_rows = [["x" * 60000, "y"]] + [["a", "b"]] * 3500
+_wide_len = tables.table_length(_wide_rows)
+check(f"a table whose lining up would pad past {tables.MAX_TABLE_PADDING:,} "
+      f"spaces is left ragged ({_wide_len:,} chars)",
+      _wide_len < 60000 + 3500 * 12)
+check("...and table_length says so without building it, as format_table builds it",
+      _wide_len == len("\n".join(tables.format_table(_wide_rows))))
+_wide_text = "\n".join("| " + " | ".join(r) + " |" for r in _wide_rows)
+_wide_aligned = tables.align(_wide_text)[0]
+check(f"...align() likewise ({len(_wide_aligned):,} chars)",
+      len(_wide_aligned) <= len(_wide_text) + 3500 * 4
+      and tables.aligned_length(_wide_text) == len(_wide_aligned))
+check("...while an ordinary table is lined up exactly as before",
+      tables.format_table([["Name", "Qty"], ["Milk", "2"]])
+      == ["| Name     | Qty      |", "| Milk     | 2        |"])
+
+_rg = _rnd.Random(20261028)
+_len_agree = True
+for _i in range(400):
+    _n, _c = _rg.randint(1, 6), _rg.randint(2, 4)
+    _lines = []
+    for _r in range(_n):
+        _k = _c if _rg.random() < 0.8 else _rg.randint(2, _c + 1)
+        if _r == 1 and _rg.random() < 0.5:
+            _lines.append("|" + "|".join(_rg.choice(["---", ":-:", "--:", "~", "-" * 12])
+                                         for _ in range(_k)) + "|")
+        else:
+            _lines.append("|" + "|".join(
+                " " * _rg.randint(0, 3) + "ab c"[:_rg.randint(0, 4)].strip()
+                + " " * _rg.randint(0, 3) for _ in range(_k)) + "|")
+    _t = _rg.choice(["", "words\n"]) + "\n".join(_lines)
+    _rows = [tables.split_row(l) for l in _lines]
+    _len_agree = (_len_agree
+                  and tables.aligned_length(_t) == len(tables.align(_t)[0])
+                  and tables.table_length(_rows)
+                  == len("\n".join(tables.format_table(_rows))))
+check("the lengths worked out ahead agree with what align() and "
+      "format_table() then build, on 400 random tables", _len_agree)
+
+# The paste: the ceiling holds on what goes into the note, padding included.
+_doc = ("<table><tr><td>" + "x" * 60000 + "</td><td>y</td></tr>"
+        + "<tr><td>a</td><td>b</td></tr>" * 3500 + "</table>")
+_cutW = {}
+_txtW = html_to_note(_doc, report=_cutW)[0]
+check(f"a pasted table with one 60,000-character cell over 3,500 rows stays "
+      f"within the paste ceiling ({len(_txtW):,} chars)",
+      len(_txtW) <= _CEIL)
+_doc = ("<table><tr><td>" + "x" * 240 + "</td><td>y</td></tr>"
+        + "<tr><td>a</td><td>b</td></tr>" * 400 + "</table>"
+        + "<p>" + "z" * 60000 + "</p>")
+_cutP = {}
+_txtP = html_to_note(_doc, report=_cutP)[0]
+check(f"a paste that padding carries past the ceiling is cut before the "
+      f"padding, and says so ({len(_txtP):,} chars, {_cutP})",
+      len(_txtP) <= _CEIL and _cutP.get("text_cut") is True
+      and _txtP.startswith("| " + "x" * 240))
+
+# A note's lines on one line, kept apart: the card and the question about a
+# day off its schedule both read them so.
+_apart = tables.lines_apart("the book borrowed\n\n  from   Radu \nthe article\n")
+check(f"lines_apart keeps a note's lines apart, empty ones left out ({_apart!r})",
+      _apart == "the book borrowed · from Radu · the article")
+check("lines_apart of nothing is nothing",
+      tables.lines_apart("") == "" and tables.lines_apart(None) == "")
+# A list item with no words is an empty line, left out.
+_items = tables.lines_apart("Pack the coat\n• \n• milk\n  ◦ \n2. \n3. eggs")
+check(f"lines_apart leaves out a list item with no words ({_items!r})",
+      _items == "Pack the coat · milk · eggs")
+# A list item keeps its words, not its marker: "· • milk" read as two marks.
+_marks = tables.lines_apart("• bread\n  ◦  rye   flour\n▪ salt\n12. butter\n•no space")
+check(f"lines_apart keeps a list item's words without its marker ({_marks!r})",
+      _marks == "bread · rye flour · salt · butter · •no space")
+# Every cut the app shows: whole when it fits, else at its last whole word.
+_cuts = [tables.glimpse(t, n) for t, n in (
+    ("milk", 4), ("", 3), ("what is next", 8), ("water bottles · Call Ann", 16),
+    ("one two", 5), ("the team's tasks", 12))]
+check(f"glimpse keeps a text that fits and ends a cut at its last whole word ({_cuts!r})",
+      _cuts == ["milk", "", "what is…", "water bottles…", "one…", "the team's…"])
+# One long word, or a short word before an address: backing up to a space
+# would give up more than half the room, so the cut goes through the word.
+_long = [tables.glimpse(t, n) for t, n in (
+    ("Supercalifragilistic", 8), ("a https://example.com/a/long/path", 12))]
+check(f"glimpse cuts through a word that holds more than half the room ({_long!r})",
+      _long == ["Supercal…", "a https://ex…"])
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

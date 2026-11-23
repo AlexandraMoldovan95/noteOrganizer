@@ -1,0 +1,19 @@
+You are a skeptical reviewer in the NINTH round of re-attacking wave 6's fixes in Note Organizer, an offline Windows notes app (Python + Tkinter), D:\Projects\NoteOrganizer, branch audit/d-val6. The eighth round found one medium in the code (a sound backup with no room for it said as one that could not be read) and nine old sentences in the test plan, all fixed. Read each commit with `git -C D:\Projects\NoteOrganizer show <hash>` and the code around it. You take both sides: each fix by name, and an ordinary person's week on the roads it touches (slowly, half-typed, clicked away, twice, interrupted, the computer put to sleep, Windows signing out and the sign-out cancelled, a nearly full disk).
+
+ROUND 8's fixes, attack these by name first:
+- 6078380 import: core/sharing.py's BackupRefused (raised for no room only, after backup_entries_problem), the import's own message for it and for a disk that fills up mid-unpack (errno.ENOSPC), _export_landed_after and _drop_unclaimed_import_files catching ValueError, and names holding ":" never taken out. Is every message an import can end with now true of its road (a damaged zip, a hostile one, no room, the disk filling, a read that fails, a stick pulled out)? Does any other caller of _safe_extract_zip or backup_space_problem now behave differently? Can the ":" guard keep the import's own leftovers from being taken out on an ordinary road?
+- 8a36ddf tools: check_guest's _D_LIST and _D_LELEM, the atomic _D_NAMED, _D_CONT needing an indented next line, a value no longer ending in a backslash. Shapes from every earlier version still seen (git log -p tools/check_guest.py)? A false positive on the repository or on prose? Any line that takes more than a second (build one)?
+- b331b99 mutants SN37, SN38, DR121: does each take its fix away, compile, and fail for that reason and no other?
+- 4655fb2 documents: the test plan's cases 13, 84, 215, 283, 312, 353, 426, 439, 448, 452, 503, 507, 509, 534, 556, 558, 671, 726, 733, 742, 984, 994, 995 and 1017 as rewritten (qa/NoteOrganizer_TestPlan.xlsx, read with openpyxl from a copy, never written); the issues log's eighth-round paragraph; docs/audit/README.md's wave 6 table. True of the code?
+
+Then what round 8 said it did NOT cover: the .notebook.lock held by a process whose daemon thread is stuck in a read (what a relaunch then says); how the app behaves when settings.json itself is on a disk that is full.
+
+You MAY probe, only like this: a new folder under <scratchpad>\wave6\r9-desktop\, a copy of note_organizer.py and the noteorganizer\ package there, small pure-Python probes (methods lifted out by ast and run on a stand-in object are fine; no window), each under a time limit of 20 seconds. Do NOT build the Tk app, do NOT run any qa*.py or test_*.py, nothing heavy (no suite, no build, no emulator), nothing inside D:\Projects\NoteOrganizer, never edit a repository file, never run git commands that change anything, never open real data (notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves, or a document a release relies on (the test plan, USER_GUIDE, the store texts) says what is not true; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. VERDICT PER FIX -- holds / does not hold, one line each with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. DOCUMENTS -- each sentence found untrue, with the code that contradicts it.
+4. NOT COVERED.

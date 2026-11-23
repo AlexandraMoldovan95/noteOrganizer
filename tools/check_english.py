@@ -13,9 +13,9 @@ being a private note the moment it is pushed.
 
 This app's interface is English throughout, so in THIS repository there
 is no legitimate Romanian to show -- which makes the rule simple to state
-and simple to check. (The Android companion is different: its interface
-speaks Romanian to its users, so its copy of this gate exempts the app's
-own strings. Same idea, different boundary.)
+and simple to check. (The Android companion keeps a copy of this gate; its
+interface has been English too since 2026-10-15, so it holds the app's own
+strings to the same rule.)
 
 One exception, agreed on purpose: the Romanian month names the date field
 understands ("17 octombrie 2026"), in noteorganizer/core/recurrence.py and
@@ -69,14 +69,14 @@ WORDS = [
     "greseala", "gresit", "inchide", "inchis", "inca", "insa", "intai",
     "lunga", "mereu", "nesalvat", "netrimis", "nicio", "niciun",
     "nimeni", "nimic", "niste", "numai", "oprit", "orice", "pastrat",
-    "porneste", "prea", "ramas", "ramane", "randul", "ruleaza",
+    "porneste", "prea", "ramas", "randul", "ruleaza",
     "salut", "salvat", "salvata", "salveaza", "scris", "scrie",
-    "sedinta", "simplu", "sterge", "titlul", "titluri", "vechi",
+    "sedinta", "simplu", "titlul", "titluri", "vechi",
     "vorbe", "acelasi", "aiurea", "editata", "inexistenta", "notitei",
     "sablon", "scurta", "versiunea",
     # A third pass the same day: seven more lines the list had missed.
     "coada", "facut", "deja", "necunoscut", "ramasa", "dinainte",
-    "laterala", "panou", "bara", "continut", "acelasi", "baza",
+    "laterala", "panou", "bara", "continut", "baza",
     "scurt", "originala", "versiune",
     # The fourth pass (2026-10-03) read the whole repository, not a sample.
     # Still invisible: two-letter words and words English shares ("da",
@@ -97,15 +97,18 @@ WORDS = [
     "unu", "valoare", "varianta", "veche", "vecina", "vezi", "vizibil",
     "vopsit", "ziua",
 ]
+# A word listed twice hides that the list grew by hand, pass after pass.
+_TWICE = sorted({w for w in WORDS if WORDS.count(w) > 1})
+if _TWICE:
+    sys.exit("check_english: listed twice in WORDS: " + ", ".join(_TWICE))
 ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
 
 # Endings Romanian gives its words and English almost never does (the
 # article in "planul", "-ilor", "-eaza", "-iune", the teens), so the rule
 # knows words nobody listed. A capital then lower case keeps it off base64.
 SHAPES = re.compile(r"\b[A-Za-z][a-z]{2,}(?:(?<![fao])ul|ului|ilor|elor|"
-                    r"urilor|eaza|easca|iune|iunea|iuni|sprezece)\b")
-ENGLISH_SHAPED = {"annul", "consul", "mogul", "kabul", "istanbul",
-                  "sailor", "tailor", "jailor", "bachelor"}
+                    r"eaza|easca|iune|iunea|iuni|sprezece)\b")
+ENGLISH_SHAPED = {"annul", "consul", "mogul", "kabul", "istanbul", "bachelor"}
 
 # Glue hides a word from \b ("NotaTabelQ", "vechi1", the "trei" in
 # "unu\ntrei"), so a copy of each line is pried apart at those seams first;
@@ -133,6 +136,24 @@ def romanian_in(line):
     return None
 
 
+# Lines the rule must find, and lines it must leave alone, read before the
+# repository: a change to the list or the shapes that blinds the rule fails
+# here, where a clean repository would have passed it in silence.
+# One of each ending no listed word carries, so each shape is read alone;
+# and each English exception, so none is kept that nothing needs.
+MUST_FIND = ["titlu nou", "NotaTabelVeche", "done\\ntrei",
+             "planul", "creionului", "copiilor", "notelor",
+             "deseneaza", "citeasca", "sectiune", "optiunea", "optiuni", "doisprezece"]
+MUST_PASS = ["annul the consul's order", "a flight to Kabul", "set the font to DejaVu Sans",
+             "a mogul in Istanbul", "a bachelor party"]
+
+
+def examples_misread():
+    """(what went wrong, line) for each example the rule reads wrongly."""
+    return ([("missed", line) for line in MUST_FIND if not romanian_in(line)]
+            + [("flagged", line) for line in MUST_PASS if romanian_in(line)])
+
+
 # Checked only against FILENAMES: too short or too code-like to search for
 # in code (`cos` is the icon's cosine), but in a filename nothing else.
 FILENAME_ONLY = ["lista", "setari", "categorii", "cos", "cosul", "tema",
@@ -153,6 +174,12 @@ TEXT = (".py", ".md", ".txt", ".yml", ".yaml", ".json", ".spec", ".cfg",
 ALLOWED = {
     "tools/check_english.py":
         "this gate: the wordlist it searches for is necessarily Romanian",
+    "docs/audit/wave2/round01.js":
+        "a prompt published as it ran: it names the Romanian letters a person "
+        "types in names and searches, as input to try the app with",
+    "docs/audit/wave1/round09-android.js":
+        "a prompt published as it ran: it names the Hangul a phone keyboard "
+        "composes, as input to try the app with",
 }
 
 
@@ -166,7 +193,7 @@ def tracked():
     every check that has quietly stopped working.
     """
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                         text=True, encoding="utf-8", errors="replace")
+                         text=True, encoding="utf-8", errors="replace", timeout=120)
     names = [line.strip() for line in out.stdout.splitlines() if line.strip()]
     if out.returncode != 0 or not names:
         print("Cannot list the tracked files (is %s a git checkout?)." % ROOT)
@@ -198,6 +225,13 @@ def hits_in(relative):
 
 
 def main():
+    import guest  # the memory ceiling, before git starts (tools/guest.py)
+    guest.settle(heavy=False)
+    misread = examples_misread()
+    for what, line in misread:
+        print("The rule %s its own example: %r" % (what, line))
+    if misread:
+        return 1
     show_all = "--list" in sys.argv
     leaks = []
     named = []
