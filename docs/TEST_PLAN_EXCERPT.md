@@ -1,9 +1,10 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **978 cases** on 14 November
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **992 cases** on 23 November
 2026. I walk it
-by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
+by hand on the packaged `.exe` before a release - a case I pass is one I've seen pass, and a
+pass that is the scripts' says so.
 
 ## How the plan is used
 
@@ -18,27 +19,32 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 ## The plan in numbers
 
-Counted on 14 November 2026: 978 cases, 596 walked and passed, 382 not yet
-walked (most of them added during the final audit, for my pass on the
-final builds).
+Counted on 23 November 2026: 992 cases, 900 walked and passed, 92 not yet
+walked. Of the passes, 604 are mine, by hand on the built `.exe`; 296 are
+the scripted suites', run for the final audit on the source of 0.102.556
+and marked *Claude (automated, final audit)*: a pass for what the suites
+walk, not a walk by hand like mine, with what they leave to the hand
+named in Actual Result. The 92 not yet walked are 90 cases that need my
+eye, whose result columns hold the suites' run all the same, and two the
+scripts did not run this time.
 
 ### By priority
 
 | Priority | Cases |
 |---|---:|
-| High | 261 |
-| Medium | 450 |
-| Low | 267 |
+| High | 263 |
+| Medium | 457 |
+| Low | 272 |
 
 ### The six largest areas
 
 | Area | Cases |
 |---|---:|
-| Backup & Sharing | 105 |
-| Editor | 101 |
-| Notes | 92 |
+| Backup & Sharing | 108 |
+| Editor | 103 |
+| Notes | 96 |
 | Recurrence | 88 |
-| Tables | 71 |
+| Tables | 72 |
 | Settings | 71 |
 
 ## The test case template, filled out four times
