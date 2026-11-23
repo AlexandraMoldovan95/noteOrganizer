@@ -609,12 +609,36 @@ def og_tags(config, page, title, description):
         return ""
     return "\n".join([
         '<meta property="og:type" content="website">',
+        '<meta property="og:site_name" content="Note Organizer">',
         '<meta property="og:title" content="%s">' % html.escape(title),
         '<meta property="og:description" content="%s">' % html.escape(description),
         '<meta property="og:url" content="%s/%s">' % (url, page),
         '<meta property="og:image" content="%s/img/social-card.png">' % url,
+        # Its size, so a network draws the large card at the first share.
+        '<meta property="og:image:width" content="1200">',
+        '<meta property="og:image:height" content="630">',
+        '<meta property="og:image:alt" content="%s">' % html.escape(SOCIAL_CARD_ALT),
         '<meta name="twitter:card" content="summary_large_image">',
     ])
+
+
+SOCIAL_CARD_ALT = ("Note Organizer's main window: a list of notes beside a note holding a "
+                   "weekly meal plan as a table.")
+
+
+def tag_copied_page(config, page):
+    """A page with a head of its own (a demo, the privacy notice) gets the
+    sharing tags too, from its own title and description: without them it
+    shared as a bare link."""
+    path = os.path.join(OUT, page)
+    text = read(path)
+    title = re.search(r"<title>(.*?)</title>", text, re.S)
+    description = re.search(r'<meta name="description" content="([^"]*)"', text)
+    if not title or not description:
+        fail("%s has no <title> or description for its sharing tags" % page)
+    tags = og_tags(config, page, html.unescape(title.group(1).strip()), html.unescape(description.group(1)))
+    if tags:
+        write(path, text.replace("</head>", tags + "\n</head>", 1))
 
 
 def fill(template, values, name):
@@ -1031,6 +1055,8 @@ def main():
             target = os.path.join(OUT, os.path.relpath(source, SRC))
             os.makedirs(os.path.dirname(target), exist_ok=True)
             shutil.copy2(source, target)
+    for page in ("demo/index.html", "android-demo/index.html"):
+        tag_copied_page(config, page)
 
     images = build_images(repo)
     images.update(build_android_images(android))
@@ -1071,6 +1097,7 @@ def main():
     for name, prefix in (("site-privacy.html", ""), ("404.html", "/")):
         write(os.path.join(OUT, name), fill(read(os.path.join(SRC, name)), {
             "nav": nav_html("", prefix), "version": version, "root": prefix}, name))
+    tag_copied_page(config, "site-privacy.html")   # the 404 is never shared
 
     index_values = dict(numbers)
     index_values.update({
