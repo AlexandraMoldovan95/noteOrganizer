@@ -947,6 +947,33 @@ check(f'...and two of them, counted ({_d7_said!r})',
       '2 files are empty (0 bytes) — attached anyway' in _d7_said)
 _d7_drop_from(1)
 app._hide_toast()
+# A file the disk has no room for: said in words, not "[Errno 28]", and the
+# half copy is not left in the folder, named by nothing.
+import noteorganizer.ui.attachments as _d7_mod
+_d7_real_copy, _d7_errors = _d7_mod.shutil.copy2, []
+
+
+def _d7_full(src, dst, *a, **k):
+    with open(dst, 'wb') as half:
+        half.write(b'half')
+    raise OSError(28, 'No space left on device')
+
+
+_d7_disk = set(os.listdir(NO.ATTACHMENTS_DIR))
+_d7_real_err = app.show_error
+app.show_error = lambda *a, **k: _d7_errors.append(' '.join(map(str, a)))
+_d7_mod.shutil.copy2 = _d7_full
+try:
+    _d7_pick([_d7_paths['qa6_new.txt']], False)
+finally:
+    _d7_mod.shutil.copy2 = _d7_real_copy
+    app.show_error = _d7_real_err
+_d7_left = set(os.listdir(NO.ATTACHMENTS_DIR)) - _d7_disk
+check(f'a file the disk has no room for is said in words, nothing attached ({_d7_errors})',
+      any('wasn’t attached: the disk is full' in e or "wasn't attached: the disk is full" in e
+          for e in _d7_errors)
+      and not any('Errno' in e for e in _d7_errors) and _d7_names() == ['qa6_attachment.txt'])
+check(f'...and its half copy is not left in the folder ({sorted(_d7_left)})', not _d7_left)
 for _d7_path in _d7_paths.values():
     os.remove(_d7_path)
 os.rmdir(_d7_dir)

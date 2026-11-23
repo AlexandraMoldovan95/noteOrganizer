@@ -135,7 +135,16 @@ class AttachmentsMixin:
             try:
                 shutil.copy2(src_path, dest_path)
             except (IOError, OSError) as e:
-                self.show_error("Couldn't attach file", f"Failed to attach '{shown}':\n{e}")
+                # Half a copy is no attachment: it stayed in the folder, named by
+                # nothing. A full disk said in words, as the exports say it.
+                try:
+                    os.remove(dest_path)
+                except OSError:
+                    pass
+                self.show_error("Couldn't attach file", (
+                    f"“{_quoted(shown)}” wasn't attached: the disk is full. Free up "
+                    "some space and try again." if self._disk_was_full(e)
+                    else f"Failed to attach '{shown}':\n{e}"))
                 continue
             self.current_attachments.append({"filename": shown, "stored_as": unique_name})
             added_any = True

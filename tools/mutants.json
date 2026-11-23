@@ -21000,6 +21000,42 @@
     "expect": "killed"
   },
   {
+    "id": "PW49",
+    "about": "a file attached onto a full disk says \"[Errno 28] No space left on device\"",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                    \"some space and try again.\" if self._disk_was_full(e)\n",
+        "replace": "                    \"some space and try again.\" if False\n"
+      }
+    ],
+    "must_fail": [
+      "a file the disk has no room for is said in words, nothing attached"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW50",
+    "about": "a copy cut short by a full disk is left in the attachments folder, named by nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                try:\n                    os.remove(dest_path)\n                except OSError:\n                    pass\n                self.show_error(\"Couldn't attach file\", (\n",
+        "replace": "                self.show_error(\"Couldn't attach file\", (\n"
+      }
+    ],
+    "must_fail": [
+      "...and its half copy is not left in the folder"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "PW52",
     "about": "a share code of one note that is in the Trash too opens it for review and says nothing of the Trash",
     "edits": [
