@@ -1099,12 +1099,14 @@ def main():
             "nav": nav_html("", prefix), "version": version, "root": prefix}, name))
     tag_copied_page(config, "site-privacy.html")   # the 404 is never shared
 
+    # The overview's sharing card says what its own title and description say.
+    index_src = read(os.path.join(SRC, "index.html"))
+    index_title = re.search(r"<title>(.*?)</title>", index_src, re.S).group(1).strip()
+    index_description = re.search(r'<meta name="description" content="([^"]*)"', index_src).group(1)
     index_values = dict(numbers)
     index_values.update({
         "version": version,
-        "og": og_tags(config, "", "Note Organizer",
-                      "An offline notes app for Windows 11, with a web demo you can try "
-                      "in the browser."),
+        "og": og_tags(config, "", html.unescape(index_title), html.unescape(index_description)),
         "nav": nav_html("index.html"),
         "android_version": droid["version"],
         "theme_count": len(themes["THEMES"]),
@@ -1114,8 +1116,7 @@ def main():
     for name, (w, h) in images.items():
         index_values["w_" + name.replace("-", "_")] = w
         index_values["h_" + name.replace("-", "_")] = h
-    write(os.path.join(OUT, "index.html"),
-          fill(read(os.path.join(SRC, "index.html")), index_values, "index.html"))
+    write(os.path.join(OUT, "index.html"), fill(index_src, index_values, "index.html"))
 
     problems, page_count = check_output()
     problems += check_kept_apart(repo, config, android)
