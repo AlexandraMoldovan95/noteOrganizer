@@ -27,7 +27,7 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   buttons, and the calculator under a note and moving one day of a series remain the desktop
   app's alone), and one site presents both apps (done on 2026-10-24: an Android page and an
   Android demo beside the desktop's, each app's code in its own repository, which the build reads;
-  each repository is named as a link once it is public, `site/site.json`). Still planned:
+  each repository named as a link since both went public, `site/site.json`). Still planned:
   - **At the public launch, links to the stores** — the Microsoft Store for the desktop app,
     Google Play for Android — rather than the built `dist/` folder to download. A store signs the
     app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up

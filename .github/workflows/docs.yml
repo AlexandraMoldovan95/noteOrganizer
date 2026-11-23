@@ -7,7 +7,8 @@ name: Documents
 # hand and left behind (the excerpt once gave 859 cases under a heading of
 # 921), Romanian in a public page -- and nothing ran on them.
 #
-# One Linux job of well under a minute, billed by the minute: it starts
+# One Linux job of well under a minute (billed by the minute while the
+# repository was private): it starts
 # only when a document, the test plan, one of these gates or this file
 # changes. openpyxl reads the workbook; it is a tool of this check, not of
 # the app, and is not in requirements.txt.

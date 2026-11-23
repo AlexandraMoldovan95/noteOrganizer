@@ -328,8 +328,8 @@ planned for the feedback after the public launch (see the [Roadmap](ROADMAP.md#u
 Agents are expensive and greps are free, so the order of work is fixed: mechanical prevention
 first (the pre-flight, static gates, mutants - no agent needed), then at most one review wave of
 four or five reviewers with separate territories, and a full wave only with my sign-off and a
-stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
-on Linux, and the workflow skips work a change cannot affect.
+stated reason. CI minutes were billed too while the repositories were private - Windows minutes
+count double, so the mutant job runs on Linux, and the workflow skips work a change cannot affect.
 
 The final audit was such a sign-off, and it ran far past its estimate: about 193 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
