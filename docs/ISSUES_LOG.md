@@ -239,6 +239,7 @@ is in the table below as well.
 | [Wave 5: what a full reading found](#wave-5-what-a-full-reading-found) | A fix found on one road is a list of roads: the same shape waited on the next road, five times. | 0.101.542 |
 | [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | 0.101.542 |
 | [Ctrl+T and the tags Tk shares](#ctrlt-and-the-tags-tk-shares) | Measure the road the code takes, not one beside it; and a fix of a round's lows is code too, each line needing its own check. | 0.101.542 |
+| [The panel's fifth meeting: what using the apps found](#the-panels-fifth-meeting-what-using-the-apps-found) | A reader of the code finds what it says; a person using the app finds where it is said: a result out of sight, an offer older than its subject, words that keep back what happened. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -5331,6 +5332,80 @@ where a mark splits it and `-1c` lands on a half.
 **Takeaway:** measure the road the code takes, not one beside it: an index read directly is not
 an index reckoned by `-1c`. And a fix of a round's lows is code too: every line added to one
 without its own check was the next round's finding.
+
+### The panel's fifth meeting: what using the apps found
+
+*(next · 2026-11-22 to 23 · the review panel's fifth meeting, the first whose readers also used
+the apps, each in a throwaway copy, the phone on an emulator; the owner chose to fix all it found
+but one)*
+
+**Symptom:** eighteen things across the two apps, none losing a note, each met by pressing the
+buttons. On the desktop:
+
+- Generate code made its code below the editor's fold, with nothing said.
+- At the window's smallest size, 640 by 600, the editor was cut off behind a sideways scrollbar.
+- Ctrl+F's bar covered the top half of the category button.
+- A note's own Delete asked "Are you sure?" without saying the note goes to the Trash, where the
+  ticked notes' Delete said so.
+- "Note moved to Trash · Undo" stayed over Settings, and after the note was restored there.
+- An unreadable notes file was met with "or ask for help", in an app that sends nothing.
+- The same file attached twice made two copies; an empty file went in without a word.
+- A Tab typed in a note was a tab, with nothing saying Ctrl+Tab moves on.
+- "30 day(s) left", and "Added 0 note(s)" in the very message the changelog said counted
+  properly.
+
+The phone's readers found their own, and four of them were on the desktop too. A "|" typed in
+a table's cell became "/" without a word. A backup that was not one said "zip END header not found". A
+note brought back by a backup while it sat in the Trash was in both places, with only "Added 1
+note". The Undo of "Moved to Trash" opened the note even when it had not been open.
+
+**Mechanism:** three shapes, each met only by using the app.
+
+- **A result made out of sight.** The code, the editor at its narrowest and the category under
+  the bar were all drawn; each lay where the person was not looking. Reading the code finds what
+  is drawn, not where.
+- **Words that keep back what happened.** A question that does not name the Trash, a library's
+  error passed on as it came, a "/" put in place of a "|" in silence, a "(s)" for a number the
+  app already knows.
+- **An offer older than its subject.** The Trash's Undo was made when the note went in, and was
+  not asked again when the note came back out by another road.
+
+**Fix:** each with a check and a mutant (PW01–PW54). Generate code scrolls its code into sight.
+The window is never narrower than it can show: 900 wide with the sidebar, 640 with it hidden
+(`_fit_window_floor`). The page makes room at its top while the find bar is open
+(`_fit_find_room`). The note's own Delete names the Trash and its days. The banner's Undo is
+taken down once its note leaves the Trash elsewhere, and opens the note again only if it was the
+open one. A broken notes file points to Settings → Backup → Import. The same file picked again
+asks first, and an empty one is said. The first Tab typed into a note says once how to move on.
+The "|" kept as "/" is said, once each time the cell is opened. A file that is not a whole backup
+and a full disk are said in words. A note brought back that is in the Trash too is said to be.
+Every count's noun takes the form its number needs (`storage.count_noun`), and a tenth rule in
+`tools/check_one_definition.py` refuses a "(s)" in the app's words. One thing was left by the
+owner's choice: "Continue without it", filled red, in the question about part of a note not
+saved, where Enter gives the safe answer.
+
+**What the rounds found:** the loop closed at the fifth round, the fourth and fifth finding
+nothing of medium severity.
+
+- The "|" word came again at every autosave, not once.
+- A share code bringing a note that is in the Trash had been missed: the backup's sibling.
+- A file attached onto a full disk said "[Errno 28]", and left its half copy, named by nothing.
+  A duplicated note's copy of its files did the same.
+- The ticked notes' question said one note's file goes "with them", and "trash" where the
+  note's own Delete now says "the Trash".
+- One of two older notes in an import was "1 of them are OLDER".
+
+Two of my own steps were wrong. I committed the first two fixes before running the static
+gates. And the attach question's fix broke `test_data_safety`, whose stand-in for the window
+lacked the new method: I had run the suites the change touched, not that one, and the full
+suite found it. One finding was the play kit's, not the app's: notes typed just before closing
+seemed lost, because the kit built the window without its close handler. Fixed in the kit, the
+same steps saved.
+
+**Takeaway:** a reader of the code finds what it says; a person using the app finds where it is
+said. The rounds before had read this code and probed what they suspected of it. The first
+readers told to use the app as a person does, and to look at its window, found a result out of
+sight, an offer older than its subject, and sentences that keep back what happened.
 
 ## Tk & platform gotchas
 
