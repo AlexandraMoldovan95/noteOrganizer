@@ -21036,6 +21036,24 @@
     "expect": "killed"
   },
   {
+    "id": "PW51",
+    "about": "one ticked note's attached file is said to go to the Trash \"with them\"",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        f\"to the Trash with {'it' if count == 1 else 'them'}.\")\n",
+        "replace": "                        f\"to the Trash with them.\")\n"
+      }
+    ],
+    "must_fail": [
+      "...a ticked note's file goes to the Trash with it"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "PW52",
     "about": "a share code of one note that is in the Trash too opens it for review and says nothing of the Trash",
     "edits": [

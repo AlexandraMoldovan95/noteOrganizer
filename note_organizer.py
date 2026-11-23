@@ -18054,12 +18054,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         attachment_count = sum(len(n.get("attachments") or []) for n in to_trash)
         warning = self._series_warning(to_trash)
         if attachment_count:
-            plural = "s" if attachment_count != 1 else ""
-            warning += f"\n\n{attachment_count} attached file{plural} will go to trash with them."
-        noun = "note" if count == 1 else "notes"
+            # The single note's question's words: "with them" over one note,
+            # and "trash" where every other line says the Trash.
+            warning += (f"\n\n{count_noun(attachment_count, 'attached file')} will go "
+                        f"to the Trash with {'it' if count == 1 else 'them'}.")
         if not self.ask_yes_no(
             "Move to trash",
-            f"Move {count} selected {noun} to the trash? "
+            f"Move {count_noun(count, 'selected note')} to the Trash? "
             f"You can restore {'it' if count == 1 else 'them'}"
             f"{trash_window_words('within')}.{warning}",
             # Enter answers a question now, and a reflexive Enter must not

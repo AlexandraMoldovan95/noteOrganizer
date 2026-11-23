@@ -4440,7 +4440,8 @@ _dn_said = {}
 _dn_stub = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: (_dn_asked.__setitem__(a[0], k.get('default')),
                                   _dn_said.__setitem__(a[0], a[1]), False)[2]
-app.notes = [NO.normalize_note({'id': 1, 'title': 'Keep me', 'body': 'x'}),
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Keep me', 'body': 'x',
+                                'attachments': [{'filename': 'a.txt', 'stored_as': 'a.txt'}]}),
              NO.normalize_note({'id': 2, 'title': 'Keep me', 'body': 'x'})]
 app.save_notes()
 app._delete_note(app.find_note(1), None)
@@ -4472,7 +4473,10 @@ check('the confirmations that move notes to the Trash keep the keyboard on No (%
 check(f"...and a note's own Delete says it goes to the Trash and can be restored "
       f"({_dn_said.get('Delete note')!r})",
       (_dn_said.get('Delete note') or '').startswith('Move this note to the Trash? You can restore it')
-      and 'Move 1 selected note to the trash? You can restore it' in (_dn_said.get('Move to trash') or ''))
+      and 'Move 1 selected note to the Trash? You can restore it' in (_dn_said.get('Move to trash') or ''))
+# ...and one ticked note's attached file goes "with it", counted in its form.
+check(f"...a ticked note's file goes to the Trash with it ({_dn_said.get('Move to trash')!r})",
+      '1 attached file will go to the Trash with it.' in (_dn_said.get('Move to trash') or ''))
 app.notes = []; app.save_notes()
 
 # ---- A DAY'S EDIT SAVED THIS SESSION IS NOT "EDITED ELSEWHERE" ----
