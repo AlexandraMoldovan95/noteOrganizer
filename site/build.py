@@ -870,8 +870,11 @@ def android_page(shell, config, facts, sizes, version):
     for heading in ANDROID_SECTIONS:
         parts.append(Renderer(link).render(readme_section(readme, heading)))
     repo = config.get("android_repo_url", "")
+    # Named by its path, which may break anywhere: the whole address ran
+    # 149 px past a phone's screen.
     where = ("in a repository of its own on GitHub, "
-             '<a href="%s" rel="noopener" target="_blank">%s</a>' % (html.escape(repo), html.escape(repo))
+             '<a class="repo-link" href="%s" rel="noopener" target="_blank">%s</a>'
+             % (html.escape(repo), html.escape(re.sub(r"^https?://(www\.)?github\.com/", "", repo)))
              if repo else "in a repository of its own on GitHub, published when the time comes")
     parts.append(
         '<h2 id="where-it-stands">Where it stands</h2>'
@@ -883,8 +886,9 @@ def android_page(shell, config, facts, sizes, version):
     parts.append('<p class="page-actions"><a class="btn btn-primary" href="android-demo/index.html">'
                  "Try the Android demo</a></p>")
     note = ('<p class="source-note">This page is built from the Android app\'s README and its '
-            "screenshots, read from its repository when the site was last built. Links to its "
-            "documents are shown as plain text until that repository is published.</p>")
+            "screenshots, read from its repository when the site was last built. %s</p>"
+            % ("Links to its documents lead to them in that repository." if repo else
+               "Links to its documents are shown as plain text until that repository is published."))
     return doc_page(shell, config, "android.html", "Android",
                     "Note Organizer for Android: the same notes as the desktop app, on a phone, "
                     "offline.", "\n".join(parts), note, version)
