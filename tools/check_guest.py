@@ -710,6 +710,14 @@ def ps_literal(value):
     return "'%s'" % "".join(c * 2 if c in PS_QUOTES else c for c in value)
 
 
+def _address_space_whole():
+    """pwsh is .NET: it reserves gigabytes of address space it never uses,
+    and under the guest's RLIMIT_AS its ICU failed to load (GitHub's Linux
+    runner). Its use is small; its timeout bounds it."""
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (resource.getrlimit(resource.RLIMIT_AS)[1],) * 2)
+
+
 def run_powershell(script, env=None, timeout=60):
     """PowerShell's output for ``script``, passed encoded (no quoting of it
     by a command line), or the reason it could not be asked."""
@@ -717,7 +725,8 @@ def run_powershell(script, env=None, timeout=60):
     try:
         run = subprocess.run([powershell(), "-NoProfile", "-NonInteractive", "-EncodedCommand",
                               encoded], capture_output=True, text=True, timeout=timeout,
-                             env=env, encoding="utf-8", errors="replace")
+                             env=env, encoding="utf-8", errors="replace",
+                             preexec_fn=_address_space_whole if os.name == "posix" else None)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return None, str(exc)
     return run.stdout, (run.stdout + run.stderr).strip()[-200:]
