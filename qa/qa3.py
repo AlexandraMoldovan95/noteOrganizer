@@ -1584,7 +1584,45 @@ check(f"a backup's note that is in the Trash too is said to be, right after what
       'Added 1 note from the backup. It is in your Trash too (Settings → Recently deleted).'
       in _bt_said.get('one', '')
       and 'Added 2 notes from the backup. 1 of them is in your Trash too' in _bt_said.get('some', ''))
+# ...and a share code bringing that note, the backup's sibling road, says it too.
+app.notes = []; app.save_notes()
+app.trash = [dict(NO.normalize_note({'id': 801, 'title': 'Gone', 'body': 'g', 'uid': 'bt-gone-1'}),
+                  deleted_at=NO.now_stamp())]
+NO.save_trash(app.trash)
+_bt_codes = {}
+_bt_toast_was = app._show_toast
+_bt_toasts = []
+app._show_toast = lambda text, *a, **k: (_bt_toasts.append(text), _bt_toast_was(text, *a, **k))[1]
+try:
+    # A code of two, one of them in the Trash, said under the box; a code of
+    # one, opened in the editor for review, on a banner.
+    for _bt_case, _bt_notes in (('two', [{'title': 'Gone', 'body': 'g', 'uid': 'bt-gone-1'},
+                                         {'title': 'Kept', 'body': 'k', 'uid': 'bt-kept-2'}]),
+                                ('one', [{'title': 'Gone', 'body': 'g', 'uid': 'bt-gone-1'}])):
+        app._cancel_pending_autosave()
+        app.new_note(); app.update()
+        app.notes = []; app.save_notes(); app.refresh_note_list(); app.update()
+        # No earlier banner's offer still up: words wait beneath an Undo.
+        app._hide_toast(); app._hide_words_beneath(); app.update()
+        del _bt_toasts[:]
+        if not app._is_placed(app.import_panel):
+            app.toggle_import_panel(); app.update()
+        app.import_box.delete('1.0', 'end')
+        app.import_box.insert('1.0', NO.encode_share_code(_bt_notes))
+        app._do_inline_import(); app.update()
+        _bt_codes[_bt_case] = (str(app.import_status.cget('text')), list(_bt_toasts))
+        if app._is_placed(app.import_panel):
+            app.toggle_import_panel(); app.update()
+finally:
+    app._show_toast = _bt_toast_was
+check(f"...and so does a share code bringing a note that is in the Trash ({_bt_codes})",
+      _bt_codes['two'][0].startswith('Added 2 notes')
+      and '1 of them is in your Trash too (Settings → Recently deleted).' in _bt_codes['two'][0]
+      and any('This note is in your Trash too' in t for t in _bt_codes['one'][1]))
+app._cancel_pending_autosave()
+app.new_note(); app.update()
 app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list(); app.update()
 
 # A CRAFTED backup's settings.json: a million day colours under keys that are
 # no dates, and markers 100,000 characters long. Adopted whole, every note

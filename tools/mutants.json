@@ -20807,8 +20807,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        in_trash = sum(1 for n in arrived\n",
-        "replace": "        in_trash = 0 * sum(1 for n in arrived\n"
+        "find": "        return sum(1 for n in arrived\n",
+        "replace": "        return 0 * sum(1 for n in arrived\n"
       }
     ],
     "must_fail": [
@@ -20975,6 +20975,42 @@
     ],
     "must_fail": [
       "...and a single-note export onto a full disk says so in words"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW48",
+    "about": "a share code bringing a note that is in the Trash too says nothing of the Trash",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        trash_note = self._also_in_trash_words(arrived)\n",
+        "replace": "        trash_note = \"\"\n"
+      }
+    ],
+    "must_fail": [
+      "...and so does a share code bringing a note that is in the Trash"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW52",
+    "about": "a share code of one note that is in the Trash too opens it for review and says nothing of the Trash",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._arrived_uid and self._in_trash_count([shared_note]):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "...and so does a share code bringing a note that is in the Trash"
     ],
     "suites": [
       "qa3"

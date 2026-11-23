@@ -11468,12 +11468,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          if oversized else "")
         known_note = ((f", updated {updated}" if updated else "")
                       + (f", {unchanged} already here" if unchanged else ""))
+        # As the backup's import says it: a note the code brings that is in
+        # the Trash too is in both places.
+        trash_note = self._also_in_trash_words(arrived)
         # Not a green tick over a refused write: the notes are on screen only.
         self.import_status.config(
-            text=(f"Added {added} {notes_word}{known_note} ✓{skipped_note}{oversize_note}"
+            text=(f"Added {added} {notes_word}{known_note} ✓{skipped_note}{oversize_note}{trash_note}"
                   if written else
                   f"Added {added} {notes_word}{known_note}, not saved — your notes "
-                  "could not be written"),
+                  f"could not be written.{trash_note}"),
             fg=self.colors["success_text" if written else "danger_text"])
 
     def toggle_share_panel(self):
@@ -12174,6 +12177,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Imported from code — trimmed to the app's size limits; saved as "
             "a new note, review it here" if trimmed
             else "Imported from code — saved as a new note, review it here")
+        # Kept under its identity, a note deleted here since is in the Trash
+        # too: said on a banner, as the autosave writes over the status line.
+        if self._arrived_uid and self._in_trash_count([shared_note]):
+            words = "This note is in your Trash too (Settings → Recently deleted)."
+            self._banner_after_undo(words, lambda: self._show_toast(words, kind="info"))
         if trimmed:
             # A note arriving SHORTER than sent is said in a dialog, as the
             # backup's report is: the autosave overwrote the status line.
@@ -12194,6 +12202,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     BACKUP_NOT_WHOLE = ("That file couldn't be read as a backup: it isn't a whole Note "
                         "Organizer backup, or it was damaged on its way here. Try "
                         "another copy of it.")
+
+    def _in_trash_count(self, arrived):
+        """How many of the notes just brought in are in the Trash too, by
+        identity: deleted here since, in the list and the Trash at once."""
+        trashed = {str(e.get("uid") or "").strip() for e in self.trash
+                   if isinstance(e, dict)} - {""}
+        return sum(1 for n in arrived
+                   if str(n.get("uid") or "").strip() in trashed)
+
+    def _also_in_trash_words(self, arrived):
+        """Of the notes just brought in -- by a backup or a share code -- those
+        in the Trash too (_in_trash_count), unsaid till now. A sentence to
+        follow "Added ...", or ""."""
+        in_trash = self._in_trash_count(arrived)
+        if not in_trash:
+            return ""
+        return ((
+                (" It is" if in_trash == 1 else " They are all")
+                if in_trash == len(arrived) else
+                f" {in_trash} of them {'is' if in_trash == 1 else 'are'}"
+            ) + " in your Trash too (Settings → Recently deleted).")
 
     @staticmethod
     def _disk_was_full(error):
@@ -12824,19 +12853,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            f"“{one_line(title.strip() or 'Untitled note', 40)}” "
                            f"{'was' if left == 1 else 'were'} not added while its date or repeat "
                            "waits to be fixed: once it is, import the backup again.")
-        # A note brought back that sits in the Trash too, deleted here since
-        # the backup was made: in the list and in the Trash at once, unsaid.
-        trashed = {str(e.get("uid") or "").strip() for e in self.trash
-                   if isinstance(e, dict)} - {""}
-        in_trash = sum(1 for n in arrived
-                       if str(n.get("uid") or "").strip() in trashed)
-        if in_trash:
-            # Right after "Added ...", which "It" and "them" are about.
-            known_note = ((
-                (" It is" if in_trash == 1 else " They are all")
-                if in_trash == len(arrived) else
-                f" {in_trash} of them {'is' if in_trash == 1 else 'are'}"
-            ) + " in your Trash too (Settings → Recently deleted).") + known_note
+        # Right after "Added ...", which "It" and "them" are about.
+        known_note = self._also_in_trash_words(arrived) + known_note
         # A sign-out's word for the next start is no longer true: this import
         # finished, its merge saved -- and a session that ends with "Import
         # complete" on screen leaves none.
