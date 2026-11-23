@@ -203,9 +203,15 @@ def project_numbers(repo):
     plan = os.path.join(repo, "qa", "NoteOrganizer_TestPlan.xlsx")
     workbook = openpyxl.load_workbook(plan, read_only=True)
     sheet = workbook["Test Cases"]
-    numbers["test_cases"] = sum(
-        1 for row in sheet.iter_rows(min_row=2, values_only=True)
-        if row and row[0] not in (None, ""))
+    rows = sheet.iter_rows(values_only=True)
+    head = [str(h or "").strip() for h in next(rows)]
+    status, tested_by = head.index("Status"), head.index("Tested By")
+    cases = [row for row in rows if row and row[0] not in (None, "")]
+    numbers["test_cases"] = len(cases)
+    # Passed by a person, not by the scripts' run ("Claude (automated, ...)").
+    numbers["hand_passed"] = sum(
+        1 for row in cases
+        if row[status] == "Pass" and not str(row[tested_by] or "").startswith("Claude"))
     workbook.close()
 
     with open(os.path.join(repo, "tools", "mutants.json"), encoding="utf-8") as f:
