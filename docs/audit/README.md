@@ -2,7 +2,7 @@
 
 Note Organizer is a personal project: a notes app for Windows and its Android companion, made
 to be used. Before the two went to the stores, AI agents checked them in waves of rounds, from
-27 October to 15 November 2026. This folder holds what those agents were told: every script
+27 October to 23 November 2026. This folder holds what those agents were told: every script
 that started them, as it ran, and the prompts of the agents started by hand.
 
 How a round worked, what each wave was for, when it closed and what it found are told in
@@ -37,6 +37,11 @@ The early waves found the apps wrong; the late rounds, mostly their documents.
   three on the desktop and one on the phone. The phone's loop closed at its second round; the
   desktop's at its twelfth, the Ctrl+T fix and its neighbours taking eight of them
   ([the story](../ISSUES_LOG.md#ctrlt-and-the-tags-tk-shares)).
+- **The panel's fifth meeting** (22 and 23 November): its readers used the apps as well as
+  reading them, and found eighteen things, none losing a note: a result out of sight, words
+  that kept back what happened, an Undo older than its subject. The owner chose to fix all but
+  one. The rounds on the fixes found two of medium severity on the desktop and four on the
+  phone ([the story](../ISSUES_LOG.md#the-panels-fifth-meeting-what-using-the-apps-found)).
 
 **When a wave stopped:** after two rounds in a row with nothing of medium severity or worse,
 save waves 3 and 4, whose last round the owner chose ([why](../AI_WORKFLOW.md#the-final-audit)). The
@@ -510,3 +515,37 @@ twentieth round was one agent, attacking the fixes of a round that had found not
 severity, and so was every desktop round from the twenty-fourth, by the owner's rule of 1
 November; the phone's eighteenth gave its second agent a file of its own, on the rules for a
 file the phone cannot read.
+
+### The panel's fifth meeting, and its fixes
+
+On 22 November the panel met a fifth time, with the same roles and questions, every agent on
+Sonnet. Its eight readers then used the apps, each in a throwaway copy: the desktop through a
+small kit that presses its buttons and photographs its window, the phone on the emulator, one
+reader at a time. What they found by using the apps was not scored. Two agents read each finding
+in the code before the plan, and the owner chose to fix all but one. One agent per app attacked
+the fixes in each round; the desktop's loop closed at its fifth round, the phone's at its fourth
+([the story](../ISSUES_LOG.md#the-panels-fifth-meeting-what-using-the-apps-found)). A reader's
+later messages, kit changes and asks to go on, are kept at the end of its second task's file.
+
+The meeting took 3.34 million tokens, and the agents of its fixes 2.46 million more.
+
+| Prompt | App | Started (UTC) | Agents | Tokens (millions) |
+|---|---|---|---|---|
+| [panel-desktop-1.txt](panel5/panel-desktop-1.txt) to [panel-desktop-4.txt](panel5/panel-desktop-4.txt), the meeting | Desktop | 2026-11-22 12:22 | 4 | 0.59 |
+| [play-desktop-1.txt](panel5/play-desktop-1.txt) to [play-desktop-4.txt](panel5/play-desktop-4.txt), the same four agents using the app | Desktop | 2026-11-22 12:27 | 4 | 1.50 |
+| [panel-phone-1.txt](panel5/panel-phone-1.txt) to [panel-phone-4.txt](panel5/panel-phone-4.txt), the meeting | Phone | 2026-11-22 12:47 | 4 | 0.53 |
+| [play-phone-1.txt](panel5/play-phone-1.txt) to [play-phone-4.txt](panel5/play-phone-4.txt), the same four, one at a time on the emulator | Phone | 2026-11-22 13:00 | 4 | 0.73 |
+| [investigate-desktop.txt](panel5/investigate-desktop.txt), the findings read in the code before the plan | Desktop | 2026-11-22 13:55 | 1 | 0.22 |
+| [investigate-phone.txt](panel5/investigate-phone.txt), the same | Phone | 2026-11-22 13:55 | 1 | 0.14 |
+| [fix-r1-desktop.txt](panel5/fix-r1-desktop.txt), the first round on the fixes | Desktop | 2026-11-22 21:33 | 1 | 0.16 |
+| [fix-r1-phone.txt](panel5/fix-r1-phone.txt), the same | Phone | 2026-11-22 21:34 | 1 | 0.17 |
+| [fix-r2-desktop.txt](panel5/fix-r2-desktop.txt), the second round, clean | Desktop | 2026-11-22 22:59 | 1 | 0.22 |
+| [fix-r2-phone.txt](panel5/fix-r2-phone.txt), the second round | Phone | 2026-11-22 22:59 | 1 | 0.16 |
+| [fix-r3-desktop.txt](panel5/fix-r3-desktop.txt), the third round | Desktop | 2026-11-22 23:29 | 1 | 0.17 |
+| [fix-r3-phone.txt](panel5/fix-r3-phone.txt), the third round, clean | Phone | 2026-11-22 23:29 | 1 | 0.17 |
+| [fix-r4-desktop.txt](panel5/fix-r4-desktop.txt), the fourth round, clean | Desktop | 2026-11-23 00:02 | 1 | 0.15 |
+| [fix-r4-phone.txt](panel5/fix-r4-phone.txt), the fourth round, clean: the phone's loop closes | Phone | 2026-11-23 00:02 | 1 | 0.23 |
+| [fix-r5-desktop.txt](panel5/fix-r5-desktop.txt), the fifth round, clean: the desktop's loop closes | Desktop | 2026-11-23 00:09 | 1 | 0.16 |
+| [fix-r6-both.txt](panel5/fix-r6-both.txt), three low findings fixed after both loops closed, attacked once | Both | 2026-11-23 00:43 | 1 | 0.10 |
+| [changelog-classify.txt](panel5/changelog-classify.txt), each fix read against the code last shipped, for the changelogs and the version numbers | Both | 2026-11-23 00:51 | 1 | 0.17 |
+| [plan-map.txt](panel5/plan-map.txt), each fix mapped to the test plans' rows | Both | 2026-11-23 01:03 | 1 | 0.22 |

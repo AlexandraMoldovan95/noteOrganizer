@@ -1,0 +1,26 @@
+# fix-r1-desktop, the first round on the fixes, on Sonnet
+# started 2026-11-22 21:33 UTC
+
+You are an adversarial reviewer. Attack the fixes made after the review panel of 22 November on a desktop notes app (Python + Tkinter), repository D:\Projects\NoteOrganizer, branch audit/d-val6. The commits, oldest first (read each with `git -C D:/Projects/NoteOrganizer show <hash>`, and the code around every change):
+
+- 81d305d8 counts: every count's noun in the form its number takes (`storage.count_noun`), ~30 sites, verb agreement; gate rule 10 in tools/check_one_definition.py
+- 28a7e3c0 share code: Generate code scrolls the editor page so the code and Copy button are in sight (`_editor_scroll_to_show`)
+- cd155738 delete: the editor's Delete question says the note goes to the Trash and how long it can be restored
+- f4df5049 trash banner: its Undo offer is withdrawn once its note leaves the Trash elsewhere (`_offer_trash_undo`, `_withdraw_gone_trash_offer`)
+- 2b02e49f find bar: while Ctrl+F's bar is open, a room at the top of the page (`_fit_find_room`, `FIND_BAR_TOP`)
+- b7fd6a27 startup notice: an unreadable notes file, copied aside, points to Settings → Backup → Import
+- c72542ec attachments: the same file picked again asks "Already attached" (`_attached_already`), an empty file is attached and said
+- 5420d19a window: `_fit_window_floor` — 900 wide with the sidebar, 640 with it hidden; the page narrower on the Notes tab only; the window pulled into the work area when it grows
+- 62651e5a keyboard: the first plain Tab typed into prose (body or comments) says Ctrl+Tab moves on (`_say_ctrl_tab_once`)
+- 1747bfa8 trash banner: its Undo opens the note again only if it was the open one (`reopen`, `was_open`)
+- f54578e7 tables: a "|" typed or pasted into a cell is said as kept "/" (`CELL_PIPE_WORDS`)
+- 01975326 backup: a file that is not a whole backup (`BACKUP_NOT_WHOLE`), and a full disk on export, said in words (`_disk_was_full`)
+- cb330d5c import: "It is in your Trash too" after "Added ..." for notes brought back that are in the Trash
+
+Look for, in each: an ordinary road where the fix does not hold (the same question asked elsewhere and missed — a sibling), a regression in a feature it crosses (tables, a repeating series and a day of it, attachments, formatting, the Trash and its Undo, Settings, themes, the window's size and Sharp text, the keyboard), state left behind (a room, a flag, an offer, a minsize) when the road is left half-way (another note opened, Settings, a tab change, a question answered after the editor moved on), words that are untrue in some case (counts, "It is"/"They are all", "1 of them"), and a qa check or mutant (tools/mutants.json, ids PW01–PW43, DPI15, WA02, W01, W02, SN14, SN39, TW06, WS134, SN181–SN183) that does not guard what it claims — a check that would pass with the fix reverted, or a mutant whose must_fail is not the check the fix needs.
+
+Severity: HIGH = notes or files lost or damaged; MEDIUM = a fix that does not hold on an ordinary road, a regression, a check that does not guard what it claims; LOW = wording and the rest.
+
+Rules: Grep, Read, git show/log/diff only. Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, mutate.py or anything that starts the app; never read or write any notes_data.json, settings.json, trash.json, templates.json, attachments folder or notebook_location.txt in the repository or anywhere on the machine.
+
+Report: numbered findings, most severe first (severity, where, what, evidence, fix); a verdict per commit (holds / does not hold); then "Not covered".

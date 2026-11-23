@@ -1,0 +1,44 @@
+# plan-map, each fix mapped to the test plans' rows, on Sonnet
+# started 2026-11-23 01:03 UTC
+
+You are mapping recent fixes in two notes apps to the rows of their manual test plans, so the plans can be updated. You only read: change no file in either repository.
+
+You may write and run small read-only Python scripts, but only inside <scratchpad>\panel7\planmap\. Run them with `py -I`, and use openpyxl with read_only=True. Put `sys.stdout.reconfigure(encoding="utf-8")` at the top of every script.
+
+Never run qa*.py, test_*.py, note_organizer.py, tools/run_tests.py, gradle, adb or anything that starts an app. Never open any notes_data.json, settings.json, trash.json, templates.json, attachments folder or notebook_location.txt anywhere. No heredocs: write scripts with the Write tool.
+
+## The plans
+- Desktop: D:\Projects\NoteOrganizer\qa\NoteOrganizer_TestPlan.xlsx. The sheet "Test Cases" has the columns ID, Area, Sub-feature, Title, Priority, Preconditions, Test Steps, Expected Result, Actual Result, Status, Build, Tested By, Test Date, Bug ID, "Automation status (Claude)" and "Your notes".
+- Phone: D:\Projects\androidVersion\qa\NoteOrganizer_Android_TestPlan.xlsx, with the same columns.
+
+## The fixes
+- Desktop: every commit in `git -C D:/Projects/NoteOrganizer log 08563351..HEAD` that touches note_organizer.py or noteorganizer/. Read each with git show.
+- Phone: every commit in `git -C D:/Projects/androidVersion log 2c2f7be..HEAD` that touches app/src/main. Read each with git show.
+
+The fixes, in short:
+- the counts' nouns ("1 note", not "1 note(s)"; "30 days left");
+- Generate code scrolls to the code;
+- the note's own Delete question names the Trash;
+- the Trash banner's Undo, which is withdrawn once the note leaves the Trash elsewhere, and reopens the note only if it was open;
+- the find bar makes room at the page's top;
+- the unreadable-notes-file startup notice;
+- the same file attached twice asks "Already attached", and an empty file is said;
+- the window's minimum size: 900 with the sidebar, 640 hidden;
+- the first Tab typed into a note says Ctrl+Tab;
+- "|" in a table cell said as kept "/";
+- a file that is not a whole backup, and a full disk, said in words;
+- an imported note that is in the Trash too is said;
+- a full disk on attach and duplicate;
+- "One of them is OLDER";
+- phone only: the Appearance line at first start; a saved repeat keeps Undo/Redo; large letters (the Show pill, the category, Repeat and Mark-day sheets' buttons); the Repeat sheet's reason beside Save.
+
+## What to find, for each plan
+1. **Rows whose text is now untrue.** These are rows whose Test Steps, Expected Result, Preconditions or Automation status quote words or behaviour a fix changed. Examples: a quoted "note(s)" or "day(s)"; "Are you sure you want to delete this note?"; a window minimum of 640x600 while the sidebar shows; "File is not a zip file"; a Tab that only types a tab; an Undo that opens the note. Search every row's text, not only titles: grep for "(s)", "Are you sure", "640", "minsize", "Undo", "zip", "|", "attach", "Tab", "older", "OLDER", "Appearance", "used last", "font", "large letters", and anything else the diffs suggest. For each row give: the plan, ID, column, the exact old words (a short quote), what the app does or says now (cite the commit), and your suggested new words.
+2. **Rows whose behaviour a fix changed, though their text stays true.** A person who passed them on the earlier build should look again. Give: plan, ID, title, which commit, and one line on what to look at.
+3. **Fixes no row covers.** These need a new row. For each, give: the area (one that exists in the plan's Area column), sub-feature, title, priority (High, Medium or Low), preconditions, test steps, expected result, and an honest Automation status.
+   - Name the automated check that walks it: the desktop's qa suite check text and file (search qa/qa*.py for the check that the commit added), or the phone's unit test or walk part (tools/emulator/walk.py), and mutant id from tools/mutants.json.
+   - Use the plans' own wording rules. Read the "How to use" sheet of each plan and qa/README.md in each repository for how "Automated", "Automated in part" and "NEEDS YOUR EYE" are used.
+   - Where only a person can judge something (how a message reads, whether a red line beside Save is noticed), say NEEDS YOUR EYE and why.
+   - Use the existing rows near it as a model for length and tone.
+
+Report the three lists for the desktop, then for the phone. Keep quotes short. End with "Not covered": rows or commits you did not read, and searches you did not run.

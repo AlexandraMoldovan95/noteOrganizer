@@ -258,6 +258,15 @@ questions, every agent on Sonnet. It scored the desktop 5.88 and 6.88 and the ph
 rather than changes to the apps, the documents had not kept pace, and what is mine is still
 hard to tell from what is the agent's ([its prompts](audit/README.md#wave-6-the-lows-before-the-stores)).
 
+It met a fifth time on 22 November, with the same questions, and scored the desktop 6.13 and
+6.88 and the phone 6.50 and 7.50. This time I also asked its readers to use the apps, each in a
+throwaway copy, the phone on the emulator, as help rather than for the scores. Using the apps
+found eighteen things the reading had not, none losing a note: a result out of sight, words
+that kept back what happened, an Undo older than its subject
+([the story](ISSUES_LOG.md#the-panels-fifth-meeting-what-using-the-apps-found)). I chose to fix
+all but one, and rounds attacked the fixes until two in a row found nothing of medium severity
+([its prompts](audit/README.md#the-panels-fifth-meeting-and-its-fixes)).
+
 The phone needed more rounds than the desktop in waves 1 and 2, and its issues log says why: most
 of the extra rounds found the round before's own fixes wrong. Custom order's drag took twelve
 rounds to settle; the list's messages were redone five times, and settled only once the phone
@@ -294,8 +303,9 @@ The agents of waves 1 to 5 used about 107 million tokens, as their runs recorded
 its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
 its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.7
 million more to 19 November, 7.5 of them on Sonnet from 15 November, and the panel's fourth
-meeting 1.1; its lows wave, 21 and 22 November, 2.8 more, on Sonnet: about 188 million in all,
-as [the audit's record](audit/README.md) adds them up. The whole audit had been
+meeting 1.1; its lows wave, 21 and 22 November, 2.8 more, on Sonnet; the panel's fifth meeting
+3.3 and the agents of its fixes 2.5, on Sonnet: about 193 million in all, as
+[the audit's record](audit/README.md) adds them up. The whole audit had been
 estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 
@@ -321,7 +331,7 @@ four or five reviewers with separate territories, and a full wave only with my s
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
 
-The final audit was such a sign-off, and it ran far past its estimate: about 188 million agent
+The final audit was such a sign-off, and it ran far past its estimate: about 193 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
 A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
 them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in
