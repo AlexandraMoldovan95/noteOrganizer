@@ -610,15 +610,24 @@ in a sense of their own:
   - the commit(s) that will be pushed;
   - the files changed;
   - the tests/checks performed.
-- Wait for explicit user approval before running `git push`.
+- Wait for explicit user approval before running `git push` (one push is
+  delegated: a fix for a failing check on an open PR's branch, under
+  [Pull requests](#pull-requests)).
 
 ### Pull requests
 
 - Do not automatically create or merge pull requests.
 - The user decides whether and when to open or merge a PR.
-- GitHub CLI (`gh`) is not installed — a deliberate choice (2026-09-05),
-  not a gap: the user reviews PR texts here before they go up, and wants
-  to stay hands-on with the GitHub side. Do not propose installing it.
+- GitHub CLI (`gh`) is installed since 2026-11-23, by the owner's choice,
+  so the agent can see a pull request's CI fail and fix it itself. The
+  agent only READS with it: a PR's checks, a run's failed log, its state.
+  A push that fixes a failing check on an open PR's branch is delegated
+  (her words: "when you see it fail, check it yourself and fix it by
+  pushing again"); every other push, and opening, merging or closing a
+  PR or an issue, stays hers or is asked in the moment. Until then it was
+  not installed on purpose (2026-09-05), and the reason still holds: she
+  reviews PR texts here before they go up, and stays hands-on with the
+  GitHub side.
 - After pushing a branch, provide the GitHub PR creation link plus
   ready-to-paste PR title, description, and suggested label.
 - **When an issue accompanies a PR** (agreed 2026-09-05): a user-visible
@@ -682,7 +691,8 @@ by the agent's hand. Pulling runs nothing; running does.
 The following always require explicit approval in the moment, even if
 something similar was approved earlier:
 
-- `git push`
+- `git push` (but the delegated fix for a failing check on an open PR's
+  branch, under [Pull requests](#pull-requests))
 - merge
 - PR creation
 - force push
