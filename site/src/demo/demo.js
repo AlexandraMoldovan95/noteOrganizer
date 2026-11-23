@@ -1910,7 +1910,7 @@
         var left = Math.max(0, TRASH_DAYS - Math.floor((Date.now() - t.deletedAt) / 86400000));
         list.appendChild(el("div", { class: "trash-row" },
           el("div", { class: "tr-text" }, el("b", { text: t.note.title || "Untitled" }),
-            el("small", { text: "deleted " + showDate(iso(new Date(t.deletedAt))) + " · " + left + " day(s) left" })),
+            el("small", { text: "deleted " + showDate(iso(new Date(t.deletedAt))) + " · " + left + (left === 1 ? " day left" : " days left") })),
           el("button", { type: "button", class: "btn-accent small", onclick: function () { restore(i); } }, "Restore"),
           el("button", { type: "button", class: "btn-danger small", onclick: function () { deleteForever(i); } }, "Delete")));
       });
