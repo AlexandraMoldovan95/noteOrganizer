@@ -19,14 +19,14 @@ pass that is the scripts' says so.
 
 ## The plan in numbers
 
-Counted on 23 November 2026: 992 cases, 900 walked and passed, 92 not yet
-walked. Of the passes, 604 are mine, by hand on the built `.exe`; 296 are
-the scripted suites', run for the final audit on the source of 0.102.556
-and marked *Claude (automated, final audit)*: a pass for what the suites
-walk, not a walk by hand like mine, with what they leave to the hand
-named in Actual Result. The 92 not yet walked are 90 cases that need my
-eye, whose result columns hold the suites' run all the same, and two the
-scripts did not run this time.
+Counted on 23 November 2026: 992 cases, 991 walked and passed, 1 not yet
+walked. Of the passes, 695 are mine, by hand on the built `.exe`, among
+them every case that needs my eye; 296 are the scripted suites', run for
+the final audit on the source of 0.102.556 and marked *Claude (automated,
+final audit)*: a pass for what the suites walk, not a walk by hand like
+mine, with what they leave to the hand named in Actual Result. The one
+not yet walked, case 704, needs the app installed from the Microsoft
+Store, and waits for the listing.
 
 ### By priority
 
