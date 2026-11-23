@@ -3108,6 +3108,19 @@ check(f"a note differing by a file alone is said to take the file, no Restore pr
       f"({_nf_said[-120:]!r})",
       'adds the attached files it lacks, nothing else' in _nf_said
       and 'Restore previous' not in _nf_said and 'OLDER' not in _nf_said)
+# Two notes edited elsewhere, one of them older in the backup: said as one,
+# as the rescue line says one, not "1 of them are".
+_od_a = NO.normalize_note({'id': 11, 'title': 'Alpha', 'body': 'a', 'updated': '2026-11-10 10:00:00'})
+_od_b = NO.normalize_note({'id': 12, 'title': 'Beta', 'body': 'b', 'updated': '2026-11-01 10:00:00'})
+app.notes = [_od_a, _od_b]; app.save_notes()
+_od_asked = []
+app._themed_dialog = lambda *a, **k: (_od_asked.append(a[1]), 'cancel')[1]
+app._take_known_notes([dict(_od_a, body='a, from the backup', updated='2026-11-01 10:00:00'),
+                       dict(_od_b, body='b, from the backup', updated='2026-11-10 10:00:00')], 'backup')
+app._themed_dialog = _real_dialog
+_od_said = _od_asked[0] if _od_asked else ''
+check(f"one of two backup notes older than here is said as one ({_od_said[-70:]!r})",
+      'One of them is OLDER' in _od_said and 'of them are' not in _od_said)
 # ...and words typed in it just before, saved by Update's own flush, make it a
 # note Update rewrites: asked again, in those words, not updated on a promise
 # of "nothing else" (its rescue copy replaced without a word).

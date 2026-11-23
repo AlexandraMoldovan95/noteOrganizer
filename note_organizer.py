@@ -10990,7 +10990,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             1 for mine, theirs in texts
             if str(theirs.get("updated") or "") < str(mine.get("updated") or ""))
         if older:
-            who = "It is" if count == 1 else f"{older} of them are"
+            who = "It is" if count == 1 else (
+                "One of them is" if older == 1 else f"{older} of them are")
             message += f"\n\n{who} OLDER than the copy on this device."
         # One rescue copy per note: an update's takes the place of one the
         # note still needs, so that is said rather than done in silence.

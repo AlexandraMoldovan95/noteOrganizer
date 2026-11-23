@@ -21088,5 +21088,23 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW54",
+    "about": "one of two backup notes older than the copy here is said \"1 of them are OLDER\"",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            who = \"It is\" if count == 1 else (\n                \"One of them is\" if older == 1 else f\"{older} of them are\")\n",
+        "replace": "            who = \"It is\" if count == 1 else f\"{older} of them are\"\n"
+      }
+    ],
+    "must_fail": [
+      "one of two backup notes older than here is said as one"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]
