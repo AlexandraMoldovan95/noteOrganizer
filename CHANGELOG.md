@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.101.542](#0101542--2026-11-22) | 2026-11-22 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
+| [0.102.556](#0102556--2026-11-23) | 2026-11-23 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too, and what a review panel found by using it; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
@@ -110,13 +110,15 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.101.542] — 2026-11-22
+## [0.102.556] — 2026-11-23
 
 *Highlights: the final audit before the stores. For nearly three weeks agents tried to break the
 app — lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a
 careless hand — and what they found that was already in 0.97.405 is fixed below, one entry for
 each defect, however many rounds its fix took; the findings of low severity were fixed too,
-before the stores rather than after. The notebook moves to the profile's own folder, where an
+before the stores rather than after. Last, a review panel used the app as a person would, and
+what it found is fixed as well: counts said in the form their number takes, a Delete that says
+the Trash, a window never narrower than its editor. The notebook moves to the profile's own folder, where an
 uninstall leaves it; the keyboard reaches every part of the app; nothing a file, a paste or a
 share code can hold stops the app starting or freezes it; and a note keeps what a newer version
 of the app adds to it.*
@@ -133,6 +135,9 @@ of the app adds to it.*
   in the Store, a newer version may add something to a note, and this one erased it at its next
   load, from a backup or at a start. It keeps up to 32 such fields now, 65,536 characters in
   all, and a backup's Update keeps the note's own for Restore previous. The owner's choice.
+- **The first Tab typed into a note says how to move on.** Tab types a tab in a note's text and
+  its comments, and Ctrl+Tab moves on to the next control; the first Tab of a run says so on the
+  status line, and still types its tab.
 
 ### Changed
 
@@ -271,6 +276,10 @@ of the app adds to it.*
   running app; the next start tries again now.
 - **A pin or a tick written as "false" or "no" is neither,** as on the phone. A notes file
   edited by hand made such a note pinned and such an item ticked.
+- **The notice for an unreadable notes file gives a step to take.** It ended "or ask for help
+  with the preserved file", with no one to ask; it says to import the most recent backup
+  (Settings → Backup → Import) and to keep the preserved file, which still holds what could not
+  be read.
 
 #### Attachments and pictures
 
@@ -302,6 +311,14 @@ of the app adds to it.*
 - **A note whose title holds a control character exports,** and a note an export cannot write
   is named.
 - **The crash log no longer writes your data file's full path,** with your user name in it.
+- **Attaching a file the note already holds asks first, and an empty file is said.** The same
+  file picked again became a second attachment and a second copy on the disk; it asks **Already
+  attached** now, once for all such files, with No the default, and an empty file is attached
+  with a banner saying it is empty (0 bytes).
+- **A file the disk has no room for is said in words, and its half copy is not left behind.** Add
+  file onto a full disk said "Failed to attach … [Errno 28]" and left a cut-off copy no note
+  named in the attachments folder; a duplicated note's file copy left one too. It says the file
+  wasn't attached because the disk is full, and the half copy goes.
 
 #### Pasting, and long text
 
@@ -438,6 +455,12 @@ of the app adds to it.*
   during the unpacking the same; a damaged stream, an encrypted entry or an unknown compression
   said "Import failed unexpectedly: Error -3 while decompressing data". Each is said as what it
   is now.
+- **A file that is not a backup is said as that.** A text file picked as a backup said "File is
+  not a zip file", in the library's words; it says now that it isn't a whole Note Organizer
+  backup, or was damaged on its way here, and to try another copy of it.
+- **An export onto a full disk says so in words.** A backup's export and a note's Export as file
+  said "[Errno 28] No space left on device"; they say the disk is full, that nothing was
+  written, and to free up space or save it somewhere else.
 - **A backup imported again brings in nothing it already brought.** A note, or a trashed note,
   whose attached file a note here used came in on a copy of that file; every later import of the
   same backup asked about the note as edited elsewhere, lacking a file it had, each Update added
@@ -456,11 +479,17 @@ of the app adds to it.*
   stood still.
 - **Find, and Tab into a table's cell, bring the cell into sight.** A tall table's cell stayed
   below the edge, and the note jumped at every Find step.
+- **The find bar no longer covers the top of the note.** It sat over half the category button,
+  over "Edit the whole series" on a day of a series and over the end of a series' line; while it
+  is open the note starts below it.
 - **A new note that Show, the search or a folded group hides says so:** "Saved in General, hidden
   by Show: Work", with **Show all**. It seemed to vanish. An empty list names what hides its
   notes.
 - **Copy code copies the note as it is now,** not as it was when the panel opened; a day of a
   series is shared as a note of that date.
+- **Generate code shows the code it made.** At an ordinary window height the code appeared below
+  the window's edge, and nothing scrolled or said so, so the button seemed to do nothing; the
+  note's page moves to the code and its Copy button now.
 - **A share code is found among the words pasted around it.**
 - **When every note left in a code or a backup looks like one here, Skip them is the default,**
   and their files go to the notes they look like. Cancel was the only no, and it dropped an
@@ -471,6 +500,10 @@ of the app adds to it.*
   were called duplicates.
 - **Import complete says each count in the form its number takes:** "Also restored 2
   categories and 1 trashed note.", where it said "2 category/categories".
+- **An import says when a note it brings back is in the Trash too.** A backup made before a note
+  was deleted brought it back into the list while its deleted copy stayed in the Trash, and
+  nothing said so; "It is in your Trash too (Settings → Recently deleted)." follows what was
+  added now, for a backup and for a share code.
 
 #### Repeating notes and the calendar
 
@@ -499,6 +532,9 @@ of the app adds to it.*
   square for a two-column table and one fewer than the caption said for any other; its first
   square now makes two columns too.
 - **A table inserted right above another leaves one empty line between them,** not two.
+- **A "|" typed or pasted into a table cell is said, as it is kept as "/".** A cell cannot hold
+  the table's own divider, so it became "/" without a word; the status line says so once each
+  time the cell is opened.
 - **Statistics' Categories tile counts every category,** those no note is in yet too. It counted
   only the categories in use.
 - **Enter on a question never presses an answer that cannot be taken back.** Reset of a moved day
@@ -511,6 +547,20 @@ of the app adds to it.*
   they delete; a Cancel in Import code left the last import's "Added …" standing; a day's quick
   look called a note holding only a checklist or a table "(empty note)", and a series of one
   said "1 times".
+- **Every count the app says is in the form its number takes.** About forty messages — the
+  selected notes' bar, exports, the Trash's days left, Duplicates, deleting a category, the
+  calendar's day preview, the start's tidy-up, Import complete's own first line — wrote "1
+  note(s)" or "30 day(s) left" where the number was known, and an import's question said "1 of
+  them are OLDER"; they say "1 note" and "2 notes" now, and the verb beside them agrees.
+- **A note's own Delete says it goes to the Trash.** "Are you sure you want to delete this note?"
+  read as gone for good; the editor's, the card's and the calendar's Delete ask "Move this note
+  to the Trash? You can restore it within 30 days." now, as the ticked delete does.
+- **"Note moved to Trash" comes down once the note has left the Trash another way.** Restored from
+  Settings → Recently deleted, or deleted for good there, the banner and its Undo stayed up,
+  saying the opposite of what had just happened.
+- **Undo on "Note moved to Trash" opens the note again only if it was the one open.** Deleted
+  from the list's menu, or ticked, the note came back in the editor over the note being written;
+  it goes back into the list now, and the editor stays where it was.
 - **The light and dark switch goes back to the last theme of each kind after a restart,** as it
   says. It remembered them only while the app was open, then gave Midnight Purple or Soft
   Lavender.
@@ -536,6 +586,10 @@ of the app adds to it.*
 - **A category added at the foot of a long list is brought into sight.**
 - **Long category names end in "…"** in the note's list and on its button, not cut bare at 13
   letters.
+- **The window stops where the editor still fits.** It could be made 640 wide while the sidebar
+  and the editor side by side needed 900, so the editor ran off the edge with its category and
+  buttons out of sight; with the sidebar shown the window is no narrower than both now, and 640
+  by 600 with it hidden.
 - **The window opens above the taskbar.** Windows chooses where it opens, and a window as tall as
   the screen allows could open with its foot under the taskbar, the Settings button half hidden;
   it is moved up or left just that far, once, and left where Windows put it when it fits.
@@ -543,7 +597,7 @@ of the app adds to it.*
 ### Testing
 
 - Every fix landed with a check that fails without it and a mutant that proves the check: the
-  catalogue grew from 422 mutants to 1,403.
+  catalogue grew from 422 mutants to 1,457.
 - `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
   share, backup and restore, after which no day's words are lost or doubled but those deleted or
   typed over.
