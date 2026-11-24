@@ -1,7 +1,7 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **992 cases** on 23 November
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **995 cases** on 24 November
 2026. I walk it
 by hand on the packaged `.exe` before a release - a case I pass is one I've seen pass, and a
 pass that is the scripts' says so.
@@ -19,21 +19,23 @@ pass that is the scripts' says so.
 
 ## The plan in numbers
 
-Counted on 23 November 2026: 992 cases, 991 walked and passed, 1 not yet
+Counted on 24 November 2026: 995 cases, 991 walked and passed, 4 not yet
 walked. Of the passes, 695 are mine, by hand on the built `.exe`, among
 them every case that needs my eye; 296 are the scripted suites', run for
 the final audit on the source of 0.102.556 and marked *Claude (automated,
 final audit)*: a pass for what the suites walk, not a walk by hand like
-mine, with what they leave to the hand named in Actual Result. The one
-not yet walked, case 704, needs the app installed from the Microsoft
-Store, and waits for the listing.
+mine, with what they leave to the hand named in Actual Result. Of the four
+not yet walked, case 704 needs the app installed from the Microsoft Store,
+and waits for the listing; cases 1100 to 1102, added on 24 November for two
+fixes from my own field test and a new way to delete rows and columns, wait
+for the next build.
 
 ### By priority
 
 | Priority | Cases |
 |---|---:|
-| High | 263 |
-| Medium | 457 |
+| High | 264 |
+| Medium | 459 |
 | Low | 272 |
 
 ### The six largest areas
@@ -44,7 +46,7 @@ Store, and waits for the listing.
 | Editor | 103 |
 | Notes | 96 |
 | Recurrence | 88 |
-| Tables | 72 |
+| Tables | 74 |
 | Settings | 71 |
 
 ## The test case template, filled out four times
