@@ -61,9 +61,14 @@ def git(*args):
 def main():
     import guest  # the memory ceiling, before git starts (tools/guest.py)
     guest.settle(heavy=False)
-    known = {m["id"] for m in json.load(open(os.path.join(ROOT, "tools", "mutants.json"), encoding="utf-8"))}
+    ids = [m["id"] for m in json.load(open(os.path.join(ROOT, "tools", "mutants.json"), encoding="utf-8"))]
+    known = set(ids)
     if not known:
         sys.exit("check_fix_mutants: the catalogue holds no mutant; a gate with nothing to read must not pass")
+    # A "Mutant: <id>" given to two entries names either (2026-11-24).
+    twice = sorted({i for i in ids if ids.count(i) > 1})
+    if twice:
+        sys.exit("check_fix_mutants: these ids are in tools/mutants.json more than once: " + ", ".join(twice))
     self_test(known)
     if git("rev-parse", "--is-shallow-repository").strip() == "true":
         sys.exit("check_fix_mutants: the history is cut short (a shallow clone), so the commit at the cut "
