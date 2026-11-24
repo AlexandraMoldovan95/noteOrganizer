@@ -116,9 +116,9 @@ How the numbers themselves are counted is the
 
 - **Several rows or columns deleted at once, or cleared.** Select cells that reach across them
   and right-click: **Delete 3 rows** takes every row the selection touches, **Delete 4 columns**
-  every column, and one Ctrl+Z brings them all back, their formatting too; **Clear 4 columns**
-  empties the columns and keeps them, and a cell's own menu has **Clear column** beside
-  **Delete column**. Four columns of eight took four trips through a cell's menu. Delete now
+  every column, and one Ctrl+Z brings them all back, their formatting too; **Clear 3 rows** and
+  **Clear 4 columns** empty them and keep them, and a cell's own menu has **Clear row** and
+  **Clear column** beside its Delete. Four columns of eight took four trips through a cell's menu. Delete now
   deletes: every row or every column deleted is the table deleted, and a table left with one
   column, which is no table, leaves its words as lines of the note. It emptied columns before
   instead of going below two. A hidden column inside the selection stays.

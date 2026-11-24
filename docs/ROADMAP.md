@@ -305,8 +305,8 @@ grew it up: multi-line cells (`<br>`), per-character styles rendered as runs, a 
 editor with an active colour, real checkboxes (`[ ]`/`[x]`), row-height drags, row duplication and
 auto-scrolling drag-selection. After the final audit, the owner's field test asked for several
 rows or columns deleted at once (2026-11-24): a selection's menu deletes every row, or every
-column, it reaches, in one Ctrl+Z, and clears columns as its own command; Delete deletes, down
-to the whole table.
+column, it reaches, in one Ctrl+Z, and clears rows and columns as commands of their own; Delete
+deletes, down to the whole table.
 
 The standing decision: the note's plain text remains the single source of truth throughout — see
 ["Tables: plain text is the store, a drawn grid is the view"](ARCHITECTURE.md#tables-plain-text-is-the-store-a-drawn-grid-is-the-view).
