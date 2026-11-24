@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.103.558](#0103558--2026-11-24) | 2026-11-24 | Typing straight after clicking a table cell lands in it, a long checklist item uses its row's width, and several rows or columns are deleted or cleared at once. |
 | [0.102.556](#0102556--2026-11-23) | 2026-11-23 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too, and what a review panel found by using it; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
@@ -110,7 +111,11 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.103.558] — 2026-11-24
+
+*Highlights: what the owner's own field test of 0.102.556 found. Typing straight after clicking
+a table cell lands in the cell, a long checklist item uses its row's whole width, and a
+selection's menu deletes or clears several rows or columns at once.*
 
 ### Added
 

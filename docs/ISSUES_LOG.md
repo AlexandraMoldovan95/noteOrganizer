@@ -240,7 +240,7 @@ is in the table below as well.
 | [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | 0.102.556 |
 | [Ctrl+T and the tags Tk shares](#ctrlt-and-the-tags-tk-shares) | Measure the road the code takes, not one beside it; and a fix of a round's lows is code too, each line needing its own check. | 0.102.556 |
 | [The panel's fifth meeting: what using the apps found](#the-panels-fifth-meeting-what-using-the-apps-found) | A reader of the code finds what it says; a person using the app finds where it is said: a result out of sight, an offer older than its subject, words that keep back what happened. | 0.102.556 |
-| [The digit typed between the press and the release](#the-digit-typed-between-the-press-and-the-release) | A gesture still deciding what it is must not move the keyboard somewhere nobody chose: give the keys to the likeliest target, and let the rarer gesture take them back. | next |
+| [The digit typed between the press and the release](#the-digit-typed-between-the-press-and-the-release) | A gesture still deciding what it is must not move the keyboard somewhere nobody chose: give the keys to the likeliest target, and let the rarer gesture take them back. | 0.103.558 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -6928,7 +6928,8 @@ leave what is already stored alone.
 
 ### The digit typed between the press and the release
 
-*(next · 2026-11-24 · the owner's field report on 0.102.556)*
+*([0.103.558](../CHANGELOG.md#0103558--2026-11-24) · 2026-11-24 · the owner's field report on
+0.102.556)*
 
 **Symptom:** typing 1, 2, 3, 4, 5 quickly down a column, a click on each cell and a digit, the 3
 landed on the line under the table, and the cell it was meant for stayed empty. Held down, the
