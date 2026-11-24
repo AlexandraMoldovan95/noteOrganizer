@@ -4146,26 +4146,248 @@ check(f'deleting the inserted row and column restores the shape '
       f'({_t["nrows"]}x{_t["ncols"]})',
       (_t['nrows'], _t['ncols']) == (2, 2)
       and core_tables.split_row(lines_now()[0]) == ['A', 'B'])
-# Two columns is the floor -- a one-column row would read as prose, not
-# as a table -- so at two, deleting a column empties it instead.
+# Delete deletes (the owner, 2026-11-24): at two columns, deleting one
+# leaves one, which is no table -- a one-column row reads as prose -- so its
+# words stay as lines of the note. It emptied the column before.
 app._grid_delete_col(_t, 1)
 app.update()
-_t = app._grid_at_line(1)
-check(f'at two columns, deleting empties the chosen one '
-      f'({core_tables.split_row(lines_now()[0])})',
-      _t is not None and _t['ncols'] == 2
-      and core_tables.split_row(lines_now()[0]) == ['A', '']
-      and core_tables.split_row(lines_now()[1]) == ['C', ''])
-app._grid_delete_col(_t, 0)
+check(f'at two columns, deleting one leaves the other\'s words as lines, '
+      f'the table gone ({lines_now()[:3]})',
+      app._grid_at_line(1) is None and core_tables.find_blocks(body()) == []
+      and lines_now()[:2] == ['A', 'C'])
+set_body('| A | B |\n| C | D |')
+app._render_table_grids()
 app.update()
 _t = app._grid_at_line(1)
-check('and the table itself is never dissolved by column deletes',
-      _t is not None and _t['ncols'] == 2
-      and core_tables.split_row(lines_now()[0]) == ['', ''])
-app._grid_delete_table(_t)
+if _t is not None:
+    app._grid_delete_table(_t)
 app.update()
 check('and deleting the table removes it outright',
-      app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+      _t is not None and app._grid_at_line(1) is None
+      and core_tables.find_blocks(body()) == [])
+
+# ---- MANY ROWS OR COLUMNS DELETED AT ONCE (2026-11-24) ----
+# Four columns of eight took four trips through the cell menu. A
+# selection's menu deletes every row, or every column, it reaches, in one
+# operation that one Ctrl+Z brings back, the other cells keeping their
+# styles; a hidden column inside the span stays. Delete deletes, Clear
+# empties (the owner, 2026-11-24): every row or column deleted is the table
+# deleted, and one column left is lines of text, a table needing two.
+_md_body = ('| H0 | H1 | H2 | H3 | H4 |\n| --- | --- | --- | --- | --- |\n'
+            '| a0 | a1 | a2 | a3 | a4 |\n| b0 | b1 | b2 | b3 | b4 |\n'
+            '| c0 | c1 | c2 | c3 | c4 |')
+
+
+def _md_setup():
+    set_body(_md_body)
+    _w = _md_body.index('a4')
+    app._apply_formatting(app.body_text, [
+        {'start': _w, 'end': _w + 2, 'style': 'bold'}])
+    app._render_table_grids()
+    app.update()
+    return app._grid_at_line(1)
+
+
+def _md_menu(a, b):
+    """The menu of the selection from cell *a* to *b*, posted over *a*."""
+    info = app._grid_at_line(1)
+    if info is None or a not in info['cells']:
+        return None
+    app._grid_select_range(info, a, b)
+    posted = []
+    real_popup = NO.tk.Menu.tk_popup
+    NO.tk.Menu.tk_popup = lambda _m, *x, **k: posted.append(_m)
+    try:
+        cell = info['cells'][a]
+        app._grid_menu(info, type('E', (), {
+            'x': int(cell['x'] + 12), 'y': int(cell['y'] + 6),
+            'x_root': 0, 'y_root': 0})())
+    finally:
+        NO.tk.Menu.tk_popup = real_popup
+    return posted[-1] if posted else None
+
+
+def _md_rows():
+    return [core_tables.split_row(l) for l in lines_now()
+            if l.strip() and not core_tables.is_separator_row(l)]
+
+
+def _md_bold():
+    _b = app.body_text.get('1.0', 'end-1c')
+    return sorted(_b[s['start']:s['end']]
+                  for s in app._extract_formatting(app.body_text)
+                  if s['style'] == 'bold')
+
+
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((1, 1), (2, 3))
+_md_labels = _menu_entries(_mdm) if _mdm else []
+check(f'a selection across rows and columns offers to delete them all '
+      f'({[l for l in _md_labels if l.startswith("Delete")]})',
+      'Delete 2 rows' in _md_labels and 'Delete 3 columns' in _md_labels
+      and _menu_entry_state(_mdm, 'Delete 2 rows') == 'normal'
+      and _menu_entry_state(_mdm, 'Delete 3 columns') == 'normal')
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 3 columns')
+app.update()
+check(f'Delete 3 columns takes the three, the other cells keeping their '
+      f'styles ({_md_rows()}; bold {_md_bold()})',
+      _md_pressed and _md_rows() == [['H0', 'H4'], ['a0', 'a4'],
+                                     ['b0', 'b4'], ['c0', 'c4']]
+      and _md_bold() == ['a4'])
+app._body_undo_redo('undo')
+app.update()
+check(f'...and one Ctrl+Z brings all three back, bold and all '
+      f'({_md_rows()[:2]}; bold {_md_bold()})',
+      body() == _md_before and _md_bold() == ['a4'])
+
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((1, 0), (2, 1))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 2 rows')
+app.update()
+check(f'Delete 2 rows takes the rows the selection reaches, every column '
+      f'of them ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', 'H1', 'H2', 'H3', 'H4'],
+                                     ['c0', 'c1', 'c2', 'c3', 'c4']])
+app._body_undo_redo('undo')
+app.update()
+check('...and one Ctrl+Z brings both rows back',
+      body() == _md_before)
+
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((0, 0), (3, 0))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 4 rows')
+app.update()
+check(f'deleting every row a selection reaches deletes the table '
+      f'({body()!r})',
+      _md_pressed and app._grid_at_line(1) is None
+      and core_tables.find_blocks(body()) == [])
+app._body_undo_redo('undo')
+app.update()
+check('...and one Ctrl+Z brings the table back',
+      body() == _md_before and app._grid_at_line(1) is not None)
+
+# A hidden column inside the span stays: nobody saw it go.
+_md_setup()
+app._grid_hide_col(app._grid_at_line(1), 2)
+app.update()
+_mdm = _md_menu((1, 1), (1, 3))
+_md_labels = _menu_entries(_mdm) if _mdm else []
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 2 columns')
+app.update()
+check(f'a hidden column inside the selection is not deleted with it '
+      f'({[l for l in _md_labels if l.startswith("Delete")]}; {_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', 'H2', 'H4'], ['a0', 'a2', 'a4'],
+                                     ['b0', 'b2', 'b4'], ['c0', 'c2', 'c4']])
+
+# Four of five deleted leave one column, which is no table: its words stay
+# as lines of the note, the bold with them. It used to stop at two columns
+# and empty the rest, which read as "deletes only the words".
+_md_setup()
+_mdm = _md_menu((0, 0), (0, 3))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 4 columns')
+app.update()
+check(f'deleting all but one column leaves its words as lines, the bold '
+      f'kept ({lines_now()[:5]}; bold {_md_bold()})',
+      _md_pressed and app._grid_at_line(1) is None
+      and lines_now()[:4] == ['H4', 'a4', 'b4', 'c4'] and _md_bold() == ['a4'])
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((0, 0), (0, 4))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 5 columns')
+app.update()
+check(f'deleting every column deletes the table ({body()!r})',
+      _md_pressed and app._grid_at_line(1) is None
+      and core_tables.find_blocks(body()) == [])
+app._body_undo_redo('undo')
+app.update()
+check('...and one Ctrl+Z brings it back', body() == _md_before)
+# A cell's line breaks become real lines, and its colour (Highlight cell)
+# stays on its words.
+set_body('| A | B |\n| --- | --- |\n| a | b1<br>b2 |')
+app._render_table_grids()
+app.update()
+_md_hl = app._grid_at_line(1)
+if _md_hl is not None:
+    app._grid_apply_style(_md_hl, (1, 1, 1, 1), 'highlight', '#ffd166',
+                          through_editor=False)
+    app.update()
+    _md_hl = app._grid_at_line(1)
+if _md_hl is not None:
+    app._grid_delete_col(_md_hl, 0)
+app.update()
+_md_hl_lines = [any(t.startswith('highlight_')
+                    for t in app.body_text.tag_names(f'{n}.0')) for n in (2, 3)]
+check(f'a cell left alone keeps its line breaks as lines and its colour on '
+      f'its words ({lines_now()[:4]}; lines 2-3 coloured {_md_hl_lines})',
+      _md_hl is not None and lines_now()[:3] == ['B', 'b1', 'b2']
+      and _md_hl_lines == [True, True])
+
+# Clear keeps the columns, empty, top to bottom; a hidden one in the span
+# keeps its words.
+_md_setup()
+app._grid_hide_col(app._grid_at_line(1), 2)
+app.update()
+_mdm = _md_menu((1, 1), (1, 3))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Clear 2 columns')
+app.update()
+check(f'Clear 2 columns empties them top to bottom and keeps them, a hidden '
+      f'one between untouched ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', '', 'H2', '', 'H4'],
+                                     ['a0', '', 'a2', '', 'a4'],
+                                     ['b0', '', 'b2', '', 'b4'],
+                                     ['c0', '', 'c2', '', 'c4']])
+
+# ...and Clear rows does the same across (the owner, 2026-11-24): from a
+# selection, every row it reaches; from one cell's menu, its own row.
+_md_setup()
+app._grid_hide_col(app._grid_at_line(1), 2)
+app.update()
+_mdm = _md_menu((1, 1), (2, 1))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Clear 2 rows')
+app.update()
+check(f'Clear 2 rows empties them across and keeps them, a hidden column\'s '
+      f'cells untouched ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', 'H1', 'H2', 'H3', 'H4'],
+                                     ['', '', 'a2', '', ''],
+                                     ['', '', 'b2', '', ''],
+                                     ['c0', 'c1', 'c2', 'c3', 'c4']])
+_md_info = app._grid_at_line(1)
+app._grid_clear_selection()
+_md_posted = []
+_md_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *x, **k: _md_posted.append(_m)
+try:
+    if _md_info is not None:
+        _md_c30 = _md_info['cells'][(3, 0)]
+        app._grid_menu(_md_info, type('E', (), {
+            'x': int(_md_c30['x'] + 12), 'y': int(_md_c30['y'] + 6),
+            'x_root': 0, 'y_root': 0})())
+finally:
+    NO.tk.Menu.tk_popup = _md_real_popup
+_md_pressed = bool(_md_posted) and _menu_invoke(_md_posted[-1], 'Clear row')
+app.update()
+check(f'Clear row from a cell\'s menu empties that row, its hidden cell kept '
+      f'({_md_rows()[3:]})',
+      _md_pressed and _md_rows()[3:] == [['', '', 'c2', '', '']])
+
+# A merge a deleted column cuts through, in a row the selection never
+# reached, comes apart: its covered cell must not join the column left of
+# the cut.
+_md_setup()
+app._grid_merge_with(app._grid_at_line(1), 3, 4, 'left')
+app.update()
+_mdm = _md_menu((1, 2), (1, 3))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 2 columns')
+app.update()
+_md_after = app._grid_at_line(1)
+check(f'a merge cut by a deleted column comes apart instead of joining '
+      f'the cell to its left ({_md_rows()})',
+      _md_pressed and _md_rows()[3] == ['c0', 'c1', '']
+      and _md_after is not None and _md_after['cells'][(3, 1)]['cs'] == 1)
+set_body('')
 
 # ---- MERGE AND INSERT FROM A CELL'S MENU, PRESSED AS A PERSON DOES ----
 # "Merge with cell to the left / above" wrote a merge marker over the
@@ -4499,7 +4721,7 @@ check('and there is always a line under the last table to land on',
 _t = app._grid_at_line(1)
 _cell = _t['cells'][(0, 1)]
 # A click is a press AND a release now that dragging selects; the editor
-# opens on the release, so a drag can end without one.
+# opens at the press, and a drag that follows closes it.
 _qa_fire(_t['canvas'], '<Button-1>',
          x=_cell['x'] + 5, y=_cell['y'] + 5)
 _qa_fire(_t['canvas'], '<ButtonRelease-1>',
@@ -4510,6 +4732,150 @@ check(f'clicking a cell opens the editor on it '
       app._cell_editor is not None
       and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
 app._commit_cell_editor()
+app.update()
+
+# ---- A CELL OPENS AT THE PRESS, NOT AT THE RELEASE ----
+# Field report (2026-11-24): typing 1, 2, 3 quickly down a column, the 3
+# landed under the table. The press took the keyboard to the note, whose
+# caret stands under the table, and the cell opened only at the release:
+# what was typed while the button was still down went there. A drag now
+# starts once the hand has moved GRID_DRAG_SLOP pixels on the screen.
+set_body('| H1 | H2 | H3 |\n| a | b | c |\n| d | e | f |')
+app._render_table_grids()
+app.update()
+
+
+def _row_cells_P(r):
+    grid = app._grid_at_line(1)
+    n = app._grid_line_of_row(grid, r) if grid else None
+    if n is None:
+        return None
+    return core_tables.split_row(app.body_text.get(f'{n}.0', f'{n}.end'))
+
+
+_tP = app._grid_at_line(1)
+_cP = _tP['cells'][(1, 0)]
+_fsP = []
+_real_fsP = tk.Misc.focus_set
+tk.Misc.focus_set = (lambda self, *a, **k:
+                     (_fsP.append(self), _real_fsP(self, *a, **k))[1])
+try:
+    _qa_fire(_tP['canvas'], '<Button-1>',
+             x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+    _edP = getattr(app, '_cell_editor', None)
+    _fsLastP = _fsP[-1] if _fsP else None
+finally:
+    tk.Misc.focus_set = _real_fsP
+check(f'a press on a cell opens it before the release, the keyboard in it '
+      f'({_edP and (_edP["r"], _edP["c"])}; '
+      f'last focus to the cell: {bool(_edP) and _fsLastP is _edP["entry"]})',
+      _edP is not None and (_edP['r'], _edP['c']) == (1, 0)
+      and _fsLastP is _edP['entry'])
+_qa_fire(_tP['canvas'], '<ButtonRelease-1>',
+         x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+app.update()
+check('...and the release leaves it open there',
+      getattr(app, '_cell_editor', None) is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (1, 0))
+# From one open cell to the next, the keyboard never stops at the note's
+# caret under the table: it showed there for a moment (her re-test).
+_tP = app._grid_at_line(1)
+_cP = _tP['cells'][(2, 1)]
+_fsP = []
+tk.Misc.focus_set = (lambda self, *a, **k:
+                     (_fsP.append(self), _real_fsP(self, *a, **k))[1])
+try:
+    _qa_fire(_tP['canvas'], '<Button-1>',
+             x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+    _qa_fire(_tP['canvas'], '<ButtonRelease-1>',
+             x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+    app.update()
+finally:
+    tk.Misc.focus_set = _real_fsP
+_edP = getattr(app, '_cell_editor', None)
+check(f'a press from one open cell to another never passes the keyboard '
+      f'through the note ({_fsP.count(app.body_text)} focus calls on the note; '
+      f'editor {_edP and (_edP["r"], _edP["c"])})',
+      app.body_text not in _fsP and _edP is not None
+      and (_edP['r'], _edP['c']) == (2, 1))
+app._commit_cell_editor()
+app.update()
+
+# A hand that shakes a few pixels, even over the edge into the next cell,
+# is still a click: before, crossing the edge selected two cells and the
+# typing went under the table. Pressed 8 px inside the edge, past the
+# rule's grab, and moved 9.
+_tP = app._grid_at_line(1)
+_cP = _tP['cells'][(2, 0)]
+_xP, _yP = int(_cP['x'] + _cP['w'] - 8), int(_cP['y'] + 6)
+_qa_fire(_tP['canvas'], '<Button-1>', x=_xP, y=_yP)
+_qa_fire(_tP['canvas'], '<B1-Motion>', x=_xP + 9, y=_yP)
+_qa_fire(_tP['canvas'], '<ButtonRelease-1>', x=_xP + 9, y=_yP)
+app.update()
+_edP = getattr(app, '_cell_editor', None)
+check(f'a hand that shakes over the cell edge still types into the cell '
+      f'(editor {_edP and (_edP["r"], _edP["c"])}, '
+      f'selection {app._grid_sel and app._grid_sel["box"]})',
+      _edP is not None and (_edP['r'], _edP['c']) == (2, 0)
+      and app._grid_sel is None)
+app._commit_cell_editor()
+app.update()
+
+# The opened cell is scrolled into sight (_see_cell), and the view moving
+# under a pointer that stays where it was is no drag: the hand is measured
+# on the screen, where it did not move.
+_tP = app._grid_at_line(1)
+_cvP = _tP['canvas']
+_cP, _nP = _tP['cells'][(1, 1)], _tP['cells'][(2, 1)]
+_rxP = _cvP.winfo_rootx() + int(_cP['x'] + 6)
+_ryP = _cvP.winfo_rooty() + int(_cP['y'] + 6)
+_qa_fire(_cvP, '<Button-1>', x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+_qa_fire(_cvP, '<B1-Motion>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6),
+         rootx=_rxP, rooty=_ryP)
+_qa_fire(_cvP, '<ButtonRelease-1>', x=int(_nP['x'] + 6),
+         y=int(_nP['y'] + 6), rootx=_rxP, rooty=_ryP)
+app.update()
+_edP = getattr(app, '_cell_editor', None)
+check(f'the view moving the cell under a still pointer is no drag '
+      f'(editor {_edP and (_edP["r"], _edP["c"])}, '
+      f'selection {app._grid_sel and app._grid_sel["box"]})',
+      _edP is not None and (_edP['r'], _edP['c']) == (1, 1)
+      and app._grid_sel is None)
+app._commit_cell_editor()
+app.update()
+
+# A real drag closes the cell the press opened and selects, writing
+# nothing; what was typed into that cell before the drag is kept.
+_bodyP = body()
+_tP = app._grid_at_line(1)
+_cvP = _tP['canvas']
+_cP, _nP = _tP['cells'][(1, 0)], _tP['cells'][(2, 2)]
+_qa_fire(_cvP, '<Button-1>', x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+_qa_fire(_cvP, '<B1-Motion>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+_qa_fire(_cvP, '<ButtonRelease-1>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+app.update()
+check(f'a drag past the slop closes the pressed cell and selects, writing '
+      f'nothing (selection {app._grid_sel and app._grid_sel["box"]})',
+      getattr(app, '_cell_editor', None) is None
+      and app._grid_sel is not None and app._grid_sel['box'] == (1, 0, 2, 2)
+      and body() == _bodyP)
+app._grid_clear_selection()
+_tP = app._grid_at_line(1)
+_cvP = _tP['canvas']
+_cP, _nP = _tP['cells'][(2, 2)], _tP['cells'][(1, 1)]
+_qa_fire(_cvP, '<Button-1>', x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+_edP = getattr(app, '_cell_editor', None)
+if _edP is not None:
+    # Typed while the button was still down: it replaces the selected words.
+    _edP['entry'].delete('1.0', 'end')
+    _edP['entry'].insert('1.0', 'Z')
+_qa_fire(_cvP, '<B1-Motion>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+_qa_fire(_cvP, '<ButtonRelease-1>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+app.update()
+check(f'what was typed into the pressed cell before a drag is kept '
+      f'({_row_cells_P(2)})',
+      _row_cells_P(2) == ['d', 'e', 'Z'])
+app._grid_clear_selection()
 app.update()
 
 # ---- ENTER BESIDE A TABLE, AND THE SELECTION MODEL ----
@@ -5246,7 +5612,8 @@ try:
           not _tS['hidden_cols'])
 
     # Delete row answers to DATA rows: a table of header + separator has
-    # one data row, and deleting it must be off the table.
+    # one data row, and deleting it deletes the table, as Delete deletes
+    # (the owner, 2026-11-24); it was greyed out before.
     set_body('| a | b |\n| --- | --- |')
     app._render_table_grids()
     app.update()
@@ -5258,8 +5625,13 @@ try:
         'x_root': 0, 'y_root': 0})())
     _del_state = (_menu_entry_state(_posted[-1], 'Delete row')
                   if _posted else None)
-    check(f'Delete row is disabled at one data row ({_del_state})',
-          _del_state == 'disabled')
+    _del_gone = bool(_posted) and _menu_invoke(_posted[-1], 'Delete row')
+    app.update()
+    check(f'Delete row at one data row is offered, and takes the table with it '
+          f'({_del_state}; {body()!r})',
+          _del_state == 'normal' and _del_gone
+          and app._grid_at_line(1) is None
+          and core_tables.find_blocks(body()) == [])
 finally:
     NO.tk.Menu.tk_popup = _real_popup
 set_body(_md)

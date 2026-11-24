@@ -21106,5 +21106,372 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PS01",
+    "about": "a table cell opens at the release again, and what is typed while the button is down goes under the table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._open_cell_editor(info, *hit)\n            editor = getattr(self, \"_cell_editor\", None)\n            if self._grid_press_editor_alive(self._grid_pressed):\n",
+        "replace": "            editor = getattr(self, \"_cell_editor\", None)\n            if self._grid_press_editor_alive(self._grid_pressed):\n"
+      }
+    ],
+    "must_fail": [
+      "a press on a cell opens it before the release"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS02",
+    "about": "any motion after a press on a cell is a drag, and a shaking hand selects two cells",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if (self._grid_hand_moved(pressed, canvas, event)\n                    < self.GRID_DRAG_SLOP):\n",
+        "replace": "            if (self._grid_hand_moved(pressed, canvas, event)\n                    < 0):\n"
+      }
+    ],
+    "must_fail": [
+      "a hand that shakes over the cell edge still types into the cell"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS03",
+    "about": "the hand is measured in the canvas, and the view scrolling the opened cell into sight reads as a drag",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if None not in then and None not in now:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "the view moving the cell under a still pointer is no drag"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS04",
+    "about": "a drag closes the cell its press opened unwritten, typed words and all",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if same and \"cell_highlight\" not in editor:\n            self._close_cell_editor()\n",
+        "replace": "        if True:\n            self._close_cell_editor()\n"
+      }
+    ],
+    "must_fail": [
+      "what was typed into the pressed cell before a drag is kept"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WF01",
+    "about": "a checklist item's text is held to CHECKLIST_WRAP again, a third of a wide page",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        wrap = max(self.px(40), width - edge)\n",
+        "replace": "        wrap = min(self.CHECKLIST_WRAP, max(self.px(40), width - edge))\n"
+      }
+    ],
+    "must_fail": [
+      "a long checklist item wraps at its row's width, not a third of a wide page"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS01",
+    "about": "a selection's menu offers no way to delete the rows and columns it reaches",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            menu.add_command(\n                label=(\"Delete row\" if del_rows == 1\n",
+        "replace": "            if False: menu.add_command(\n                label=(\"Delete row\" if del_rows == 1\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "            menu.add_command(\n                label=(\"Delete column\" if len(del_cols) == 1\n",
+        "replace": "            if False: menu.add_command(\n                label=(\"Delete column\" if len(del_cols) == 1\n"
+      }
+    ],
+    "must_fail": [
+      "a selection across rows and columns offers to delete them all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS02",
+    "about": "deleting a selection's rows takes only its first row",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        del rows[r0:r1 + 1]\n        del aligns[r0:r1 + 1]\n",
+        "replace": "        del rows[r0:r0 + 1]\n        del aligns[r0:r0 + 1]\n"
+      }
+    ],
+    "must_fail": [
+      "Delete 2 rows takes the rows the selection reaches"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS03",
+    "about": "a hidden column inside a selection is deleted with the columns around it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            del_cols = [c for c in range(sel_c0, sel_c1 + 1)\n                        if c not in info.get(\"hidden_cols\", ())]\n",
+        "replace": "            del_cols = list(range(sel_c0, sel_c1 + 1))\n"
+      }
+    ],
+    "must_fail": [
+      "a hidden column inside the selection is not deleted with it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS04",
+    "about": "the one column a delete leaves stays framed in pipes, words between bars, instead of lines of text",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._grid_unframe_column(first, len(rows))\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "deleting all but one column leaves its words as lines"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS05",
+    "about": "deleting many columns is a Ctrl+Z step for each piece of the rewrite",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "    @_undo_atom\n    def _grid_delete_cols(self, info, cols):\n",
+        "replace": "    def _grid_delete_cols(self, info, cols):\n"
+      }
+    ],
+    "must_fail": [
+      "...and one Ctrl+Z brings all three back, bold and all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS06",
+    "about": "a merge cut by a deleted column, in a row the selection never reached, joins the cell left of the cut",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if any(ac <= c < ac + cs for c in delete):\n",
+        "replace": "            if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a merge cut by a deleted column comes apart instead of joining"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS07",
+    "about": "deleting every column of a table leaves the table standing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if left <= 0:\n            self._grid_delete_block_text(first, nrows)\n            self._grid_after_op(first)\n            return\n",
+        "replace": "        if left <= 0:\n            self._grid_after_op(first)\n            return\n"
+      }
+    ],
+    "must_fail": [
+      "deleting every column deletes the table"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS08",
+    "about": "deleting every row of a table leaves the table standing, as the greyed Delete row once did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if r1 - r0 + 1 >= len(rows):\n            self._grid_delete_block_text(first, nrows)\n",
+        "replace": "        if r1 - r0 + 1 >= len(rows):\n"
+      }
+    ],
+    "must_fail": [
+      "deleting every row a selection reaches deletes the table",
+      "Delete row at one data row is offered, and takes the table with it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS09",
+    "about": "a cell left alone by a column delete keeps its <br> as words instead of real lines",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                b.delete(f\"{n}.{col}\", f\"{n}.{col + len(brk)}\")\n                b.insert(f\"{n}.{col}\", \"\\n\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a cell left alone keeps its line breaks as lines"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS10",
+    "about": "Clear N columns empties only the selected rows of them, not the columns top to bottom",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     \"box\": (0, sel_c0, info[\"data_rows\"] - 1, sel_c1)},\n",
+        "replace": "                     \"box\": (sel_r0, sel_c0, sel_r1, sel_c1)},\n"
+      }
+    ],
+    "must_fail": [
+      "Clear 2 columns empties them top to bottom and keeps them"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS11",
+    "about": "Clear N columns empties a hidden column inside the selection too",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if cols is not None and c not in cols:\n                    continue\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "Clear 2 columns empties them top to bottom and keeps them"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS05",
+    "about": "a press from one open cell to another hands the keyboard to the note first, its caret showing under the table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if not opens:\n                # The keyboard back from the editor",
+        "replace": "            if True:\n                # The keyboard back from the editor"
+      }
+    ],
+    "must_fail": [
+      "a press from one open cell to another never passes the keyboard through the note"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS12",
+    "about": "Clear N rows empties only the first of the rows a selection reaches",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     \"box\": (sel_r0, 0, sel_r1, info[\"ncols\"] - 1)},\n",
+        "replace": "                     \"box\": (sel_r0, 0, sel_r0, info[\"ncols\"] - 1)},\n"
+      }
+    ],
+    "must_fail": [
+      "Clear 2 rows empties them across and keeps them"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS13",
+    "about": "Clear row empties a hidden column's cell too, which nobody sees go",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        return {c for c in range(info[\"ncols\"]) if c not in hidden}\n",
+        "replace": "        return set(range(info[\"ncols\"]))\n"
+      }
+    ],
+    "must_fail": [
+      "Clear 2 rows empties them across and keeps them",
+      "Clear row from a cell's menu empties that row, its hidden cell kept"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS14",
+    "about": "a cell's Clear row empties only the cell's own column of it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                {\"info\": info, \"box\": (r, 0, r, info[\"ncols\"] - 1)}, \"\",\n",
+        "replace": "                {\"info\": info, \"box\": (r, c, r, c)}, \"\",\n"
+      }
+    ],
+    "must_fail": [
+      "Clear row from a cell's menu empties that row, its hidden cell kept"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

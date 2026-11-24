@@ -181,7 +181,13 @@ def verdict(entry):
 def load_catalogue():
     with io.open(CATALOGUE, encoding="utf-8") as fh:
         entries = json.load(fh)
+    seen = set()
     for e in entries:
+        # One id for two entries: a commit's "Mutant: <id>" named either, and
+        # asking for one ran both (TP01 and RZ05, given twice on 2026-11-24).
+        if e["id"] in seen:
+            sys.exit("catalogue entry %s is in the catalogue twice" % e["id"])
+        seen.add(e["id"])
         # A "killed" entry with nothing that must fail is killed by anything,
         # including a crash -- the vacuous verdict this runner exists to stop.
         if e["expect"] == "killed" and not e["must_fail"]:

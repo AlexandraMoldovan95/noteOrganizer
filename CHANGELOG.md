@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.103.558](#0103558--2026-11-24) | 2026-11-24 | Typing straight after clicking a table cell lands in it, a long checklist item uses its row's width, and several rows or columns are deleted or cleared at once. |
 | [0.102.556](#0102556--2026-11-23) | 2026-11-23 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too, and what a review panel found by using it; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
@@ -109,6 +110,34 @@ How the numbers themselves are counted is the
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
 
 ---
+
+## [0.103.558] — 2026-11-24
+
+*Highlights: what the owner's own field test of 0.102.556 found. Typing straight after clicking
+a table cell lands in the cell, a long checklist item uses its row's whole width, and a
+selection's menu deletes or clears several rows or columns at once.*
+
+### Added
+
+- **Several rows or columns deleted at once, or cleared.** Select cells that reach across them
+  and right-click: **Delete 3 rows** takes every row the selection touches, **Delete 4 columns**
+  every column, and one Ctrl+Z brings them all back, their formatting too; **Clear 3 rows** and
+  **Clear 4 columns** empty them and keep them, and a cell's own menu has **Clear row** and
+  **Clear column** beside its Delete. Four columns of eight took four trips through a cell's menu. Delete now
+  deletes: every row or every column deleted is the table deleted, and a table left with one
+  column, which is no table, leaves its words as lines of the note. It emptied columns before
+  instead of going below two. A hidden column inside the selection stays.
+
+### Fixed
+
+- **What you type into a table cell straight after clicking it lands in the cell.** The cell
+  opened only when the mouse button came up; typed while it was still down, a digit went to the
+  line under the table. A cell opens at the press now, the cursor going from one cell straight
+  to the next without stopping under the table, and a drag selects only once the mouse has
+  moved a little, so a hand that shakes over a cell's edge still types into the cell.
+- **A long checklist item uses the row's whole width.** Its words wrapped at 380 pixels however
+  wide the page was, filling a third of a wide window; they run to the row's end now, as the
+  note's own text does.
 
 ## [0.102.556] — 2026-11-23
 

@@ -44,7 +44,7 @@ except ImportError:
 # ---- Version: the one source, bumped by hand at each release by the policy in
 # docs/ROADMAP.md ("Versioning"); recorded in settings, so a newer build can
 # say it was updated ----
-APP_VERSION = "0.102.556"
+APP_VERSION = "0.103.558"
 
 
 def parse_version(v):
@@ -4960,12 +4960,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_autoscroll_stop()
         press_x = info["canvas"].canvasx(event.x)
         press_y = info["canvas"].canvasy(event.y)
+        # What the press grabs, read before the commit below can rebuild.
+        boundary = self._grid_boundary_at(info, press_x)
+        row_boundary = (None if boundary is not None
+                        else self._grid_row_boundary_at(info, press_y))
+        hit = (None if boundary is not None or row_boundary is not None
+               else self._grid_cell_at_xy(info, press_x, press_y))
+        cell = info["cells"].get(hit) if hit else None
+        opens = (cell is not None
+                 and core_tables.checkbox_state(cell["value"]) is None)
         if getattr(self, "_cell_editor", None) is not None:
-            # The press takes the keyboard back from the open editor, or Ctrl+C
-            # copied the editor's word, not the cells selected.
             anchor_line = self._grid_first_line(info)
             self._commit_cell_editor()
-            self.body_text.focus_set()
+            if not opens:
+                # The keyboard back from the editor, or Ctrl+C copied its word,
+                # not the cells selected; a cell opening takes it straight, not
+                # by the caret under the table (field report, 2026-11-24).
+                self.body_text.focus_set()
             if not int(info["canvas"].winfo_exists()):
                 # The commit's rebuild took this canvas, so no release follows:
                 # the cell aimed at, by the geometry seen, opens at the press.
@@ -4976,15 +4987,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if fresh is not None and hit is not None:
                     self._open_cell_editor(fresh, *hit)
                 return "break"
-        canvas = info["canvas"]
-        x = press_x
-        boundary = self._grid_boundary_at(info, x)
         if boundary is not None:
             # Grabbing a rule resizes its column instead of selecting.
-            self._grid_resizing = {"info": info, "col": boundary, "x": x}
+            self._grid_resizing = {"info": info, "col": boundary, "x": press_x}
             self._grid_pressed = None
             return "break"
-        row_boundary = self._grid_row_boundary_at(info, press_y)
         if row_boundary is not None:
             # The horizontal rule resizes its row, the vertical twin of
             # dragging a column wider.
@@ -4992,10 +4999,73 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                        "y": press_y}
             self._grid_pressed = None
             return "break"
-        hit = self._grid_cell_at_xy(info, x, press_y)
         self._grid_clear_selection()
-        self._grid_pressed = (info, hit, x, press_y) if hit else None
+        if not hit:
+            self._grid_pressed = None
+            return "break"
+        self._grid_pressed = {
+            "info": info, "cell": hit, "x": press_x, "y": press_y,
+            # Where the hand was on the screen (_grid_hand_moved).
+            "root": (getattr(event, "x_root", None),
+                     getattr(event, "y_root", None)),
+            "opened": None, "dragging": False}
+        if opens:
+            # Open at the PRESS: opened at the release, keys typed while the
+            # button was down went under the table (ISSUES_LOG, "The digit
+            # typed between the press and the release"). A checkbox ticks.
+            self._open_cell_editor(info, *hit)
+            editor = getattr(self, "_cell_editor", None)
+            if self._grid_press_editor_alive(self._grid_pressed):
+                try:
+                    # As it opened: a drag closes it unwritten if it still
+                    # reads so (_grid_drop_press_editor).
+                    self._grid_pressed["opened"] = editor["entry"].dump(
+                        "1.0", "end", text=True, tag=True)
+                except tk.TclError:
+                    pass
         return "break"
+
+    # How far the hand moves, in pixels, before a press on a cell is a drag
+    # that selects instead of a click that types.
+    GRID_DRAG_SLOP = 10
+
+    def _grid_hand_moved(self, pressed, canvas, event):
+        """How far the hand has moved since the press on a cell: measured on
+        the screen, where the view scrolling the opened cell into sight under
+        a still pointer moves nothing; in the canvas for an event that carries
+        no screen point."""
+        then = pressed.get("root") or (None, None)
+        now = (getattr(event, "x_root", None), getattr(event, "y_root", None))
+        if None not in then and None not in now:
+            return max(abs(now[0] - then[0]), abs(now[1] - then[1]))
+        return max(abs(canvas.canvasx(event.x) - pressed["x"]),
+                   abs(canvas.canvasy(event.y) - pressed["y"]))
+
+    def _grid_press_editor_alive(self, pressed):
+        """Whether the open cell editor is the one this press opened."""
+        editor = getattr(self, "_cell_editor", None)
+        return (editor is not None and editor["info"] is pressed["info"]
+                and (editor["r"], editor["c"]) == pressed["cell"])
+
+    def _grid_drop_press_editor(self, pressed):
+        """The editor this press opened, closed as the press becomes a drag:
+        unwritten while it reads as it opened (a commit opens an undo unit,
+        which lays the whole note out again), committed once anything was
+        done in it. The keyboard goes to the note, as a selection's does."""
+        opened, pressed["opened"] = pressed.get("opened"), None
+        if opened is None or not self._grid_press_editor_alive(pressed):
+            return
+        editor = self._cell_editor
+        try:
+            same = editor["entry"].dump(
+                "1.0", "end", text=True, tag=True) == opened
+        except tk.TclError:
+            same = False
+        if same and "cell_highlight" not in editor:
+            self._close_cell_editor()
+        else:
+            self._commit_cell_editor()
+        self.body_text.focus_set()
 
     def _grid_drag_autoscroll(self, info):
         """While a cell drag runs, the view follows the pointer: the
@@ -5031,11 +5101,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             elif py < top + 16:
                 body.yview_scroll(-24, "pixels")
             pressed = getattr(self, "_grid_pressed", None)
-            if pressed and pressed[0] is info:
+            if pressed and pressed["info"] is info:
                 hit = self._grid_cell_at_xy(info, canvas.canvasx(wx),
                                             canvas.canvasy(wy))
-                if hit and hit != pressed[1]:
-                    self._grid_select_range(info, pressed[1], hit)
+                if hit and hit != pressed["cell"]:
+                    self._grid_select_range(info, pressed["cell"], hit)
         except tk.TclError:
             pass
 
@@ -5063,19 +5133,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or getattr(self, "_grid_row_resizing", None)):
             return "break"
         pressed = getattr(self, "_grid_pressed", None)
-        if not pressed or pressed[0] is not info:
+        if not pressed or pressed["info"] is not info:
             return "break"
+        canvas = info["canvas"]
+        if not pressed["dragging"]:
+            if (self._grid_hand_moved(pressed, canvas, event)
+                    < self.GRID_DRAG_SLOP):
+                # A hand that shook a little, even over the cell's edge, is
+                # still a click: the cell stays open for typing.
+                return "break"
+            pressed["dragging"] = True
+            self._grid_drop_press_editor(pressed)
+            if not int(canvas.winfo_exists()):
+                # What was typed into it widened the column, and the
+                # rebuild took this canvas: no more of this drag arrives.
+                self._grid_pressed = None
+                return "break"
         # A held pointer at an edge produces no more motion events; the
         # timer keeps the view (and the selection) moving until release.
         self._grid_drag_hold = info
         if getattr(self, "_grid_autoscroll_job", None) is None:
             self._grid_autoscroll_job = self.after(
                 60, self._grid_autoscroll_tick)
-        canvas = info["canvas"]
         hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
                                     canvas.canvasy(event.y))
-        if hit and hit != pressed[1]:
-            self._grid_select_range(info, pressed[1], hit)
+        if hit and hit != pressed["cell"]:
+            self._grid_select_range(info, pressed["cell"], hit)
         return "break"
 
     def _grid_release(self, info, event):
@@ -5114,22 +5197,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         pressed = getattr(self, "_grid_pressed", None)
         self._grid_pressed = None
-        if pressed is None or pressed[0] is not info:
+        if pressed is None or pressed["info"] is not info:
             return "break"
-        if getattr(self, "_grid_sel", None) is None and pressed[1]:
+        if getattr(self, "_grid_sel", None) is None and pressed["cell"]:
             # A drag inside one cell selects THAT cell whole (one took two); a
-            # short click still opens the editor.
+            # short click leaves the cell open for typing.
             canvas = info["canvas"]
-            moved = max(abs(canvas.canvasx(event.x) - pressed[2]),
-                        abs(canvas.canvasy(event.y) - pressed[3]))
-            if moved >= 10:
-                self._grid_select_range(info, pressed[1], pressed[1])
+            if (self._grid_hand_moved(pressed, canvas, event)
+                    >= self.GRID_DRAG_SLOP):
+                self._grid_drop_press_editor(pressed)
+                if int(canvas.winfo_exists()):
+                    self._grid_select_range(info, pressed["cell"],
+                                            pressed["cell"])
                 self.body_text.focus_set()
-            elif not self._grid_toggle_checkbox(info, *pressed[1]):
+            elif self._grid_press_editor_alive(pressed):
+                pass                        # opened at the press, still open
+            elif not self._grid_toggle_checkbox(info, *pressed["cell"]):
                 # A checkbox cell toggles on click; every other cell
                 # opens for typing, as always. Editing a checkbox AS
                 # TEXT stays available from its right-click menu.
-                self._open_cell_editor(info, *pressed[1])
+                self._open_cell_editor(info, *pressed["cell"])
         else:
             # A finished drag leaves a selection; the keyboard belongs to
             # it now, so Delete and Ctrl+C/V land on the cells no matter
@@ -5958,57 +6045,76 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  else (r, c - 1) if c > at else None))
         self._grid_after_op(first)
 
-    @_undo_atom
     def _grid_delete_row(self, info, r):
+        """The cell menu's Delete row: the selection's delete, one row long."""
+        self._grid_delete_rows(info, r, r)
+
+    @_undo_atom
+    def _grid_delete_rows(self, info, r0, r1):
+        """Rows *r0* to *r1* deleted in one operation, one Ctrl+Z bringing
+        them all back (a selection's menu, field report 2026-11-24). Every
+        row deleted is the table deleted: Delete deletes (the owner's word)."""
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, _ncols = context
-        if nrows <= 1:
-            self._grid_after_op(first)
-            return
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
-        if r >= len(rows):
+        r1 = min(r1, len(rows) - 1)
+        if r0 > r1:
             self._grid_after_op(first)
             return
-        del rows[r]
-        del aligns[r]
+        if r1 - r0 + 1 >= len(rows):
+            self._grid_delete_block_text(first, nrows)
+            self._grid_after_op(first)
+            return
+        k = r1 - r0 + 1
+        del rows[r0:r1 + 1]
+        del aligns[r0:r1 + 1]
         rows = self._dissolve_orphan_markers(rows)
-        gone = r
         self._grid_replace_block(
             first, nrows, rows, aligns, sep_cols,
-            source=lambda rr, c: (rr if rr < gone else rr + 1, c))
+            source=lambda rr, c: (rr if rr < r0 else rr + k, c))
         self._grid_after_op(first)
 
-    @_undo_atom
     def _grid_delete_col(self, info, c):
-        """At two columns, deleting empties the chosen column instead.
+        """The cell menu's Delete column: the selection's delete, one
+        column wide (_grid_delete_cols)."""
+        self._grid_delete_cols(info, [c])
 
-        A one-column row reads as prose, not as a table -- "| just one |"
-        is deliberately not a row, or quoting something between pipes would
-        redraw it as a grid -- so two columns is the floor. Removing the
-        table outright is its own menu entry.
+    @_undo_atom
+    def _grid_delete_cols(self, info, cols):
+        """The columns *cols* deleted, every one, in one operation, one Ctrl+Z
+        (Delete deletes: the owner, 2026-11-24). Every column gone is the
+        table gone; one left is no table -- "| just one |" is deliberately
+        not a row, or words quoted between pipes would draw as a grid -- so
+        its words stay as lines of the note (_grid_unframe_column).
         """
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
-        source = None
-        if ncols <= 2:
-            for row in rows:
-                if c < len(row):
-                    row[c] = ""
-            rows = self._dissolve_orphan_markers(rows)
-        else:
-            source = (lambda r, cc: (r, cc if cc < c else cc + 1))
-            spans, _covered = core_tables.merge_map(rows)
-            for (ar, ac), (rs, cs) in spans.items():
-                if ac <= c < ac + cs:
-                    for rr in range(ar, ar + rs):
-                        for cc in range(ac, ac + cs):
-                            if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
-                                rows[rr][cc] = ""
+        width = max([ncols] + [len(row) for row in rows])
+        # Right to left, so each index still names its column.
+        delete = sorted({c for c in cols if 0 <= c < width}, reverse=True)
+        left = width - len(delete)
+        if not delete:
+            self._grid_after_op(first)
+            return
+        if left <= 0:
+            self._grid_delete_block_text(first, nrows)
+            self._grid_after_op(first)
+            return
+        # A merge a deleted column cuts through comes apart, its anchor
+        # keeping its words.
+        spans, _covered = core_tables.merge_map(rows)
+        for (ar, ac), (rs, cs) in spans.items():
+            if any(ac <= c < ac + cs for c in delete):
+                for rr in range(ar, ar + rs):
+                    for cc in range(ac, ac + cs):
+                        if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
+                            rows[rr][cc] = ""
+        for c in delete:
             for row in rows:
                 if c < len(row):
                     del row[c]
@@ -6017,10 +6123,57 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     del row_aligns[c]
             if sep_cols is not None and c < len(sep_cols):
                 del sep_cols[c]
-            rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
-                                 source=source)
+        rows = self._dissolve_orphan_markers(rows)
+        # Each new column's old index, for its cells' styles.
+        kept = [c for c in range(width) if c not in delete]
+
+        def source(r, cc):
+            return (r, kept[cc]) if cc < len(kept) else None
+
+        if left >= 2:
+            self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                     source=source)
+        else:
+            self._grid_replace_block(first, nrows, rows, aligns, None,
+                                     source=source)
+            self._grid_unframe_column(first, len(rows))
         self._grid_after_op(first)
+
+    @staticmethod
+    def _grid_shown_cols(info):
+        """The table's columns not hidden: what Clear row empties."""
+        hidden = info.get("hidden_cols", ())
+        return {c for c in range(info["ncols"]) if c not in hidden}
+
+    def _grid_delete_block_text(self, first, nrows):
+        """A table's lines taken out of the note, the line break after them
+        too: Remove table's delete, and every row or column deleted."""
+        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
+
+    def _grid_unframe_column(self, first, count):
+        """The *count* one-cell rows from line *first* written as each cell's
+        words alone, its line breaks real lines, its words keeping their
+        styles -- a cell's colour among them, laid on its words by the
+        rewrite. One column is no table, as a pasted one is not
+        (_unframe_lone_cells)."""
+        b = self.body_text
+        brk = core_tables.LINE_BREAK
+        for r in range(count - 1, -1, -1):           # bottom up: lines hold
+            n = first + r
+            line = b.get(f"{n}.0", f"{n}.end")
+            bounds = core_tables.cell_bounds(line)
+            if not bounds:
+                continue
+            start, end = bounds[0]
+            value = line[start:end]
+            b.delete(f"{n}.{self._tk_col(line, end)}", f"{n}.end")
+            b.delete(f"{n}.0", f"{n}.{self._tk_col(line, start)}")
+            at = value.rfind(brk)
+            while at != -1:                          # right to left: cols hold
+                col = self._tk_col(value, at)
+                b.delete(f"{n}.{col}", f"{n}.{col + len(brk)}")
+                b.insert(f"{n}.{col}", "\n")
+                at = value.rfind(brk, 0, at)
 
     # No person's action calls this any more (the menus merge through
     # _grid_merge_selection); qa1 and mutant TM01 still write a marker by it.
@@ -6402,7 +6555,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # yanked the page.
         self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
-        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
+        self._grid_delete_block_text(first, nrows)
         self._resync_list_tags()
         self._render_table_grids()
         self._schedule_autosave()
@@ -6520,7 +6673,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
 
     @_undo_atom
-    def _grid_fill_selection(self, sel, value, align=None):
+    def _grid_fill_selection(self, sel, value, align=None, cols=None):
+        """Every cell of *sel*'s box set to *value* -- of the columns *cols*
+        alone, when given (Clear column: the box's hidden ones stay)."""
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
         # The rewrite keeps every other cell exactly as it was and a
@@ -6533,6 +6688,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
+                if cols is not None and c not in cols:
+                    continue
                 if rows[r][c] not in (core_tables.MERGE_LEFT,
                                       core_tables.MERGE_UP):
                     rows[r][c] = value
@@ -7408,6 +7565,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            else f"Copy {span_rows} rows to the end"),
                     command=lambda box=sel["box"]:
                         self._grid_append_rows(info, box[0], box[2]))
+            # Every row, and every column, the selection reaches goes at once,
+            # as one cell's menu deletes its own (field report, 2026-11-24);
+            # a hidden column inside the span stays: nobody would see it go.
+            menu.add_separator()
+            sel_r0, sel_c0, sel_r1, sel_c1 = sel["box"]
+            del_rows = sel_r1 - sel_r0 + 1
+            del_cols = [c for c in range(sel_c0, sel_c1 + 1)
+                        if c not in info.get("hidden_cols", ())]
+            # Clear keeps the rows or columns, empty; Delete takes them (the
+            # owner's two, 2026-11-24). A hidden column's cells stay.
+            menu.add_command(
+                label=("Clear row" if del_rows == 1
+                       else f"Clear {del_rows} rows"),
+                command=lambda: self._grid_fill_selection(
+                    {"info": info,
+                     "box": (sel_r0, 0, sel_r1, info["ncols"] - 1)},
+                    "", cols=self._grid_shown_cols(info)))
+            menu.add_command(
+                label=("Delete row" if del_rows == 1
+                       else f"Delete {del_rows} rows"),
+                command=lambda: self._grid_delete_rows(info, sel_r0, sel_r1))
+            menu.add_command(
+                label=("Clear column" if len(del_cols) == 1
+                       else f"Clear {len(del_cols)} columns"),
+                state="normal" if del_cols else "disabled",
+                command=lambda: self._grid_fill_selection(
+                    {"info": info,
+                     "box": (0, sel_c0, info["data_rows"] - 1, sel_c1)},
+                    "", cols=set(del_cols)))
+            menu.add_command(
+                label=("Delete column" if len(del_cols) == 1
+                       else f"Delete {len(del_cols)} columns"),
+                state="normal" if del_cols else "disabled",
+                command=lambda: self._grid_delete_cols(info, del_cols))
             menu.add_separator()
             menu.add_command(
                 label="Highlight cells\u2026",
@@ -7489,8 +7680,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             label="Insert row below",
             command=lambda: self._grid_insert_row(info, r + 1))
         rows_menu.add_command(
+            label="Clear row",
+            command=lambda: self._grid_fill_selection(
+                {"info": info, "box": (r, 0, r, info["ncols"] - 1)}, "",
+                cols=self._grid_shown_cols(info)))
+        # The last row too: the table goes with it, one Ctrl+Z back.
+        rows_menu.add_command(
             label="Delete row",
-            state=("normal" if info["data_rows"] > 1 else "disabled"),
             command=lambda: self._grid_delete_row(info, r))
         menu.add_cascade(label="Rows", menu=rows_menu)
 
@@ -7506,6 +7702,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             label="Unhide all columns",
             state=("normal" if info.get("hidden_cols") else "disabled"),
             command=lambda: self._grid_unhide_all(info))
+        cols_menu.add_command(
+            label="Clear column",
+            command=lambda: self._grid_fill_selection(
+                {"info": info, "box": (0, c, info["data_rows"] - 1, c)}, ""))
         cols_menu.add_command(label="Delete column",
                               command=lambda: self._grid_delete_col(info, c))
         menu.add_cascade(label="Columns", menu=cols_menu)
@@ -13260,18 +13460,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # row, so it is never watched for wrapping (159 px at 640x600).
     CHECKLIST_SHORT = 150
 
-    # Where a checklist item's text wraps, unless its row is narrower.
+    # Where a checklist item's text wraps until its row has given it a width
+    # (_wrap_to_width), and its row block none yet (_wrap_as_its_rows).
     CHECKLIST_WRAP = 380
 
     def _wrap_to_width(self, label, width):
         """Make *label* wrap its text inside *width* pixels, its own -- only
         when its text is cut off, or has room again: rewrapping every row
-        doubled the time a long checklist took to open."""
+        doubled the time a long checklist took to open. As wide as its row,
+        as the note's own text is: held to CHECKLIST_WRAP, a long item stood
+        in a third of a wide page (field report, 2026-11-24)."""
         if width <= 1:
             return
         edge = 2 * sum(int(str(label.cget(option)))
                        for option in ("bd", "padx", "highlightthickness"))
-        wrap = min(self.CHECKLIST_WRAP, max(self.px(40), width - edge))
+        wrap = max(self.px(40), width - edge)
         now = int(str(label.cget("wraplength")))
         # The block of a row stack its row stands in (RowStack): told, so a
         # chunk's height is read as its rows now stand, and the next row is

@@ -328,10 +328,12 @@ A table works the way a spreadsheet has taught your hands to expect:
 | **Ctrl+A** | Selects the whole cell. |
 
 - A table wider than the editor gets its own horizontal scrollbar, drawn just underneath it.
-- **Click** any cell to edit it. **Drag** across cells to select a block of them — a firm drag
-  *inside* one cell selects just that cell; drag toward an edge and the view scrolls along with
-  you, so a selection can reach cells that started off screen — then **Ctrl+C** copies it and
-  **Ctrl+V** somewhere else pastes it in the same shape.
+- **Click** any cell to edit it: it opens the moment you press, so what you type straight away
+  lands in it, even before you let go of the mouse. **Drag** across cells to select a block of
+  them — the selection starts once the mouse has moved a little, so a hand that shakes still
+  types into the cell; a firm drag *inside* one cell selects just that cell; drag toward an edge
+  and the view scrolls along with you, so a selection can reach cells that started off screen —
+  then **Ctrl+C** copies it and **Ctrl+V** somewhere else pastes it in the same shape.
 - Copying works with the outside world in both directions: cells copied here paste into Excel as
   cells and into Word as a real table with visible borders, and a table copied from Excel or a web
   page lands here as a real table, a single row of it too. So does a table written as markdown
@@ -354,7 +356,14 @@ A table works the way a spreadsheet has taught your hands to expect:
 - The full set: merge the selected cells into one (their texts join — the same with **Merge with
   cell to the left / above**, which takes in all of a neighbour that is itself merged), or split a
   merge back apart. Insert or delete rows and columns (**Insert row above** on the header row
-  puts the new row just under it, so the header stays the header). Duplicate whole columns to
+  puts the new row just under it, so the header stays the header). To delete several at once,
+  select cells that reach across them and right-click: **Delete 3 rows** takes every row the
+  selection touches, **Delete 4 columns** every column, and one Ctrl+Z brings them all back;
+  **Clear 3 rows** and **Clear 4 columns** empty them and keep them (one cell's menu has
+  **Clear row** and **Clear column** beside its Delete). A hidden column keeps its words.
+  Deleting every row or every column deletes the table. A table needs two columns, so when a
+  delete leaves only one, its words stay in the note as ordinary lines, one cell to a line.
+  Duplicate whole columns to
   the end of the table, and whole rows to the bottom. Insert a **checkbox** (with its own colour
   palette) or an emoji, and highlight cells from a small colour palette.
 - A checkbox is a real little box, not text: **click it to tick and untick it** — for marking when
