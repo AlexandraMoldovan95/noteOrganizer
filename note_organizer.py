@@ -6048,15 +6048,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @_undo_atom
     def _grid_delete_rows(self, info, r0, r1):
         """Rows *r0* to *r1* deleted in one operation, one Ctrl+Z bringing
-        them all back (a selection's menu, field report 2026-11-24). Never
-        every row: Remove table is its own menu entry."""
+        them all back (a selection's menu, field report 2026-11-24). Every
+        row deleted is the table deleted: Delete deletes (the owner's word)."""
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, _ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         r1 = min(r1, len(rows) - 1)
-        if r0 > r1 or r1 - r0 + 1 >= len(rows):
+        if r0 > r1:
+            self._grid_after_op(first)
+            return
+        if r1 - r0 + 1 >= len(rows):
+            self._grid_delete_block_text(first, nrows)
             self._grid_after_op(first)
             return
         k = r1 - r0 + 1
@@ -6075,11 +6079,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _grid_delete_cols(self, info, cols):
-        """The columns *cols* deleted in one operation, one Ctrl+Z, leaving
-        the table as deleting them one by one would. At two columns, deleting
-        empties the chosen column instead: "| just one |" is deliberately not
-        a row, or words quoted between pipes would draw as a grid. Removing
-        the table outright is its own menu entry.
+        """The columns *cols* deleted, every one, in one operation, one Ctrl+Z
+        (Delete deletes: the owner, 2026-11-24). Every column gone is the
+        table gone; one left is no table -- "| just one |" is deliberately
+        not a row, or words quoted between pipes would draw as a grid -- so
+        its words stay as lines of the note (_grid_unframe_column).
         """
         context = self._grid_op_context(info)
         if not context:
@@ -6087,29 +6091,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first, nrows, ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         width = max([ncols] + [len(row) for row in rows])
-        # Right to left, as one by one would, while more than two stand;
-        # those left over are emptied. Each index still names its column.
-        delete, empty, left = [], [], ncols
-        for c in sorted(set(cols), reverse=True):
-            if left > 2:
-                delete.append(c)
-                left -= 1
-            else:
-                empty.append(c)
-        if delete:
-            # A merge a deleted column cuts through comes apart, its anchor
-            # keeping its words.
-            spans, _covered = core_tables.merge_map(rows)
-            for (ar, ac), (rs, cs) in spans.items():
-                if any(ac <= c < ac + cs for c in delete):
-                    for rr in range(ar, ar + rs):
-                        for cc in range(ac, ac + cs):
-                            if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
-                                rows[rr][cc] = ""
-        for c in empty:
-            for row in rows:
-                if c < len(row):
-                    row[c] = ""
+        # Right to left, so each index still names its column.
+        delete = sorted({c for c in cols if 0 <= c < width}, reverse=True)
+        left = width - len(delete)
+        if not delete:
+            self._grid_after_op(first)
+            return
+        if left <= 0:
+            self._grid_delete_block_text(first, nrows)
+            self._grid_after_op(first)
+            return
+        # A merge a deleted column cuts through comes apart, its anchor
+        # keeping its words.
+        spans, _covered = core_tables.merge_map(rows)
+        for (ar, ac), (rs, cs) in spans.items():
+            if any(ac <= c < ac + cs for c in delete):
+                for rr in range(ar, ar + rs):
+                    for cc in range(ac, ac + cs):
+                        if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
+                            rows[rr][cc] = ""
         for c in delete:
             for row in rows:
                 if c < len(row):
@@ -6120,14 +6120,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if sep_cols is not None and c < len(sep_cols):
                 del sep_cols[c]
         rows = self._dissolve_orphan_markers(rows)
-        source = None
-        if delete:
-            # Each new column's old index, for its cells' styles.
-            kept = [c for c in range(width) if c not in delete]
-            source = (lambda r, cc: (r, kept[cc]) if cc < len(kept) else None)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
-                                 source=source)
+        # Each new column's old index, for its cells' styles.
+        kept = [c for c in range(width) if c not in delete]
+
+        def source(r, cc):
+            return (r, kept[cc]) if cc < len(kept) else None
+
+        if left >= 2:
+            self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                     source=source)
+        else:
+            self._grid_replace_block(first, nrows, rows, aligns, None,
+                                     source=source)
+            self._grid_unframe_column(first, len(rows))
         self._grid_after_op(first)
+
+    def _grid_delete_block_text(self, first, nrows):
+        """A table's lines taken out of the note, the line break after them
+        too: Remove table's delete, and every row or column deleted."""
+        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
+
+    def _grid_unframe_column(self, first, count):
+        """The *count* one-cell rows from line *first* written as each cell's
+        words alone, its line breaks real lines, its words keeping their
+        styles -- a cell's colour among them, laid on its words by the
+        rewrite. One column is no table, as a pasted one is not
+        (_unframe_lone_cells)."""
+        b = self.body_text
+        brk = core_tables.LINE_BREAK
+        for r in range(count - 1, -1, -1):           # bottom up: lines hold
+            n = first + r
+            line = b.get(f"{n}.0", f"{n}.end")
+            bounds = core_tables.cell_bounds(line)
+            if not bounds:
+                continue
+            start, end = bounds[0]
+            value = line[start:end]
+            b.delete(f"{n}.{self._tk_col(line, end)}", f"{n}.end")
+            b.delete(f"{n}.0", f"{n}.{self._tk_col(line, start)}")
+            at = value.rfind(brk)
+            while at != -1:                          # right to left: cols hold
+                col = self._tk_col(value, at)
+                b.delete(f"{n}.{col}", f"{n}.{col + len(brk)}")
+                b.insert(f"{n}.{col}", "\n")
+                at = value.rfind(brk, 0, at)
 
     # No person's action calls this any more (the menus merge through
     # _grid_merge_selection); qa1 and mutant TM01 still write a marker by it.
@@ -6509,7 +6545,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # yanked the page.
         self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
-        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
+        self._grid_delete_block_text(first, nrows)
         self._resync_list_tags()
         self._render_table_grids()
         self._schedule_autosave()
@@ -6627,7 +6663,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
 
     @_undo_atom
-    def _grid_fill_selection(self, sel, value, align=None):
+    def _grid_fill_selection(self, sel, value, align=None, cols=None):
+        """Every cell of *sel*'s box set to *value* -- of the columns *cols*
+        alone, when given (Clear column: the box's hidden ones stay)."""
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
         # The rewrite keeps every other cell exactly as it was and a
@@ -6640,6 +6678,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
+                if cols is not None and c not in cols:
+                    continue
                 if rows[r][c] not in (core_tables.MERGE_LEFT,
                                       core_tables.MERGE_UP):
                     rows[r][c] = value
@@ -7526,9 +7566,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             menu.add_command(
                 label=("Delete row" if del_rows == 1
                        else f"Delete {del_rows} rows"),
-                state=("normal" if del_rows < info["data_rows"]
-                       else "disabled"),
                 command=lambda: self._grid_delete_rows(info, sel_r0, sel_r1))
+            # Clear keeps the columns, empty; Delete takes them (the owner's
+            # two, 2026-11-24).
+            menu.add_command(
+                label=("Clear column" if len(del_cols) == 1
+                       else f"Clear {len(del_cols)} columns"),
+                state="normal" if del_cols else "disabled",
+                command=lambda: self._grid_fill_selection(
+                    {"info": info,
+                     "box": (0, sel_c0, info["data_rows"] - 1, sel_c1)},
+                    "", cols=set(del_cols)))
             menu.add_command(
                 label=("Delete column" if len(del_cols) == 1
                        else f"Delete {len(del_cols)} columns"),
@@ -7614,9 +7662,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows_menu.add_command(
             label="Insert row below",
             command=lambda: self._grid_insert_row(info, r + 1))
+        # The last row too: the table goes with it, one Ctrl+Z back.
         rows_menu.add_command(
             label="Delete row",
-            state=("normal" if info["data_rows"] > 1 else "disabled"),
             command=lambda: self._grid_delete_row(info, r))
         menu.add_cascade(label="Rows", menu=rows_menu)
 
@@ -7632,6 +7680,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             label="Unhide all columns",
             state=("normal" if info.get("hidden_cols") else "disabled"),
             command=lambda: self._grid_unhide_all(info))
+        cols_menu.add_command(
+            label="Clear column",
+            command=lambda: self._grid_fill_selection(
+                {"info": info, "box": (0, c, info["data_rows"] - 1, c)}, ""))
         cols_menu.add_command(label="Delete column",
                               command=lambda: self._grid_delete_col(info, c))
         menu.add_cascade(label="Columns", menu=cols_menu)

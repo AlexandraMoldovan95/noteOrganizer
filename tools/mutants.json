@@ -21258,16 +21258,16 @@
   },
   {
     "id": "DS04",
-    "about": "deleting many columns goes below the two-column floor",
+    "about": "the one column a delete leaves stays framed in pipes, words between bars, instead of lines of text",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        for c in sorted(set(cols), reverse=True):\n            if left > 2:\n",
-        "replace": "        for c in sorted(set(cols), reverse=True):\n            if left > 0:\n"
+        "find": "            self._grid_unframe_column(first, len(rows))\n",
+        "replace": "            pass\n"
       }
     ],
     "must_fail": [
-      "deleting all but one column leaves two, the extra one emptied"
+      "deleting all but one column leaves its words as lines"
     ],
     "suites": [
       "qa1"
@@ -21298,12 +21298,103 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if any(ac <= c < ac + cs for c in delete):\n",
-        "replace": "                if False:\n"
+        "find": "            if any(ac <= c < ac + cs for c in delete):\n",
+        "replace": "            if False:\n"
       }
     ],
     "must_fail": [
       "a merge cut by a deleted column comes apart instead of joining"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS07",
+    "about": "deleting every column of a table leaves the table standing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if left <= 0:\n            self._grid_delete_block_text(first, nrows)\n            self._grid_after_op(first)\n            return\n",
+        "replace": "        if left <= 0:\n            self._grid_after_op(first)\n            return\n"
+      }
+    ],
+    "must_fail": [
+      "deleting every column deletes the table"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS08",
+    "about": "deleting every row of a table leaves the table standing, as the greyed Delete row once did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if r1 - r0 + 1 >= len(rows):\n            self._grid_delete_block_text(first, nrows)\n",
+        "replace": "        if r1 - r0 + 1 >= len(rows):\n"
+      }
+    ],
+    "must_fail": [
+      "deleting every row a selection reaches deletes the table",
+      "Delete row at one data row is offered, and takes the table with it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS09",
+    "about": "a cell left alone by a column delete keeps its <br> as words instead of real lines",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                b.delete(f\"{n}.{col}\", f\"{n}.{col + len(brk)}\")\n                b.insert(f\"{n}.{col}\", \"\\n\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a cell left alone keeps its line breaks as lines"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS10",
+    "about": "Clear N columns empties only the selected rows of them, not the columns top to bottom",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     \"box\": (0, sel_c0, info[\"data_rows\"] - 1, sel_c1)},\n",
+        "replace": "                     \"box\": (sel_r0, sel_c0, sel_r1, sel_c1)},\n"
+      }
+    ],
+    "must_fail": [
+      "Clear 2 columns empties them top to bottom and keeps them"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS11",
+    "about": "Clear N columns empties a hidden column inside the selection too",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if cols is not None and c not in cols:\n                    continue\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "Clear 2 columns empties them top to bottom and keeps them"
     ],
     "suites": [
       "qa1"

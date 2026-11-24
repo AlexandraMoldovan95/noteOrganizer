@@ -4146,39 +4146,33 @@ check(f'deleting the inserted row and column restores the shape '
       f'({_t["nrows"]}x{_t["ncols"]})',
       (_t['nrows'], _t['ncols']) == (2, 2)
       and core_tables.split_row(lines_now()[0]) == ['A', 'B'])
-# Two columns is the floor -- a one-column row would read as prose, not
-# as a table -- so at two, deleting a column empties it instead.
+# Delete deletes (the owner, 2026-11-24): at two columns, deleting one
+# leaves one, which is no table -- a one-column row reads as prose -- so its
+# words stay as lines of the note. It emptied the column before.
 app._grid_delete_col(_t, 1)
 app.update()
+check(f'at two columns, deleting one leaves the other\'s words as lines, '
+      f'the table gone ({lines_now()[:3]})',
+      app._grid_at_line(1) is None and core_tables.find_blocks(body()) == []
+      and lines_now()[:2] == ['A', 'C'])
+set_body('| A | B |\n| C | D |')
+app._render_table_grids()
+app.update()
 _t = app._grid_at_line(1)
-check(f'at two columns, deleting empties the chosen one '
-      f'({core_tables.split_row(lines_now()[0])})',
-      _t is not None and _t['ncols'] == 2
-      and core_tables.split_row(lines_now()[0]) == ['A', '']
-      and core_tables.split_row(lines_now()[1]) == ['C', ''])
-# Asked only of a table still there: one a broken floor dissolved has no
-# grid, and the suite must reach its footer (qa/README's house rules).
-if _t is not None:
-    app._grid_delete_col(_t, 0)
-    app.update()
-_t = app._grid_at_line(1)
-check('and the table itself is never dissolved by column deletes',
-      _t is not None and _t['ncols'] == 2
-      and core_tables.split_row(lines_now()[0]) == ['', ''])
 if _t is not None:
     app._grid_delete_table(_t)
-else:
-    set_body('')        # the check above failed already; the next starts clean
 app.update()
 check('and deleting the table removes it outright',
-      app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+      _t is not None and app._grid_at_line(1) is None
+      and core_tables.find_blocks(body()) == [])
 
 # ---- MANY ROWS OR COLUMNS DELETED AT ONCE (2026-11-24) ----
 # Four columns of eight took four trips through the cell menu. A
 # selection's menu deletes every row, or every column, it reaches, in one
 # operation that one Ctrl+Z brings back, the other cells keeping their
-# styles; a hidden column inside the span stays; the two-column floor
-# holds as deleting one by one would.
+# styles; a hidden column inside the span stays. Delete deletes, Clear
+# empties (the owner, 2026-11-24): every row or column deleted is the table
+# deleted, and one column left is lines of text, a table needing two.
 _md_body = ('| H0 | H1 | H2 | H3 | H4 |\n| --- | --- | --- | --- | --- |\n'
             '| a0 | a1 | a2 | a3 | a4 |\n| b0 | b1 | b2 | b3 | b4 |\n'
             '| c0 | c1 | c2 | c3 | c4 |')
@@ -4262,11 +4256,18 @@ check('...and one Ctrl+Z brings both rows back',
       body() == _md_before)
 
 _md_setup()
+_md_before = body()
 _mdm = _md_menu((0, 0), (3, 0))
-check(f'a selection of every row cannot delete them all, the table stays '
-      f'({_mdm and _menu_entry_state(_mdm, "Delete 4 rows")})',
-      bool(_mdm) and _menu_entry_state(_mdm, 'Delete 4 rows') == 'disabled')
-app._grid_clear_selection()
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 4 rows')
+app.update()
+check(f'deleting every row a selection reaches deletes the table '
+      f'({body()!r})',
+      _md_pressed and app._grid_at_line(1) is None
+      and core_tables.find_blocks(body()) == [])
+app._body_undo_redo('undo')
+app.update()
+check('...and one Ctrl+Z brings the table back',
+      body() == _md_before and app._grid_at_line(1) is not None)
 
 # A hidden column inside the span stays: nobody saw it go.
 _md_setup()
@@ -4281,16 +4282,63 @@ check(f'a hidden column inside the selection is not deleted with it '
       _md_pressed and _md_rows() == [['H0', 'H2', 'H4'], ['a0', 'a2', 'a4'],
                                      ['b0', 'b2', 'b4'], ['c0', 'c2', 'c4']])
 
-# Two columns is the floor: four of five deleted leave two, the second
-# emptied, as deleting them one by one does.
+# Four of five deleted leave one column, which is no table: its words stay
+# as lines of the note, the bold with them. It used to stop at two columns
+# and empty the rest, which read as "deletes only the words".
 _md_setup()
-_mdm = _md_menu((0, 1), (0, 4))
+_mdm = _md_menu((0, 0), (0, 3))
 _md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 4 columns')
 app.update()
-check(f'deleting all but one column leaves two, the extra one emptied, as '
-      f'one by one would ({_md_rows()})',
-      _md_pressed and _md_rows() == [['H0', ''], ['a0', ''], ['b0', ''],
-                                     ['c0', '']])
+check(f'deleting all but one column leaves its words as lines, the bold '
+      f'kept ({lines_now()[:5]}; bold {_md_bold()})',
+      _md_pressed and app._grid_at_line(1) is None
+      and lines_now()[:4] == ['H4', 'a4', 'b4', 'c4'] and _md_bold() == ['a4'])
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((0, 0), (0, 4))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 5 columns')
+app.update()
+check(f'deleting every column deletes the table ({body()!r})',
+      _md_pressed and app._grid_at_line(1) is None
+      and core_tables.find_blocks(body()) == [])
+app._body_undo_redo('undo')
+app.update()
+check('...and one Ctrl+Z brings it back', body() == _md_before)
+# A cell's line breaks become real lines, and its colour (Highlight cell)
+# stays on its words.
+set_body('| A | B |\n| --- | --- |\n| a | b1<br>b2 |')
+app._render_table_grids()
+app.update()
+_md_hl = app._grid_at_line(1)
+if _md_hl is not None:
+    app._grid_apply_style(_md_hl, (1, 1, 1, 1), 'highlight', '#ffd166',
+                          through_editor=False)
+    app.update()
+    _md_hl = app._grid_at_line(1)
+if _md_hl is not None:
+    app._grid_delete_col(_md_hl, 0)
+app.update()
+_md_hl_lines = [any(t.startswith('highlight_')
+                    for t in app.body_text.tag_names(f'{n}.0')) for n in (2, 3)]
+check(f'a cell left alone keeps its line breaks as lines and its colour on '
+      f'its words ({lines_now()[:4]}; lines 2-3 coloured {_md_hl_lines})',
+      _md_hl is not None and lines_now()[:3] == ['B', 'b1', 'b2']
+      and _md_hl_lines == [True, True])
+
+# Clear keeps the columns, empty, top to bottom; a hidden one in the span
+# keeps its words.
+_md_setup()
+app._grid_hide_col(app._grid_at_line(1), 2)
+app.update()
+_mdm = _md_menu((1, 1), (1, 3))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Clear 2 columns')
+app.update()
+check(f'Clear 2 columns empties them top to bottom and keeps them, a hidden '
+      f'one between untouched ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', '', 'H2', '', 'H4'],
+                                     ['a0', '', 'a2', '', 'a4'],
+                                     ['b0', '', 'b2', '', 'b4'],
+                                     ['c0', '', 'c2', '', 'c4']])
 
 # A merge a deleted column cuts through, in a row the selection never
 # reached, comes apart: its covered cell must not join the column left of
@@ -5510,7 +5558,8 @@ try:
           not _tS['hidden_cols'])
 
     # Delete row answers to DATA rows: a table of header + separator has
-    # one data row, and deleting it must be off the table.
+    # one data row, and deleting it deletes the table, as Delete deletes
+    # (the owner, 2026-11-24); it was greyed out before.
     set_body('| a | b |\n| --- | --- |')
     app._render_table_grids()
     app.update()
@@ -5522,8 +5571,13 @@ try:
         'x_root': 0, 'y_root': 0})())
     _del_state = (_menu_entry_state(_posted[-1], 'Delete row')
                   if _posted else None)
-    check(f'Delete row is disabled at one data row ({_del_state})',
-          _del_state == 'disabled')
+    _del_gone = bool(_posted) and _menu_invoke(_posted[-1], 'Delete row')
+    app.update()
+    check(f'Delete row at one data row is offered, and takes the table with it '
+          f'({_del_state}; {body()!r})',
+          _del_state == 'normal' and _del_gone
+          and app._grid_at_line(1) is None
+          and core_tables.find_blocks(body()) == [])
 finally:
     NO.tk.Menu.tk_popup = _real_popup
 set_body(_md)
