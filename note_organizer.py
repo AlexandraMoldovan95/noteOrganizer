@@ -4994,8 +4994,74 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         hit = self._grid_cell_at_xy(info, x, press_y)
         self._grid_clear_selection()
-        self._grid_pressed = (info, hit, x, press_y) if hit else None
+        if not hit:
+            self._grid_pressed = None
+            return "break"
+        self._grid_pressed = {
+            "info": info, "cell": hit, "x": x, "y": press_y,
+            # Where the hand was on the screen (_grid_hand_moved).
+            "root": (getattr(event, "x_root", None),
+                     getattr(event, "y_root", None)),
+            "opened": None, "dragging": False}
+        cell = info["cells"].get(hit)
+        if cell is not None and core_tables.checkbox_state(
+                cell["value"]) is None:
+            # Open at the PRESS: opened at the release, keys typed while the
+            # button was down went under the table (ISSUES_LOG, "The digit
+            # typed between the press and the release"). A checkbox ticks.
+            self._open_cell_editor(info, *hit)
+            editor = getattr(self, "_cell_editor", None)
+            if self._grid_press_editor_alive(self._grid_pressed):
+                try:
+                    # As it opened: a drag closes it unwritten if it still
+                    # reads so (_grid_drop_press_editor).
+                    self._grid_pressed["opened"] = editor["entry"].dump(
+                        "1.0", "end", text=True, tag=True)
+                except tk.TclError:
+                    pass
         return "break"
+
+    # How far the hand moves, in pixels, before a press on a cell is a drag
+    # that selects instead of a click that types.
+    GRID_DRAG_SLOP = 10
+
+    def _grid_hand_moved(self, pressed, canvas, event):
+        """How far the hand has moved since the press on a cell: measured on
+        the screen, where the view scrolling the opened cell into sight under
+        a still pointer moves nothing; in the canvas for an event that carries
+        no screen point."""
+        then = pressed.get("root") or (None, None)
+        now = (getattr(event, "x_root", None), getattr(event, "y_root", None))
+        if None not in then and None not in now:
+            return max(abs(now[0] - then[0]), abs(now[1] - then[1]))
+        return max(abs(canvas.canvasx(event.x) - pressed["x"]),
+                   abs(canvas.canvasy(event.y) - pressed["y"]))
+
+    def _grid_press_editor_alive(self, pressed):
+        """Whether the open cell editor is the one this press opened."""
+        editor = getattr(self, "_cell_editor", None)
+        return (editor is not None and editor["info"] is pressed["info"]
+                and (editor["r"], editor["c"]) == pressed["cell"])
+
+    def _grid_drop_press_editor(self, pressed):
+        """The editor this press opened, closed as the press becomes a drag:
+        unwritten while it reads as it opened (a commit opens an undo unit,
+        which lays the whole note out again), committed once anything was
+        done in it. The keyboard goes to the note, as a selection's does."""
+        opened, pressed["opened"] = pressed.get("opened"), None
+        if opened is None or not self._grid_press_editor_alive(pressed):
+            return
+        editor = self._cell_editor
+        try:
+            same = editor["entry"].dump(
+                "1.0", "end", text=True, tag=True) == opened
+        except tk.TclError:
+            same = False
+        if same and "cell_highlight" not in editor:
+            self._close_cell_editor()
+        else:
+            self._commit_cell_editor()
+        self.body_text.focus_set()
 
     def _grid_drag_autoscroll(self, info):
         """While a cell drag runs, the view follows the pointer: the
@@ -5031,11 +5097,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             elif py < top + 16:
                 body.yview_scroll(-24, "pixels")
             pressed = getattr(self, "_grid_pressed", None)
-            if pressed and pressed[0] is info:
+            if pressed and pressed["info"] is info:
                 hit = self._grid_cell_at_xy(info, canvas.canvasx(wx),
                                             canvas.canvasy(wy))
-                if hit and hit != pressed[1]:
-                    self._grid_select_range(info, pressed[1], hit)
+                if hit and hit != pressed["cell"]:
+                    self._grid_select_range(info, pressed["cell"], hit)
         except tk.TclError:
             pass
 
@@ -5063,19 +5129,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or getattr(self, "_grid_row_resizing", None)):
             return "break"
         pressed = getattr(self, "_grid_pressed", None)
-        if not pressed or pressed[0] is not info:
+        if not pressed or pressed["info"] is not info:
             return "break"
+        canvas = info["canvas"]
+        if not pressed["dragging"]:
+            if (self._grid_hand_moved(pressed, canvas, event)
+                    < self.GRID_DRAG_SLOP):
+                # A hand that shook a little, even over the cell's edge, is
+                # still a click: the cell stays open for typing.
+                return "break"
+            pressed["dragging"] = True
+            self._grid_drop_press_editor(pressed)
+            if not int(canvas.winfo_exists()):
+                # What was typed into it widened the column, and the
+                # rebuild took this canvas: no more of this drag arrives.
+                self._grid_pressed = None
+                return "break"
         # A held pointer at an edge produces no more motion events; the
         # timer keeps the view (and the selection) moving until release.
         self._grid_drag_hold = info
         if getattr(self, "_grid_autoscroll_job", None) is None:
             self._grid_autoscroll_job = self.after(
                 60, self._grid_autoscroll_tick)
-        canvas = info["canvas"]
         hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
                                     canvas.canvasy(event.y))
-        if hit and hit != pressed[1]:
-            self._grid_select_range(info, pressed[1], hit)
+        if hit and hit != pressed["cell"]:
+            self._grid_select_range(info, pressed["cell"], hit)
         return "break"
 
     def _grid_release(self, info, event):
@@ -5114,22 +5193,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         pressed = getattr(self, "_grid_pressed", None)
         self._grid_pressed = None
-        if pressed is None or pressed[0] is not info:
+        if pressed is None or pressed["info"] is not info:
             return "break"
-        if getattr(self, "_grid_sel", None) is None and pressed[1]:
+        if getattr(self, "_grid_sel", None) is None and pressed["cell"]:
             # A drag inside one cell selects THAT cell whole (one took two); a
-            # short click still opens the editor.
+            # short click leaves the cell open for typing.
             canvas = info["canvas"]
-            moved = max(abs(canvas.canvasx(event.x) - pressed[2]),
-                        abs(canvas.canvasy(event.y) - pressed[3]))
-            if moved >= 10:
-                self._grid_select_range(info, pressed[1], pressed[1])
+            if (self._grid_hand_moved(pressed, canvas, event)
+                    >= self.GRID_DRAG_SLOP):
+                self._grid_drop_press_editor(pressed)
+                if int(canvas.winfo_exists()):
+                    self._grid_select_range(info, pressed["cell"],
+                                            pressed["cell"])
                 self.body_text.focus_set()
-            elif not self._grid_toggle_checkbox(info, *pressed[1]):
+            elif self._grid_press_editor_alive(pressed):
+                pass                        # opened at the press, still open
+            elif not self._grid_toggle_checkbox(info, *pressed["cell"]):
                 # A checkbox cell toggles on click; every other cell
                 # opens for typing, as always. Editing a checkbox AS
                 # TEXT stays available from its right-click menu.
-                self._open_cell_editor(info, *pressed[1])
+                self._open_cell_editor(info, *pressed["cell"])
         else:
             # A finished drag leaves a selection; the keyboard belongs to
             # it now, so Delete and Ctrl+C/V land on the cells no matter

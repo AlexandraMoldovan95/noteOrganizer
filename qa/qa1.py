@@ -4499,7 +4499,7 @@ check('and there is always a line under the last table to land on',
 _t = app._grid_at_line(1)
 _cell = _t['cells'][(0, 1)]
 # A click is a press AND a release now that dragging selects; the editor
-# opens on the release, so a drag can end without one.
+# opens at the press, and a drag that follows closes it.
 _qa_fire(_t['canvas'], '<Button-1>',
          x=_cell['x'] + 5, y=_cell['y'] + 5)
 _qa_fire(_t['canvas'], '<ButtonRelease-1>',
@@ -4510,6 +4510,129 @@ check(f'clicking a cell opens the editor on it '
       app._cell_editor is not None
       and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
 app._commit_cell_editor()
+app.update()
+
+# ---- A CELL OPENS AT THE PRESS, NOT AT THE RELEASE ----
+# Field report (2026-11-24): typing 1, 2, 3 quickly down a column, the 3
+# landed under the table. The press took the keyboard to the note, whose
+# caret stands under the table, and the cell opened only at the release:
+# what was typed while the button was still down went there. A drag now
+# starts once the hand has moved GRID_DRAG_SLOP pixels on the screen.
+set_body('| H1 | H2 | H3 |\n| a | b | c |\n| d | e | f |')
+app._render_table_grids()
+app.update()
+
+
+def _row_cells_P(r):
+    grid = app._grid_at_line(1)
+    n = app._grid_line_of_row(grid, r) if grid else None
+    if n is None:
+        return None
+    return core_tables.split_row(app.body_text.get(f'{n}.0', f'{n}.end'))
+
+
+_tP = app._grid_at_line(1)
+_cP = _tP['cells'][(1, 0)]
+_fsP = []
+_real_fsP = tk.Misc.focus_set
+tk.Misc.focus_set = (lambda self, *a, **k:
+                     (_fsP.append(self), _real_fsP(self, *a, **k))[1])
+try:
+    _qa_fire(_tP['canvas'], '<Button-1>',
+             x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+    _edP = getattr(app, '_cell_editor', None)
+    _fsLastP = _fsP[-1] if _fsP else None
+finally:
+    tk.Misc.focus_set = _real_fsP
+check(f'a press on a cell opens it before the release, the keyboard in it '
+      f'({_edP and (_edP["r"], _edP["c"])}; '
+      f'last focus to the cell: {bool(_edP) and _fsLastP is _edP["entry"]})',
+      _edP is not None and (_edP['r'], _edP['c']) == (1, 0)
+      and _fsLastP is _edP['entry'])
+_qa_fire(_tP['canvas'], '<ButtonRelease-1>',
+         x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+app.update()
+check('...and the release leaves it open there',
+      getattr(app, '_cell_editor', None) is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (1, 0))
+app._commit_cell_editor()
+app.update()
+
+# A hand that shakes a few pixels, even over the edge into the next cell,
+# is still a click: before, crossing the edge selected two cells and the
+# typing went under the table. Pressed 8 px inside the edge, past the
+# rule's grab, and moved 9.
+_tP = app._grid_at_line(1)
+_cP = _tP['cells'][(2, 0)]
+_xP, _yP = int(_cP['x'] + _cP['w'] - 8), int(_cP['y'] + 6)
+_qa_fire(_tP['canvas'], '<Button-1>', x=_xP, y=_yP)
+_qa_fire(_tP['canvas'], '<B1-Motion>', x=_xP + 9, y=_yP)
+_qa_fire(_tP['canvas'], '<ButtonRelease-1>', x=_xP + 9, y=_yP)
+app.update()
+_edP = getattr(app, '_cell_editor', None)
+check(f'a hand that shakes over the cell edge still types into the cell '
+      f'(editor {_edP and (_edP["r"], _edP["c"])}, '
+      f'selection {app._grid_sel and app._grid_sel["box"]})',
+      _edP is not None and (_edP['r'], _edP['c']) == (2, 0)
+      and app._grid_sel is None)
+app._commit_cell_editor()
+app.update()
+
+# The opened cell is scrolled into sight (_see_cell), and the view moving
+# under a pointer that stays where it was is no drag: the hand is measured
+# on the screen, where it did not move.
+_tP = app._grid_at_line(1)
+_cvP = _tP['canvas']
+_cP, _nP = _tP['cells'][(1, 1)], _tP['cells'][(2, 1)]
+_rxP = _cvP.winfo_rootx() + int(_cP['x'] + 6)
+_ryP = _cvP.winfo_rooty() + int(_cP['y'] + 6)
+_qa_fire(_cvP, '<Button-1>', x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+_qa_fire(_cvP, '<B1-Motion>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6),
+         rootx=_rxP, rooty=_ryP)
+_qa_fire(_cvP, '<ButtonRelease-1>', x=int(_nP['x'] + 6),
+         y=int(_nP['y'] + 6), rootx=_rxP, rooty=_ryP)
+app.update()
+_edP = getattr(app, '_cell_editor', None)
+check(f'the view moving the cell under a still pointer is no drag '
+      f'(editor {_edP and (_edP["r"], _edP["c"])}, '
+      f'selection {app._grid_sel and app._grid_sel["box"]})',
+      _edP is not None and (_edP['r'], _edP['c']) == (1, 1)
+      and app._grid_sel is None)
+app._commit_cell_editor()
+app.update()
+
+# A real drag closes the cell the press opened and selects, writing
+# nothing; what was typed into that cell before the drag is kept.
+_bodyP = body()
+_tP = app._grid_at_line(1)
+_cvP = _tP['canvas']
+_cP, _nP = _tP['cells'][(1, 0)], _tP['cells'][(2, 2)]
+_qa_fire(_cvP, '<Button-1>', x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+_qa_fire(_cvP, '<B1-Motion>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+_qa_fire(_cvP, '<ButtonRelease-1>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+app.update()
+check(f'a drag past the slop closes the pressed cell and selects, writing '
+      f'nothing (selection {app._grid_sel and app._grid_sel["box"]})',
+      getattr(app, '_cell_editor', None) is None
+      and app._grid_sel is not None and app._grid_sel['box'] == (1, 0, 2, 2)
+      and body() == _bodyP)
+app._grid_clear_selection()
+_tP = app._grid_at_line(1)
+_cvP = _tP['canvas']
+_cP, _nP = _tP['cells'][(2, 2)], _tP['cells'][(1, 1)]
+_qa_fire(_cvP, '<Button-1>', x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+_edP = getattr(app, '_cell_editor', None)
+if _edP is not None:
+    # Typed while the button was still down: it replaces the selected words.
+    _edP['entry'].delete('1.0', 'end')
+    _edP['entry'].insert('1.0', 'Z')
+_qa_fire(_cvP, '<B1-Motion>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+_qa_fire(_cvP, '<ButtonRelease-1>', x=int(_nP['x'] + 6), y=int(_nP['y'] + 6))
+app.update()
+check(f'what was typed into the pressed cell before a drag is kept '
+      f'({_row_cells_P(2)})',
+      _row_cells_P(2) == ['d', 'e', 'Z'])
+app._grid_clear_selection()
 app.update()
 
 # ---- ENTER BESIDE A TABLE, AND THE SELECTION MODEL ----

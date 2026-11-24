@@ -328,10 +328,12 @@ A table works the way a spreadsheet has taught your hands to expect:
 | **Ctrl+A** | Selects the whole cell. |
 
 - A table wider than the editor gets its own horizontal scrollbar, drawn just underneath it.
-- **Click** any cell to edit it. **Drag** across cells to select a block of them — a firm drag
-  *inside* one cell selects just that cell; drag toward an edge and the view scrolls along with
-  you, so a selection can reach cells that started off screen — then **Ctrl+C** copies it and
-  **Ctrl+V** somewhere else pastes it in the same shape.
+- **Click** any cell to edit it: it opens the moment you press, so what you type straight away
+  lands in it, even before you let go of the mouse. **Drag** across cells to select a block of
+  them — the selection starts once the mouse has moved a little, so a hand that shakes still
+  types into the cell; a firm drag *inside* one cell selects just that cell; drag toward an edge
+  and the view scrolls along with you, so a selection can reach cells that started off screen —
+  then **Ctrl+C** copies it and **Ctrl+V** somewhere else pastes it in the same shape.
 - Copying works with the outside world in both directions: cells copied here paste into Excel as
   cells and into Word as a real table with visible borders, and a table copied from Excel or a web
   page lands here as a real table, a single row of it too. So does a table written as markdown

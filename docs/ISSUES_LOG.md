@@ -240,6 +240,7 @@ is in the table below as well.
 | [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | 0.102.556 |
 | [Ctrl+T and the tags Tk shares](#ctrlt-and-the-tags-tk-shares) | Measure the road the code takes, not one beside it; and a fix of a round's lows is code too, each line needing its own check. | 0.102.556 |
 | [The panel's fifth meeting: what using the apps found](#the-panels-fifth-meeting-what-using-the-apps-found) | A reader of the code finds what it says; a person using the app finds where it is said: a result out of sight, an offer older than its subject, words that keep back what happened. | 0.102.556 |
+| [The digit typed between the press and the release](#the-digit-typed-between-the-press-and-the-release) | A gesture still deciding what it is must not move the keyboard somewhere nobody chose: give the keys to the likeliest target, and let the rarer gesture take them back. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -6924,6 +6925,32 @@ desktop's answers on 86 texts by its paste fixture.
 **Takeaway:** when a format borrows another's syntax, the borrowed form arrives written the
 way the other world writes it. Decide whose it is where that is still known — at the way in — and
 leave what is already stored alone.
+
+### The digit typed between the press and the release
+
+*(next · 2026-11-24 · the owner's field report on 0.102.556)*
+
+**Symptom:** typing 1, 2, 3, 4, 5 quickly down a column, a click on each cell and a digit, the 3
+landed on the line under the table, and the cell it was meant for stayed empty. Held down, the
+mouse showed the cursor under the table; let go, it jumped into the cell.
+
+**Root cause:** a press on a cell committed the cell being typed in and handed the keyboard to
+the note, whose cursor stands under the table; the cell clicked opened only at the release,
+because a press might still turn into a drag that selects cells. A fast hand types before it lets
+go, and those keys went to the note. A drag also began the moment the pointer crossed into the
+next cell, so a hand that shook over a cell's edge selected two cells, and its typing went under
+the table as well.
+
+**Fix:** the cell opens at the press, the keyboard in it. The press becomes a drag only once the
+hand has moved `GRID_DRAG_SLOP` (10) pixels, measured on the screen: opening a cell can scroll it
+into sight, which moves the cell under a still pointer, and measured in the canvas that read as a
+drag. The drag closes the cell its press opened — without a commit when nothing was done in it,
+since a commit's undo unit lays the whole note out again, and with one when something was typed
+while the button was down. A checkbox still ticks on the click.
+
+**Takeaway:** a gesture that is still deciding what it is must not move the keyboard somewhere
+nobody chose. Give the keys to the likeliest target at once, and let the rarer gesture take them
+back when it declares itself.
 
 ## Theming & performance
 

@@ -21106,5 +21106,77 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PS01",
+    "about": "a table cell opens at the release again, and what is typed while the button is down goes under the table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._open_cell_editor(info, *hit)\n            editor = getattr(self, \"_cell_editor\", None)\n            if self._grid_press_editor_alive(self._grid_pressed):\n",
+        "replace": "            editor = getattr(self, \"_cell_editor\", None)\n            if self._grid_press_editor_alive(self._grid_pressed):\n"
+      }
+    ],
+    "must_fail": [
+      "a press on a cell opens it before the release"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS02",
+    "about": "any motion after a press on a cell is a drag, and a shaking hand selects two cells",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if (self._grid_hand_moved(pressed, canvas, event)\n                    < self.GRID_DRAG_SLOP):\n",
+        "replace": "            if (self._grid_hand_moved(pressed, canvas, event)\n                    < 0):\n"
+      }
+    ],
+    "must_fail": [
+      "a hand that shakes over the cell edge still types into the cell"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS03",
+    "about": "the hand is measured in the canvas, and the view scrolling the opened cell into sight reads as a drag",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if None not in then and None not in now:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "the view moving the cell under a still pointer is no drag"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PS04",
+    "about": "a drag closes the cell its press opened unwritten, typed words and all",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if same and \"cell_highlight\" not in editor:\n            self._close_cell_editor()\n",
+        "replace": "        if True:\n            self._close_cell_editor()\n"
+      }
+    ],
+    "must_fail": [
+      "what was typed into the pressed cell before a drag is kept"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
