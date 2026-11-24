@@ -13343,18 +13343,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # row, so it is never watched for wrapping (159 px at 640x600).
     CHECKLIST_SHORT = 150
 
-    # Where a checklist item's text wraps, unless its row is narrower.
+    # Where a checklist item's text wraps until its row has given it a width
+    # (_wrap_to_width), and its row block none yet (_wrap_as_its_rows).
     CHECKLIST_WRAP = 380
 
     def _wrap_to_width(self, label, width):
         """Make *label* wrap its text inside *width* pixels, its own -- only
         when its text is cut off, or has room again: rewrapping every row
-        doubled the time a long checklist took to open."""
+        doubled the time a long checklist took to open. As wide as its row,
+        as the note's own text is: held to CHECKLIST_WRAP, a long item stood
+        in a third of a wide page (field report, 2026-11-24)."""
         if width <= 1:
             return
         edge = 2 * sum(int(str(label.cget(option)))
                        for option in ("bd", "padx", "highlightthickness"))
-        wrap = min(self.CHECKLIST_WRAP, max(self.px(40), width - edge))
+        wrap = max(self.px(40), width - edge)
         now = int(str(label.cget("wraplength")))
         # The block of a row stack its row stands in (RowStack): told, so a
         # chunk's height is read as its rows now stand, and the next row is

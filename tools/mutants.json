@@ -21178,5 +21178,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WF01",
+    "about": "a checklist item's text is held to CHECKLIST_WRAP again, a third of a wide page",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        wrap = max(self.px(40), width - edge)\n",
+        "replace": "        wrap = min(self.CHECKLIST_WRAP, max(self.px(40), width - edge))\n"
+      }
+    ],
+    "must_fail": [
+      "a long checklist item wraps at its row's width, not a third of a wide page"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
   }
 ]

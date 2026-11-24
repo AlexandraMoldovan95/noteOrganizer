@@ -1509,6 +1509,33 @@ check(f'long checklist items that grow in a narrower window are chunked again as
       and _ll_grow.get('read as it stands, wide again') is True
       and _ll_grow.get('read as it stands, a row grown') is True)
 
+# ...and a long item's words run the row's whole width, as the note's own
+# text does: held to CHECKLIST_WRAP, a long item stood in a third of a wide
+# page, the rest of its row empty (field report, 2026-11-24). The checklist
+# shares its row with the calculator, half each: at 1600 px its row has room
+# well past CHECKLIST_WRAP, which the cap would have shown.
+_ll_full = {}
+_ll_geo_full = app.geometry()
+try:
+    app.geometry('1600x900'); _ll_settle(10)
+    _ll_one_row('W0 ' + _ll_long)
+    _ll_settle(4)
+    _ll_lbl = next((c for c in app._checklist_rows.rows()[0].winfo_children()
+                    if isinstance(c, tk.Label)
+                    and str(c.cget('text')).startswith('W0')), None)
+    if _ll_lbl is not None:
+        _ll_edge = 2 * sum(int(str(_ll_lbl.cget(o)))
+                           for o in ('bd', 'padx', 'highlightthickness'))
+        _ll_full['width'] = _ll_lbl.winfo_width()
+        _ll_full['room'] = _ll_full['width'] - _ll_edge
+        _ll_full['wrap'] = int(str(_ll_lbl.cget('wraplength')))
+finally:
+    app.geometry(_ll_geo_full); _ll_settle(10)
+check(f'a long checklist item wraps at its row\'s width, not a third of a wide '
+      f'page ({_ll_full}; CHECKLIST_WRAP {app.CHECKLIST_WRAP})',
+      _ll_full.get('room', 0) > app.CHECKLIST_WRAP + 40
+      and abs(_ll_full.get('wrap', 0) - _ll_full.get('room', -99)) <= 2)
+
 # ...and whatever its rows do, no chunk is placed past the 32,767 px X and
 # Windows keep a window's place in (RowStack.REACH): one that tall, scrolled
 # 33,500 px into, was placed at -33,500, and X drew it nowhere. The reach is
