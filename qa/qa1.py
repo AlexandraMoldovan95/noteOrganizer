@@ -4156,16 +4156,157 @@ check(f'at two columns, deleting empties the chosen one '
       _t is not None and _t['ncols'] == 2
       and core_tables.split_row(lines_now()[0]) == ['A', '']
       and core_tables.split_row(lines_now()[1]) == ['C', ''])
-app._grid_delete_col(_t, 0)
-app.update()
+# Asked only of a table still there: one a broken floor dissolved has no
+# grid, and the suite must reach its footer (qa/README's house rules).
+if _t is not None:
+    app._grid_delete_col(_t, 0)
+    app.update()
 _t = app._grid_at_line(1)
 check('and the table itself is never dissolved by column deletes',
       _t is not None and _t['ncols'] == 2
       and core_tables.split_row(lines_now()[0]) == ['', ''])
-app._grid_delete_table(_t)
+if _t is not None:
+    app._grid_delete_table(_t)
+else:
+    set_body('')        # the check above failed already; the next starts clean
 app.update()
 check('and deleting the table removes it outright',
       app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+
+# ---- MANY ROWS OR COLUMNS DELETED AT ONCE (2026-11-24) ----
+# Four columns of eight took four trips through the cell menu. A
+# selection's menu deletes every row, or every column, it reaches, in one
+# operation that one Ctrl+Z brings back, the other cells keeping their
+# styles; a hidden column inside the span stays; the two-column floor
+# holds as deleting one by one would.
+_md_body = ('| H0 | H1 | H2 | H3 | H4 |\n| --- | --- | --- | --- | --- |\n'
+            '| a0 | a1 | a2 | a3 | a4 |\n| b0 | b1 | b2 | b3 | b4 |\n'
+            '| c0 | c1 | c2 | c3 | c4 |')
+
+
+def _md_setup():
+    set_body(_md_body)
+    _w = _md_body.index('a4')
+    app._apply_formatting(app.body_text, [
+        {'start': _w, 'end': _w + 2, 'style': 'bold'}])
+    app._render_table_grids()
+    app.update()
+    return app._grid_at_line(1)
+
+
+def _md_menu(a, b):
+    """The menu of the selection from cell *a* to *b*, posted over *a*."""
+    info = app._grid_at_line(1)
+    if info is None or a not in info['cells']:
+        return None
+    app._grid_select_range(info, a, b)
+    posted = []
+    real_popup = NO.tk.Menu.tk_popup
+    NO.tk.Menu.tk_popup = lambda _m, *x, **k: posted.append(_m)
+    try:
+        cell = info['cells'][a]
+        app._grid_menu(info, type('E', (), {
+            'x': int(cell['x'] + 12), 'y': int(cell['y'] + 6),
+            'x_root': 0, 'y_root': 0})())
+    finally:
+        NO.tk.Menu.tk_popup = real_popup
+    return posted[-1] if posted else None
+
+
+def _md_rows():
+    return [core_tables.split_row(l) for l in lines_now()
+            if l.strip() and not core_tables.is_separator_row(l)]
+
+
+def _md_bold():
+    _b = app.body_text.get('1.0', 'end-1c')
+    return sorted(_b[s['start']:s['end']]
+                  for s in app._extract_formatting(app.body_text)
+                  if s['style'] == 'bold')
+
+
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((1, 1), (2, 3))
+_md_labels = _menu_entries(_mdm) if _mdm else []
+check(f'a selection across rows and columns offers to delete them all '
+      f'({[l for l in _md_labels if l.startswith("Delete")]})',
+      'Delete 2 rows' in _md_labels and 'Delete 3 columns' in _md_labels
+      and _menu_entry_state(_mdm, 'Delete 2 rows') == 'normal'
+      and _menu_entry_state(_mdm, 'Delete 3 columns') == 'normal')
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 3 columns')
+app.update()
+check(f'Delete 3 columns takes the three, the other cells keeping their '
+      f'styles ({_md_rows()}; bold {_md_bold()})',
+      _md_pressed and _md_rows() == [['H0', 'H4'], ['a0', 'a4'],
+                                     ['b0', 'b4'], ['c0', 'c4']]
+      and _md_bold() == ['a4'])
+app._body_undo_redo('undo')
+app.update()
+check(f'...and one Ctrl+Z brings all three back, bold and all '
+      f'({_md_rows()[:2]}; bold {_md_bold()})',
+      body() == _md_before and _md_bold() == ['a4'])
+
+_md_setup()
+_md_before = body()
+_mdm = _md_menu((1, 0), (2, 1))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 2 rows')
+app.update()
+check(f'Delete 2 rows takes the rows the selection reaches, every column '
+      f'of them ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', 'H1', 'H2', 'H3', 'H4'],
+                                     ['c0', 'c1', 'c2', 'c3', 'c4']])
+app._body_undo_redo('undo')
+app.update()
+check('...and one Ctrl+Z brings both rows back',
+      body() == _md_before)
+
+_md_setup()
+_mdm = _md_menu((0, 0), (3, 0))
+check(f'a selection of every row cannot delete them all, the table stays '
+      f'({_mdm and _menu_entry_state(_mdm, "Delete 4 rows")})',
+      bool(_mdm) and _menu_entry_state(_mdm, 'Delete 4 rows') == 'disabled')
+app._grid_clear_selection()
+
+# A hidden column inside the span stays: nobody saw it go.
+_md_setup()
+app._grid_hide_col(app._grid_at_line(1), 2)
+app.update()
+_mdm = _md_menu((1, 1), (1, 3))
+_md_labels = _menu_entries(_mdm) if _mdm else []
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 2 columns')
+app.update()
+check(f'a hidden column inside the selection is not deleted with it '
+      f'({[l for l in _md_labels if l.startswith("Delete")]}; {_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', 'H2', 'H4'], ['a0', 'a2', 'a4'],
+                                     ['b0', 'b2', 'b4'], ['c0', 'c2', 'c4']])
+
+# Two columns is the floor: four of five deleted leave two, the second
+# emptied, as deleting them one by one does.
+_md_setup()
+_mdm = _md_menu((0, 1), (0, 4))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 4 columns')
+app.update()
+check(f'deleting all but one column leaves two, the extra one emptied, as '
+      f'one by one would ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', ''], ['a0', ''], ['b0', ''],
+                                     ['c0', '']])
+
+# A merge a deleted column cuts through, in a row the selection never
+# reached, comes apart: its covered cell must not join the column left of
+# the cut.
+_md_setup()
+app._grid_merge_with(app._grid_at_line(1), 3, 4, 'left')
+app.update()
+_mdm = _md_menu((1, 2), (1, 3))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Delete 2 columns')
+app.update()
+_md_after = app._grid_at_line(1)
+check(f'a merge cut by a deleted column comes apart instead of joining '
+      f'the cell to its left ({_md_rows()})',
+      _md_pressed and _md_rows()[3] == ['c0', 'c1', '']
+      and _md_after is not None and _md_after['cells'][(3, 1)]['cs'] == 1)
+set_body('')
 
 # ---- MERGE AND INSERT FROM A CELL'S MENU, PRESSED AS A PERSON DOES ----
 # "Merge with cell to the left / above" wrote a merge marker over the

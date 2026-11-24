@@ -6041,57 +6041,76 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  else (r, c - 1) if c > at else None))
         self._grid_after_op(first)
 
-    @_undo_atom
     def _grid_delete_row(self, info, r):
+        """The cell menu's Delete row: the selection's delete, one row long."""
+        self._grid_delete_rows(info, r, r)
+
+    @_undo_atom
+    def _grid_delete_rows(self, info, r0, r1):
+        """Rows *r0* to *r1* deleted in one operation, one Ctrl+Z bringing
+        them all back (a selection's menu, field report 2026-11-24). Never
+        every row: Remove table is its own menu entry."""
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, _ncols = context
-        if nrows <= 1:
-            self._grid_after_op(first)
-            return
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
-        if r >= len(rows):
+        r1 = min(r1, len(rows) - 1)
+        if r0 > r1 or r1 - r0 + 1 >= len(rows):
             self._grid_after_op(first)
             return
-        del rows[r]
-        del aligns[r]
+        k = r1 - r0 + 1
+        del rows[r0:r1 + 1]
+        del aligns[r0:r1 + 1]
         rows = self._dissolve_orphan_markers(rows)
-        gone = r
         self._grid_replace_block(
             first, nrows, rows, aligns, sep_cols,
-            source=lambda rr, c: (rr if rr < gone else rr + 1, c))
+            source=lambda rr, c: (rr if rr < r0 else rr + k, c))
         self._grid_after_op(first)
 
-    @_undo_atom
     def _grid_delete_col(self, info, c):
-        """At two columns, deleting empties the chosen column instead.
+        """The cell menu's Delete column: the selection's delete, one
+        column wide (_grid_delete_cols)."""
+        self._grid_delete_cols(info, [c])
 
-        A one-column row reads as prose, not as a table -- "| just one |"
-        is deliberately not a row, or quoting something between pipes would
-        redraw it as a grid -- so two columns is the floor. Removing the
-        table outright is its own menu entry.
+    @_undo_atom
+    def _grid_delete_cols(self, info, cols):
+        """The columns *cols* deleted in one operation, one Ctrl+Z, leaving
+        the table as deleting them one by one would. At two columns, deleting
+        empties the chosen column instead: "| just one |" is deliberately not
+        a row, or words quoted between pipes would draw as a grid. Removing
+        the table outright is its own menu entry.
         """
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
-        source = None
-        if ncols <= 2:
-            for row in rows:
-                if c < len(row):
-                    row[c] = ""
-            rows = self._dissolve_orphan_markers(rows)
-        else:
-            source = (lambda r, cc: (r, cc if cc < c else cc + 1))
+        width = max([ncols] + [len(row) for row in rows])
+        # Right to left, as one by one would, while more than two stand;
+        # those left over are emptied. Each index still names its column.
+        delete, empty, left = [], [], ncols
+        for c in sorted(set(cols), reverse=True):
+            if left > 2:
+                delete.append(c)
+                left -= 1
+            else:
+                empty.append(c)
+        if delete:
+            # A merge a deleted column cuts through comes apart, its anchor
+            # keeping its words.
             spans, _covered = core_tables.merge_map(rows)
             for (ar, ac), (rs, cs) in spans.items():
-                if ac <= c < ac + cs:
+                if any(ac <= c < ac + cs for c in delete):
                     for rr in range(ar, ar + rs):
                         for cc in range(ac, ac + cs):
                             if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
                                 rows[rr][cc] = ""
+        for c in empty:
+            for row in rows:
+                if c < len(row):
+                    row[c] = ""
+        for c in delete:
             for row in rows:
                 if c < len(row):
                     del row[c]
@@ -6100,7 +6119,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     del row_aligns[c]
             if sep_cols is not None and c < len(sep_cols):
                 del sep_cols[c]
-            rows = self._dissolve_orphan_markers(rows)
+        rows = self._dissolve_orphan_markers(rows)
+        source = None
+        if delete:
+            # Each new column's old index, for its cells' styles.
+            kept = [c for c in range(width) if c not in delete]
+            source = (lambda r, cc: (r, kept[cc]) if cc < len(kept) else None)
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
                                  source=source)
         self._grid_after_op(first)
@@ -7491,6 +7515,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            else f"Copy {span_rows} rows to the end"),
                     command=lambda box=sel["box"]:
                         self._grid_append_rows(info, box[0], box[2]))
+            # Every row, and every column, the selection reaches goes at once,
+            # as one cell's menu deletes its own (field report, 2026-11-24);
+            # a hidden column inside the span stays: nobody would see it go.
+            menu.add_separator()
+            sel_r0, sel_c0, sel_r1, sel_c1 = sel["box"]
+            del_rows = sel_r1 - sel_r0 + 1
+            del_cols = [c for c in range(sel_c0, sel_c1 + 1)
+                        if c not in info.get("hidden_cols", ())]
+            menu.add_command(
+                label=("Delete row" if del_rows == 1
+                       else f"Delete {del_rows} rows"),
+                state=("normal" if del_rows < info["data_rows"]
+                       else "disabled"),
+                command=lambda: self._grid_delete_rows(info, sel_r0, sel_r1))
+            menu.add_command(
+                label=("Delete column" if len(del_cols) == 1
+                       else f"Delete {len(del_cols)} columns"),
+                state="normal" if del_cols else "disabled",
+                command=lambda: self._grid_delete_cols(info, del_cols))
             menu.add_separator()
             menu.add_command(
                 label="Highlight cells\u2026",

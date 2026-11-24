@@ -21196,5 +21196,118 @@
       "qa2"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DS01",
+    "about": "a selection's menu offers no way to delete the rows and columns it reaches",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            menu.add_command(\n                label=(\"Delete row\" if del_rows == 1\n",
+        "replace": "            if False: menu.add_command(\n                label=(\"Delete row\" if del_rows == 1\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "            menu.add_command(\n                label=(\"Delete column\" if len(del_cols) == 1\n",
+        "replace": "            if False: menu.add_command(\n                label=(\"Delete column\" if len(del_cols) == 1\n"
+      }
+    ],
+    "must_fail": [
+      "a selection across rows and columns offers to delete them all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS02",
+    "about": "deleting a selection's rows takes only its first row",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        del rows[r0:r1 + 1]\n        del aligns[r0:r1 + 1]\n",
+        "replace": "        del rows[r0:r0 + 1]\n        del aligns[r0:r0 + 1]\n"
+      }
+    ],
+    "must_fail": [
+      "Delete 2 rows takes the rows the selection reaches"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS03",
+    "about": "a hidden column inside a selection is deleted with the columns around it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            del_cols = [c for c in range(sel_c0, sel_c1 + 1)\n                        if c not in info.get(\"hidden_cols\", ())]\n",
+        "replace": "            del_cols = list(range(sel_c0, sel_c1 + 1))\n"
+      }
+    ],
+    "must_fail": [
+      "a hidden column inside the selection is not deleted with it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS04",
+    "about": "deleting many columns goes below the two-column floor",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for c in sorted(set(cols), reverse=True):\n            if left > 2:\n",
+        "replace": "        for c in sorted(set(cols), reverse=True):\n            if left > 0:\n"
+      }
+    ],
+    "must_fail": [
+      "deleting all but one column leaves two, the extra one emptied"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS05",
+    "about": "deleting many columns is a Ctrl+Z step for each piece of the rewrite",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "    @_undo_atom\n    def _grid_delete_cols(self, info, cols):\n",
+        "replace": "    def _grid_delete_cols(self, info, cols):\n"
+      }
+    ],
+    "must_fail": [
+      "...and one Ctrl+Z brings all three back, bold and all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS06",
+    "about": "a merge cut by a deleted column, in a row the selection never reached, joins the cell left of the cut",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if any(ac <= c < ac + cs for c in delete):\n",
+        "replace": "                if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a merge cut by a deleted column comes apart instead of joining"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
