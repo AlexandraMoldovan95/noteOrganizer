@@ -4960,12 +4960,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_autoscroll_stop()
         press_x = info["canvas"].canvasx(event.x)
         press_y = info["canvas"].canvasy(event.y)
+        # What the press grabs, read before the commit below can rebuild.
+        boundary = self._grid_boundary_at(info, press_x)
+        row_boundary = (None if boundary is not None
+                        else self._grid_row_boundary_at(info, press_y))
+        hit = (None if boundary is not None or row_boundary is not None
+               else self._grid_cell_at_xy(info, press_x, press_y))
+        cell = info["cells"].get(hit) if hit else None
+        opens = (cell is not None
+                 and core_tables.checkbox_state(cell["value"]) is None)
         if getattr(self, "_cell_editor", None) is not None:
-            # The press takes the keyboard back from the open editor, or Ctrl+C
-            # copied the editor's word, not the cells selected.
             anchor_line = self._grid_first_line(info)
             self._commit_cell_editor()
-            self.body_text.focus_set()
+            if not opens:
+                # The press takes the keyboard back from the open editor, or
+                # Ctrl+C copied the editor's word, not the cells selected. A
+                # cell opening takes it straight, never by the caret under
+                # the table, which showed there for a moment (field report).
+                self.body_text.focus_set()
             if not int(info["canvas"].winfo_exists()):
                 # The commit's rebuild took this canvas, so no release follows:
                 # the cell aimed at, by the geometry seen, opens at the press.
@@ -4976,15 +4988,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if fresh is not None and hit is not None:
                     self._open_cell_editor(fresh, *hit)
                 return "break"
-        canvas = info["canvas"]
-        x = press_x
-        boundary = self._grid_boundary_at(info, x)
         if boundary is not None:
             # Grabbing a rule resizes its column instead of selecting.
-            self._grid_resizing = {"info": info, "col": boundary, "x": x}
+            self._grid_resizing = {"info": info, "col": boundary, "x": press_x}
             self._grid_pressed = None
             return "break"
-        row_boundary = self._grid_row_boundary_at(info, press_y)
         if row_boundary is not None:
             # The horizontal rule resizes its row, the vertical twin of
             # dragging a column wider.
@@ -4992,20 +5000,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                        "y": press_y}
             self._grid_pressed = None
             return "break"
-        hit = self._grid_cell_at_xy(info, x, press_y)
         self._grid_clear_selection()
         if not hit:
             self._grid_pressed = None
             return "break"
         self._grid_pressed = {
-            "info": info, "cell": hit, "x": x, "y": press_y,
+            "info": info, "cell": hit, "x": press_x, "y": press_y,
             # Where the hand was on the screen (_grid_hand_moved).
             "root": (getattr(event, "x_root", None),
                      getattr(event, "y_root", None)),
             "opened": None, "dragging": False}
-        cell = info["cells"].get(hit)
-        if cell is not None and core_tables.checkbox_state(
-                cell["value"]) is None:
+        if opens:
             # Open at the PRESS: opened at the release, keys typed while the
             # button was down went under the table (ISSUES_LOG, "The digit
             # typed between the press and the release"). A checkbox ticks.

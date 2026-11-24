@@ -4744,6 +4744,27 @@ app.update()
 check('...and the release leaves it open there',
       getattr(app, '_cell_editor', None) is not None
       and (app._cell_editor['r'], app._cell_editor['c']) == (1, 0))
+# From one open cell to the next, the keyboard never stops at the note's
+# caret under the table: it showed there for a moment (her re-test).
+_tP = app._grid_at_line(1)
+_cP = _tP['cells'][(2, 1)]
+_fsP = []
+tk.Misc.focus_set = (lambda self, *a, **k:
+                     (_fsP.append(self), _real_fsP(self, *a, **k))[1])
+try:
+    _qa_fire(_tP['canvas'], '<Button-1>',
+             x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+    _qa_fire(_tP['canvas'], '<ButtonRelease-1>',
+             x=int(_cP['x'] + 6), y=int(_cP['y'] + 6))
+    app.update()
+finally:
+    tk.Misc.focus_set = _real_fsP
+_edP = getattr(app, '_cell_editor', None)
+check(f'a press from one open cell to another never passes the keyboard '
+      f'through the note ({_fsP.count(app.body_text)} focus calls on the note; '
+      f'editor {_edP and (_edP["r"], _edP["c"])})',
+      app.body_text not in _fsP and _edP is not None
+      and (_edP['r'], _edP['c']) == (2, 1))
 app._commit_cell_editor()
 app.update()
 

@@ -21400,5 +21400,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PS05",
+    "about": "a press from one open cell to another hands the keyboard to the note first, its caret showing under the table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if not opens:\n                # The press takes the keyboard back",
+        "replace": "            if True:\n                # The press takes the keyboard back"
+      }
+    ],
+    "must_fail": [
+      "a press from one open cell to another never passes the keyboard through the note"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
