@@ -4973,10 +4973,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             anchor_line = self._grid_first_line(info)
             self._commit_cell_editor()
             if not opens:
-                # The press takes the keyboard back from the open editor, or
-                # Ctrl+C copied the editor's word, not the cells selected. A
-                # cell opening takes it straight, never by the caret under
-                # the table, which showed there for a moment (field report).
+                # The keyboard back from the editor, or Ctrl+C copied its word,
+                # not the cells selected; a cell opening takes it straight, not
+                # by the caret under the table (field report, 2026-11-24).
                 self.body_text.focus_set()
             if not int(info["canvas"].winfo_exists()):
                 # The commit's rebuild took this canvas, so no release follows:

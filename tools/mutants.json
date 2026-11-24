@@ -21407,8 +21407,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if not opens:\n                # The press takes the keyboard back",
-        "replace": "            if True:\n                # The press takes the keyboard back"
+        "find": "            if not opens:\n                # The keyboard back from the editor",
+        "replace": "            if True:\n                # The keyboard back from the editor"
       }
     ],
     "must_fail": [
