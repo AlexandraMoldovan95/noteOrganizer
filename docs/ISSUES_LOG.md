@@ -241,6 +241,7 @@ is in the table below as well.
 | [Ctrl+T and the tags Tk shares](#ctrlt-and-the-tags-tk-shares) | Measure the road the code takes, not one beside it; and a fix of a round's lows is code too, each line needing its own check. | 0.102.556 |
 | [The panel's fifth meeting: what using the apps found](#the-panels-fifth-meeting-what-using-the-apps-found) | A reader of the code finds what it says; a person using the app finds where it is said: a result out of sight, an offer older than its subject, words that keep back what happened. | 0.102.556 |
 | [The digit typed between the press and the release](#the-digit-typed-between-the-press-and-the-release) | A gesture still deciding what it is must not move the keyboard somewhere nobody chose: give the keys to the likeliest target, and let the rarer gesture take them back. | 0.103.558 |
+| [Two reds from a day the PC was in use](#two-reds-from-a-day-the-pc-was-in-use) | A precondition written as a bet waits for a loaded day; a red that cannot be reproduced is made to explain itself next time, not re-run until green. | — |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -8979,6 +8980,36 @@ documents call the last line of defence looking in the wrong folder.
 **Takeaway, round ten:** a guard asks the question the thing it guards will ask, of the same
 code. "Is there a notebook here?" became the wrong question the day the app stopped keeping its
 notebook here.
+
+### Two reds from a day the PC was in use
+
+*(2026-11-24 · two checks, each red once in about ten runs of its suite, on a desktop the owner
+was using)*
+
+**Symptom:** qa1's "palette: the arrow keys and a Tab landing on the tabs show the ring again"
+read the tabs' ring at rest after the Tab. qa2's "Space on a checklist bin hands the keyboard to
+the bin in its place" found the keyboard on the window itself after the bin at the end of a
+chunk went. Both passed on every run after, on the same code; the Space case passed 40 times
+running in a probe that pressed it alone.
+
+**Root cause:** the palette check forced the keyboard onto the widget before the tabs with
+`focus_force()` and one `update()`, then generated the Tab, which Tk hands to whatever holds the
+keyboard: the house rule's PRECONDITION, written as a bet. When the focus arrived late, the Tab
+left from somewhere else and never reached the tabs. The Space check's cause is not proven. Its
+road has one place where the app leaves the keyboard alone on purpose: a pointer press between
+the key and the move (`_tk_press_ends`), so that a click someone made is not overridden. The
+test makes no press there; only a hand on the machine's mouse could.
+
+**Fix:** the palette check takes the focus with `take_focus` and waits for it, and prints SKIP
+when Windows will not give it, never a pass. The Space check counts the app's pointer presses
+across each Space: one it did not make is said as a SKIP with the run's details. Otherwise it
+judges as before, and a wrong answer now prints, update by update, where the keyboard went, so
+the next red names its road. A sweep of the qa suites for `focus_force()` followed by one
+`update()` and a key found no other.
+
+**Takeaway:** the rule was already written (qa/README, "Force a precondition; read back only a
+promise"); a check that broke it waited for a loaded day to show it. A check that cannot be
+reproduced is made to explain itself the next time, not re-run until green.
 
 ## Smaller lessons, moved out of the code
 

@@ -11897,19 +11897,27 @@ _rg_arrow_ok = _rg_seen['arrow'] == app._on_fill('accent').lower()
 app.notebook.select(app.TAB_NOTES); app.update()
 app._set_tab_ring(False)
 _rg_prev = app.notebook.tk_focusPrev()
-if _rg_prev is not None:
-    # A generated key goes to the window holding the keyboard, so the Tab
-    # starts where a person's would: on the widget before the tabs.
-    _rg_prev.focus_force(); app.update()
+# A generated key goes to the window holding the keyboard, so the Tab
+# starts where a person's would: on the widget before the tabs -- forced
+# there and waited for (take_focus). A focus_force with one update was a
+# bet that lost once in a full run (2026-11-24): the Tab left from
+# elsewhere and never reached the tabs.
+_rg_had = _rg_prev is not None and take_focus(_rg_prev)
+if _rg_had:
     _rg_prev.event_generate('<Tab>'); app.update()
 _rg_seen['tabbed'] = _rg_ring()
 app.set_theme(_pl_theme); app.notebook.select(app.TAB_NOTES); app.update()
 check(f'palette: a click on the tabs hides their focus ring, through a theme '
       f'switch too ({_rg_xy}, {_rg_seen})', bool(_rg_xy) and _rg_hidden_ok)
-check(f'palette: the arrow keys and a Tab landing on the tabs show the ring again '
-      f'({_rg_prev}, {_rg_seen})',
-      _rg_arrow_ok and _rg_prev is not None
-      and _rg_seen['tabbed'] == app._on_fill('accent').lower())
+if _rg_prev is not None and not _rg_had:
+    print('SKIP palette: the arrow keys and a Tab landing on the tabs show the '
+          'ring again: Windows would not give the keyboard to the widget before '
+          'the tabs, so no Tab could start there')
+else:
+    check(f'palette: the arrow keys and a Tab landing on the tabs show the ring '
+          f'again ({_rg_prev}, {_rg_seen})',
+          _rg_arrow_ok and _rg_prev is not None
+          and _rg_seen['tabbed'] == app._on_fill('accent').lower())
 
 # The colour palette's tick marks the colour in use -- the only sign of it
 # when two swatches look alike to a colour-blind eye -- and was white on 13

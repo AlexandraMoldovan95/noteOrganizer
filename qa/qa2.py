@@ -1236,15 +1236,32 @@ check(f'an item deleted at the end of a chunk and put back stands there again, '
                    'alone between': ([_LL_N, 1, _LL_N], True, 1)})
 
 
+# Each Space's run, for the check that reads it: whether a pointer press
+# this script never made reached the app meanwhile -- the person at the
+# machine; the app then leaves the keyboard where the click put it, by
+# design (_tk_press_ends) -- and where the keyboard went, update by update.
+_ll_space_runs = []
+
+
 def _ll_after_space(widget):
     """Space on *widget*, from the keyboard, and the widget holding it after:
     Tk runs a button's command 100 ms after the key."""
     if not _ll_focus(widget):
+        _ll_space_runs.append({'unscripted press': False,
+                               'keyboard went': ['never reached the button']})
         return None
+    clicks = getattr(app, '_pointer_presses', 0)
+    trail = []
     widget.event_generate('<space>')
     for _ in range(25):
         app.update()
+        now = str(app.tk.call('focus'))[-24:]
+        if not trail or trail[-1] != now:
+            trail.append(now)
         time.sleep(0.02)
+    _ll_space_runs.append({
+        'unscripted press': getattr(app, '_pointer_presses', 0) != clicks,
+        'keyboard went': trail})
     try:
         return app.nametowidget(str(app.tk.call('focus')))
     except (KeyError, tk.TclError):
@@ -1271,17 +1288,29 @@ def _ll_bin_by_key(count, at):
 # and the keyboard went to the chunk before's FIRST item, which the next
 # Space removed.
 _LL_E = 2 * _LL_N
+del _ll_space_runs[:]
 _ll_keys = {'the first': _ll_bin_by_key(_LL_E, 0),
             'end of a chunk': _ll_bin_by_key(_LL_E, _LL_N - 1),
             'first of a chunk': _ll_bin_by_key(_LL_E, _LL_N),
             "the list's last": _ll_bin_by_key(_LL_E, _LL_E - 1),
             'alone at the end': _ll_bin_by_key(_LL_E + 1, _LL_E)}
-check(f'Space on a checklist bin hands the keyboard to the bin in its place, '
-      f'or to the last, at every place among the chunks ({_ll_keys})',
-      _ll_keys == {'the first': 'item 1', 'end of a chunk': f'item {_LL_N}',
-                   'first of a chunk': f'item {_LL_N + 1}',
-                   "the list's last": f'item {_LL_E - 2}',
-                   'alone at the end': f'item {_LL_E - 1}'})
+# Once in a full run on a desktop in use the keyboard ended on the window
+# itself (2026-11-24), never since in 40 repeats: a press that reached the
+# app from outside is said, not judged, and a wrong answer says its route.
+_ll_space_said = dict(zip(_ll_keys, _ll_space_runs))
+if any(run['unscripted press'] for run in _ll_space_runs):
+    print(f'SKIP Space on a checklist bin hands the keyboard to the bin in its '
+          f'place: a pointer press this script never made reached the app '
+          f'({_ll_keys}; {_ll_space_said})')
+else:
+    _ll_want_keys = {'the first': 'item 1', 'end of a chunk': f'item {_LL_N}',
+                     'first of a chunk': f'item {_LL_N + 1}',
+                     "the list's last": f'item {_LL_E - 2}',
+                     'alone at the end': f'item {_LL_E - 1}'}
+    check(f'Space on a checklist bin hands the keyboard to the bin in its place, '
+          f'or to the last, at every place among the chunks ({_ll_keys}; the '
+          f'wrong ones went {[_ll_space_said.get(k) for k in _ll_keys if _ll_keys[k] != _ll_want_keys[k]]})',
+          _ll_keys == _ll_want_keys)
 
 # A chunk out of sight is parked beside the list, never over it, however tall
 # it has grown; and one scrolled further into than its parking place stands at
