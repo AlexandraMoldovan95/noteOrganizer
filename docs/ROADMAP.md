@@ -47,6 +47,15 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     declared in `__init__` instead; and the card's tags line worked out by a pure function in
     `core/`, tested on its own.
 
+- **After the stores: tables of one column** (the owner's call, 2026-11-24). A table needs two
+  columns today, so deleting all but one leaves that column's words as lines of the note. The
+  owner asked whether one column could stay a table. It can, read only when a separator line
+  (`| --- |`) stands under its header, as markdown does, so words written between two bars stay
+  words. But that changes how notes are read, in this app and in the phone's, which mirrors the
+  rule (`tables._MIN_CELLS`): every place that reads a row, paste, copy to Excel, export and
+  merges would be walked again, and the phone needs a release of its own. Not on the eve of
+  the stores.
+
 - **Feedback from real readers at the public launch, colour-blind readers among them.** The
   colour-blind check so far is an AI simulation: photographs of the app simulated for
   protanopia, deuteranopia and tritanopia, read by AI reviewers (the test plan's case 625). A
@@ -296,7 +305,8 @@ grew it up: multi-line cells (`<br>`), per-character styles rendered as runs, a 
 editor with an active colour, real checkboxes (`[ ]`/`[x]`), row-height drags, row duplication and
 auto-scrolling drag-selection. After the final audit, the owner's field test asked for several
 rows or columns deleted at once (2026-11-24): a selection's menu deletes every row, or every
-column, it reaches, in one Ctrl+Z.
+column, it reaches, in one Ctrl+Z, and clears columns as its own command; Delete deletes, down
+to the whole table.
 
 The standing decision: the note's plain text remains the single source of truth throughout — see
 ["Tables: plain text is the store, a drawn grid is the view"](ARCHITECTURE.md#tables-plain-text-is-the-store-a-drawn-grid-is-the-view).

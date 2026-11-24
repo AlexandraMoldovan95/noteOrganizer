@@ -6948,9 +6948,17 @@ drag. The drag closes the cell its press opened — without a commit when nothin
 since a commit's undo unit lays the whole note out again, and with one when something was typed
 while the button was down. A checkbox still ticks on the click.
 
+**Her re-test, the same day:** the cursor still showed under the table for a moment on the way
+from one cell to the next. The press still handed the keyboard to the note first, for Ctrl+C on
+a selection, and the new cell took it a moment later, once Tk had drawn it. The check that
+recorded only the LAST call to `focus_set` was satisfied by the right final answer. The press now
+works out what it grabs before the commit, and only a press that opens no cell gives the note
+the keyboard; the check counts every `focus_set` on the note during the press, and wants none.
+
 **Takeaway:** a gesture that is still deciding what it is must not move the keyboard somewhere
 nobody chose. Give the keys to the likeliest target at once, and let the rarer gesture take them
-back when it declares itself.
+back when it declares itself. And a check of where the keyboard ends up proves nothing about
+where it went on the way: ask the route, not only the destination.
 
 ## Theming & performance
 

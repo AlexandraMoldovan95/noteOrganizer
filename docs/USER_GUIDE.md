@@ -358,9 +358,12 @@ A table works the way a spreadsheet has taught your hands to expect:
   merge back apart. Insert or delete rows and columns (**Insert row above** on the header row
   puts the new row just under it, so the header stays the header). To delete several at once,
   select cells that reach across them and right-click: **Delete 3 rows** takes every row the
-  selection touches, **Delete 4 columns** every column, and one Ctrl+Z brings them all back. A
-  hidden column inside the selection stays; a table keeps two columns, so deleting all but one
-  empties the second instead, as deleting them one by one would. Duplicate whole columns to
+  selection touches, **Delete 4 columns** every column, and one Ctrl+Z brings them all back;
+  **Clear 4 columns** empties those columns top to bottom and keeps them (one cell's menu has
+  **Clear column** and **Delete column** too). A hidden column inside the selection stays.
+  Deleting every row or every column deletes the table. A table needs two columns, so when a
+  delete leaves only one, its words stay in the note as ordinary lines, one cell to a line.
+  Duplicate whole columns to
   the end of the table, and whole rows to the bottom. Insert a **checkbox** (with its own colour
   palette) or an emoji, and highlight cells from a small colour palette.
 - A checkbox is a real little box, not text: **click it to tick and untick it** — for marking when

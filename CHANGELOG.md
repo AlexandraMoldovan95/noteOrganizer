@@ -114,18 +114,22 @@ How the numbers themselves are counted is the
 
 ### Added
 
-- **Several rows or columns deleted at once.** Select cells that reach across them and
-  right-click: **Delete 3 rows** takes every row the selection touches, **Delete 4 columns**
-  every column, and one Ctrl+Z brings them all back, their formatting too. Four columns of eight
-  took four trips through a cell's menu. A hidden column inside the selection stays, and a table
-  keeps its two columns as deleting one by one would.
+- **Several rows or columns deleted at once, or cleared.** Select cells that reach across them
+  and right-click: **Delete 3 rows** takes every row the selection touches, **Delete 4 columns**
+  every column, and one Ctrl+Z brings them all back, their formatting too; **Clear 4 columns**
+  empties the columns and keeps them, and a cell's own menu has **Clear column** beside
+  **Delete column**. Four columns of eight took four trips through a cell's menu. Delete now
+  deletes: every row or every column deleted is the table deleted, and a table left with one
+  column, which is no table, leaves its words as lines of the note. It emptied columns before
+  instead of going below two. A hidden column inside the selection stays.
 
 ### Fixed
 
 - **What you type into a table cell straight after clicking it lands in the cell.** The cell
   opened only when the mouse button came up; typed while it was still down, a digit went to the
-  line under the table. A cell opens at the press now, and a drag selects only once the mouse
-  has moved a little, so a hand that shakes over a cell's edge still types into the cell.
+  line under the table. A cell opens at the press now, the cursor going from one cell straight
+  to the next without stopping under the table, and a drag selects only once the mouse has
+  moved a little, so a hand that shakes over a cell's edge still types into the cell.
 - **A long checklist item uses the row's whole width.** Its words wrapped at 380 pixels however
   wide the page was, filling a third of a wide window; they run to the row's end now, as the
   note's own text does.
