@@ -421,6 +421,7 @@
   "_grid_set_marker": "(self, info, r, c, marker)",
   "_grid_set_row_lines": "(self, info, r, lines)",
   "_grid_set_table_align": "(self, info, align)",
+  "_grid_shown_cols": "(info)",
   "_grid_split": "(self, info, r, c)",
   "_grid_stub_menu": "(self, info, event, c)",
   "_grid_style_target": "(self)",

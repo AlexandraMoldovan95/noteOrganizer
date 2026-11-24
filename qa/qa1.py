@@ -4340,6 +4340,39 @@ check(f'Clear 2 columns empties them top to bottom and keeps them, a hidden '
                                      ['b0', '', 'b2', '', 'b4'],
                                      ['c0', '', 'c2', '', 'c4']])
 
+# ...and Clear rows does the same across (the owner, 2026-11-24): from a
+# selection, every row it reaches; from one cell's menu, its own row.
+_md_setup()
+app._grid_hide_col(app._grid_at_line(1), 2)
+app.update()
+_mdm = _md_menu((1, 1), (2, 1))
+_md_pressed = bool(_mdm) and _menu_invoke(_mdm, 'Clear 2 rows')
+app.update()
+check(f'Clear 2 rows empties them across and keeps them, a hidden column\'s '
+      f'cells untouched ({_md_rows()})',
+      _md_pressed and _md_rows() == [['H0', 'H1', 'H2', 'H3', 'H4'],
+                                     ['', '', 'a2', '', ''],
+                                     ['', '', 'b2', '', ''],
+                                     ['c0', 'c1', 'c2', 'c3', 'c4']])
+_md_info = app._grid_at_line(1)
+app._grid_clear_selection()
+_md_posted = []
+_md_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *x, **k: _md_posted.append(_m)
+try:
+    if _md_info is not None:
+        _md_c30 = _md_info['cells'][(3, 0)]
+        app._grid_menu(_md_info, type('E', (), {
+            'x': int(_md_c30['x'] + 12), 'y': int(_md_c30['y'] + 6),
+            'x_root': 0, 'y_root': 0})())
+finally:
+    NO.tk.Menu.tk_popup = _md_real_popup
+_md_pressed = bool(_md_posted) and _menu_invoke(_md_posted[-1], 'Clear row')
+app.update()
+check(f'Clear row from a cell\'s menu empties that row, its hidden cell kept '
+      f'({_md_rows()[3:]})',
+      _md_pressed and _md_rows()[3:] == [['', '', 'c2', '', '']])
+
 # A merge a deleted column cuts through, in a row the selection never
 # reached, comes apart: its covered cell must not join the column left of
 # the cut.

@@ -21418,5 +21418,60 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DS12",
+    "about": "Clear N rows empties only the first of the rows a selection reaches",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     \"box\": (sel_r0, 0, sel_r1, info[\"ncols\"] - 1)},\n",
+        "replace": "                     \"box\": (sel_r0, 0, sel_r0, info[\"ncols\"] - 1)},\n"
+      }
+    ],
+    "must_fail": [
+      "Clear 2 rows empties them across and keeps them"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS13",
+    "about": "Clear row empties a hidden column's cell too, which nobody sees go",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        return {c for c in range(info[\"ncols\"]) if c not in hidden}\n",
+        "replace": "        return set(range(info[\"ncols\"]))\n"
+      }
+    ],
+    "must_fail": [
+      "Clear 2 rows empties them across and keeps them",
+      "Clear row from a cell's menu empties that row, its hidden cell kept"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DS14",
+    "about": "a cell's Clear row empties only the cell's own column of it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                {\"info\": info, \"box\": (r, 0, r, info[\"ncols\"] - 1)}, \"\",\n",
+        "replace": "                {\"info\": info, \"box\": (r, c, r, c)}, \"\",\n"
+      }
+    ],
+    "must_fail": [
+      "Clear row from a cell's menu empties that row, its hidden cell kept"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

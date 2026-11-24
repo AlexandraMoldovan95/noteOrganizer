@@ -6139,6 +6139,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_unframe_column(first, len(rows))
         self._grid_after_op(first)
 
+    @staticmethod
+    def _grid_shown_cols(info):
+        """The table's columns not hidden: what Clear row empties."""
+        hidden = info.get("hidden_cols", ())
+        return {c for c in range(info["ncols"]) if c not in hidden}
+
     def _grid_delete_block_text(self, first, nrows):
         """A table's lines taken out of the note, the line break after them
         too: Remove table's delete, and every row or column deleted."""
@@ -7567,12 +7573,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             del_rows = sel_r1 - sel_r0 + 1
             del_cols = [c for c in range(sel_c0, sel_c1 + 1)
                         if c not in info.get("hidden_cols", ())]
+            # Clear keeps the rows or columns, empty; Delete takes them (the
+            # owner's two, 2026-11-24). A hidden column's cells stay.
+            menu.add_command(
+                label=("Clear row" if del_rows == 1
+                       else f"Clear {del_rows} rows"),
+                command=lambda: self._grid_fill_selection(
+                    {"info": info,
+                     "box": (sel_r0, 0, sel_r1, info["ncols"] - 1)},
+                    "", cols=self._grid_shown_cols(info)))
             menu.add_command(
                 label=("Delete row" if del_rows == 1
                        else f"Delete {del_rows} rows"),
                 command=lambda: self._grid_delete_rows(info, sel_r0, sel_r1))
-            # Clear keeps the columns, empty; Delete takes them (the owner's
-            # two, 2026-11-24).
             menu.add_command(
                 label=("Clear column" if len(del_cols) == 1
                        else f"Clear {len(del_cols)} columns"),
@@ -7666,6 +7679,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows_menu.add_command(
             label="Insert row below",
             command=lambda: self._grid_insert_row(info, r + 1))
+        rows_menu.add_command(
+            label="Clear row",
+            command=lambda: self._grid_fill_selection(
+                {"info": info, "box": (r, 0, r, info["ncols"] - 1)}, "",
+                cols=self._grid_shown_cols(info)))
         # The last row too: the table goes with it, one Ctrl+Z back.
         rows_menu.add_command(
             label="Delete row",
