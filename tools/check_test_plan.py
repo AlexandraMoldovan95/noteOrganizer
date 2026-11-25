@@ -12,9 +12,9 @@ its heading said 921. This gate counts the rows itself and fails when:
   nowhere (43 were, until 7 November 2026);
 * a Summary formula stops short of the last case;
 * a document gives the plan a number the plan does not have:
-  docs/TEST_PLAN_EXCERPT.md (the cases, those passed and those not yet
-  walked, each priority, the six largest areas), docs/BUG_REPORTS.md and
-  qa/README.md (the cases).
+  docs/TEST_PLAN_EXCERPT.md (the cases, those passed, not yet walked and
+  blocked, the passes walked by hand and by the suites, each priority, the
+  six largest areas), docs/BUG_REPORTS.md and qa/README.md (the cases).
 
 Every sentence it reads must be found: a gate that cannot find what it
 checks fails, rather than passing over it.
@@ -119,12 +119,24 @@ def check_documents(cases):
     m = said(excerpt, r"\*\*([\d,]+) cases\*\* on", "the cases")
     if m:
         agree(excerpt, "the number of cases (heading)", number(m.group(1)), total)
-    m = said(excerpt, r"Counted on [^:]+: ([\d,]+) cases, ([\d,]+) walked and passed, ([\d,]+) not yet\s+walked",
-             "the cases passed and not yet walked")
+    m = said(excerpt, r"Counted on [^:]+: ([\d,]+) cases, ([\d,]+) walked and passed, ([\d,]+) not yet\s+walked"
+             r"(?:,\s+([\d,]+)\s+blocked)?", "the cases passed and not yet walked")
     if m:
         agree(excerpt, "the number of cases", number(m.group(1)), total)
         agree(excerpt, "the cases passed", number(m.group(2)), status["Pass"])
         agree(excerpt, "the cases not yet walked", number(m.group(3)), status["Not Tested"])
+        # Blocked was never used until 2026-11-25; a status the sentence
+        # leaves out would be counted nowhere a reader looks.
+        agree(excerpt, "the cases blocked", number(m.group(4)) if m.group(4) else 0, status["Blocked"])
+    passes = [c for c in cases if c["Status"] == "Pass"]
+    m = said(excerpt, r"Of the passes, ([\d,]+) are mine", "the passes walked by hand")
+    if m:
+        agree(excerpt, "the passes walked by hand", number(m.group(1)),
+              sum(not c["Tested By"].startswith("Claude") for c in passes))
+    m = said(excerpt, r"([\d,]+) are the scripted\s+suites'", "the passes the suites made")
+    if m:
+        agree(excerpt, "the passes the suites made", number(m.group(1)),
+              sum(c["Tested By"].startswith("Claude") for c in passes))
     m = said(excerpt, r"### By priority\s*\n(.*?)\n\n", "the cases by priority")
     if m:
         rows = dict(re.findall(r"^\| ([^|]+?) \| ([\d,]+) \|$", m.group(1), re.M))
@@ -162,8 +174,9 @@ def main():
         return 1
     status = collections.Counter(c["Status"] for c in cases)
     print("The test plan counts itself and is counted right: %d cases, %d passed, %d not yet walked, "
-          "in %d areas; three documents agree." % (len(cases), status["Pass"], status["Not Tested"],
-                                                  len({c["Area"] for c in cases})))
+          "%d blocked, in %d areas; three documents agree." % (
+              len(cases), status["Pass"], status["Not Tested"], status["Blocked"],
+              len({c["Area"] for c in cases})))
     return 0
 
 
