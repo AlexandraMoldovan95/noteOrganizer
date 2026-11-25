@@ -375,10 +375,10 @@
     screen.appendChild(el("div", { class: "chips" },
       el("button", { type: "button", class: "chip", onclick: function () {
         choose("Sort", D.SORTS, S.ui.sort, function (o) { S.ui.sort = o; persist(); render(); });
-      } }, "Sort: " + S.ui.sort + " ▾"),
+      } }, "Sort: " + S.ui.sort, el("span", { "aria-hidden": "true", text: " ▾" })),
       el("button", { type: "button", class: "chip", onclick: function () {
         choose("Show", shows, S.ui.show, function (o) { S.ui.show = o; persist(); render(); });
-      } }, "Show: " + S.ui.show + " ▾")));
+      } }, "Show: " + S.ui.show, el("span", { "aria-hidden": "true", text: " ▾" }))));
     fillCards(cards);
     screen.appendChild(cards);
     screen.appendChild(el("button", { type: "button", class: "fab", "aria-label": "New note", title: "New note",
@@ -493,7 +493,8 @@
     var rec = D.normRec(n.recurrence);
     var meta = el("div", { class: "ed-meta" },
       el("button", { type: "button", class: "chip", onclick: function () { categorySheet(n); } },
-        el("span", { class: "ed-cat-dot", vars: { "--dot": n.color || cat.color } }), n.category + " ▾"),
+        el("span", { class: "ed-cat-dot", vars: { "--dot": n.color || cat.color } }), n.category,
+        el("span", { "aria-hidden": "true", text: " ▾" })),
       el("label", { class: "chip date-chip" }, "\u{1F4C5} " + (n.date ? D.showDate(n.date) : "Date"), date),
       el("button", { type: "button", class: "chip", onclick: function () {
         if (!n.date) { toast("Give the note a date first: a repeat starts on it."); return; }

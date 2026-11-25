@@ -305,6 +305,20 @@ try {
              first: links.every((e) => e === a || e.getBoundingClientRect().top > r.top) };
   })()`;
   check("site.json names the portfolio's address", /^https:\/\//.test(portfolioUrl || ""), String(portfolioUrl));
+  // A drawn arrow or caret beside a control's words is shown, not said: a
+  // screen reader reads the words alone (aria-hidden), or the control's
+  // aria-label in their place (the owner, 2026-11-25). Asked on the site's
+  // pages here and in both demos below. Only at either end of what is said:
+  // inside, an arrow is a note's own text ("Settings → Trash" on a card).
+  const arrowsSaid = `(() => {
+    const g = "[\\u2190-\\u21FF\\u25B2-\\u25C5\\u2039\\u203A]";
+    const drawn = new RegExp("^" + g + "|" + g + "$");
+    const said = (n) => n.nodeType === 3 ? n.textContent
+      : n.nodeType === 1 && n.getAttribute("aria-hidden") !== "true" ? [...n.childNodes].map(said).join("") : "";
+    return [...document.querySelectorAll("a, button")]
+      .filter((e) => !e.hasAttribute("aria-label") && drawn.test(said(e).trim()))
+      .map((e) => e.outerHTML.slice(0, 90));
+  })()`;
   // 901: the narrowest bar that still holds every page (site.css, 900).
   for (const w of [1366, 1024, 901]) {
     await viewport(w, 900, false, "light", "reduce");
@@ -316,6 +330,10 @@ try {
             c.found && c.href === new URL(portfolioUrl).href && c.shown && c.corner && c.row && c.header <= 62,
             JSON.stringify(c));
       if (p === "index.html") await shot(`site-index-portfolio-corner-${w}`);
+      if (w === 1366) {
+        const said = await js(arrowsSaid);
+        check(`${p}: no link or button says a drawn arrow`, said.length === 0, JSON.stringify(said));
+      }
     }
   }
   for (const [w, mobile, label] of [[390, true, "phone"], [900, false, "900px"]]) {
@@ -567,6 +585,8 @@ try {
   await js("[...document.querySelectorAll('.nc-open')].find(b => b.textContent.includes('Weekly meal plan')).click()");
   await sleep(200);
   await shot("demo-desktop-table-note");
+  const deskSaid = await js(arrowsSaid);
+  check("desktop demo, a note open: no link or button says a drawn arrow", deskSaid.length === 0, JSON.stringify(deskSaid));
   check("the meal plan shows its table", (await js("document.querySelectorAll('#ed-body table tr').length")) === 5);
   const deskCount = await js("document.getElementById('ed-count').textContent");
   await js("document.getElementById('ed-body').focus()");
@@ -829,6 +849,8 @@ try {
     await js("document.querySelectorAll('.card').length") === 5, String(await js("document.querySelectorAll('.card').length")));
   check("...with no name set, the list is headed with the app's name",
     await js("document.querySelector('.greeting').textContent") === "Note Organizer");
+  const listSaid = await js(arrowsSaid);
+  check("android demo list: no link or button says a drawn arrow", listSaid.length === 0, JSON.stringify(listSaid));
   check("a card's preview leaves its table out, as the phone's does, and badges it",
     await js(`(() => { const c = ${cardWith("September expenses")}; const p = c.querySelector('.c-preview');
       return (!p || !p.textContent.includes('1500')) && c.textContent.includes('1 table'); })()`));
@@ -846,6 +868,8 @@ try {
     await js("document.getElementById('ed-title').value") === "Home-made bread"
     && await js("document.querySelectorAll('.cl-row').length") === 3
     && await js("!!document.getElementById('fmt') && document.getElementById('navbar').hidden"));
+  const noteSaid = await js(arrowsSaid);
+  check("android demo note: no link or button says a drawn arrow", noteSaid.length === 0, JSON.stringify(noteSaid));
   check("its date reads day first, as the app shows it, not in the browser's own order",
     /\d{2}\.\d{2}\.\d{4}/.test(await js("document.querySelector('.date-chip').textContent")),
     await js("document.querySelector('.date-chip').textContent"));
