@@ -602,10 +602,11 @@ def nav_html(current, config, prefix=""):
         items.append('<a href="%s%s"%s>%s</a>' % (prefix, href, here, label))
     # The way back to the portfolio (site.json's portfolio_url): last in the
     # bar, beside the theme button; the phone's menu puts it first (site.css).
+    # The arrow is drawn, not said: a screen reader reads "Portfolio".
     portfolio = config.get("portfolio_url", "")
     if portfolio:
-        items.append('<a class="portfolio-link" href="%s">&larr; Portfolio</a>'
-                     % html.escape(portfolio))
+        items.append('<a class="portfolio-link" href="%s"><span aria-hidden="true">&larr;</span>'
+                     ' Portfolio</a>' % html.escape(portfolio))
     return "\n        ".join(items)
 
 

@@ -1456,7 +1456,9 @@
         popup(items, catBtn, { alignRight: true });
       } }, el("span", { class: "dot", vars: { "--dot": cat.color } }), cat.name, " ▾");
     inner.appendChild(el("div", { class: "ed-head" },
-      el("button", { type: "button", class: "btn-quiet ed-back", onclick: leaveEditing, text: "◀ Notes" }),
+      // A no-break space: a flex button drops a plain one at its words' start.
+      el("button", { type: "button", class: "btn-quiet ed-back", onclick: leaveEditing },
+        el("span", { "aria-hidden": "true", text: "◀" }), " Notes"),
       title, catBtn));
 
     // Date, colour, repeat.
