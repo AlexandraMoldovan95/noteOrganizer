@@ -595,11 +595,17 @@ def issues_log_sections(text):
 # Pages
 # ---------------------------------------------------------------------
 
-def nav_html(current, prefix=""):
+def nav_html(current, config, prefix=""):
     items = []
     for href, label in NAV:
         here = ' aria-current="page"' if href == current else ""
         items.append('<a href="%s%s"%s>%s</a>' % (prefix, href, here, label))
+    # The way back to the portfolio (site.json's portfolio_url): last in the
+    # bar, beside the theme button; the phone's menu puts it first (site.css).
+    portfolio = config.get("portfolio_url", "")
+    if portfolio:
+        items.append('<a class="portfolio-link" href="%s">&larr; Portfolio</a>'
+                     % html.escape(portfolio))
     return "\n        ".join(items)
 
 
@@ -655,7 +661,7 @@ def doc_page(shell, config, page, title, description, body_html, source_note, ve
         "title": html.escape(title),
         "description": html.escape(description),
         "og": og_tags(config, page, title, description),
-        "nav": nav_html(page),
+        "nav": nav_html(page, config),
         "content": body_html,
         "source_note": source_note,
         "version": version,
@@ -1096,7 +1102,7 @@ def main():
     # address, so its links start at the site's root.
     for name, prefix in (("site-privacy.html", ""), ("404.html", "/")):
         write(os.path.join(OUT, name), fill(read(os.path.join(SRC, name)), {
-            "nav": nav_html("", prefix), "version": version, "root": prefix}, name))
+            "nav": nav_html("", config, prefix), "version": version, "root": prefix}, name))
     tag_copied_page(config, "site-privacy.html")   # the 404 is never shared
 
     # The overview's sharing card says what its own title and description say.
@@ -1107,7 +1113,7 @@ def main():
     index_values.update({
         "version": version,
         "og": og_tags(config, "", html.unescape(index_title), html.unescape(index_description)),
-        "nav": nav_html("index.html"),
+        "nav": nav_html("index.html", config),
         "android_version": droid["version"],
         "theme_count": len(themes["THEMES"]),
         "theme_names": ", ".join(themes["THEME_LABELS"][key] for key in

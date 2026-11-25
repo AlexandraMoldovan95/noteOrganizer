@@ -2,5 +2,6 @@
   "site_url": "https://note-organizer-8f7772.netlify.app",
   "repo_url": "https://github.com/AlexandraMoldovan95/noteOrganizer",
   "android_repo": "../androidVersion",
-  "android_repo_url": "https://github.com/AlexandraMoldovan95/noteOrganizerForAndroid"
+  "android_repo_url": "https://github.com/AlexandraMoldovan95/noteOrganizerForAndroid",
+  "portfolio_url": "https://alexandra-moldovan.netlify.app/#portfolio"
 }
