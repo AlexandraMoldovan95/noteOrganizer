@@ -1242,8 +1242,8 @@ and never a path: a folder's path holds the person's name.
 `PRIVACY_URL` is the privacy policy on Google Sites, which About opens and
 both stores are given. The project's site does not link it: the site is
 kept apart from the apps ([site/README](../site/README.md#kept-apart-from-the-apps)).
-`STORE_REVIEW_URL` is the Store's review page once there is
-one: until then it is `None`, and About shows no Feedback card. The app
+`STORE_REVIEW_URL` is the app's review page in the Microsoft Store,
+set at 1.0.0; set to `None`, About shows no Feedback card. The app
 opens a page and nothing more; it makes no connection of its own.
 `NOTICES` names the licenses file the build ships beside the package,
 which About opens in the person's text editor

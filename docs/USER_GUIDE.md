@@ -1299,10 +1299,9 @@ Organizer is built with — Python, Tcl/Tk, Pillow and the libraries they bring 
 
 ### Feedback and the privacy policy
 
-Something not working, slow, or an idea? Once the app is in the Microsoft Store, **Settings →
-About → Feedback → Write a review** opens its page there: write it in a review, and the answer
-comes back in the Store. Before the app has a Store page, About has no Feedback card. The app
-itself never connects to the internet — it only opens the page.
+Something not working, slow, or an idea? **Settings → About → Feedback → Write a review** opens
+the app's page in the Microsoft Store: write it in a review, and the answer comes back in the
+Store. The app itself never connects to the internet — it only opens the page.
 
 **Privacy policy → Read** opens the [privacy policy](PRIVACY.md): what the app keeps, where, and
 what leaves your computer — only what you send. If the browser cannot be opened, the link is

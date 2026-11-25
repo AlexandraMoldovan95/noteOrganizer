@@ -1,13 +1,14 @@
 """Pack the built app (dist/NoteOrganizer) into an MSIX package, unsigned.
 
-    py tools/msix/build_msix.py              # test identity, version from APP_VERSION
+    py tools/msix/build_msix.py              # the Store's identity, version from APP_VERSION
     py tools/msix/build_msix.py --update     # and one a build higher, to play an update
     py tools/msix/build_msix.py --name N --publisher "CN=..." --publisher-display "..."
 
 Build the app first (NoteOrganizer.spec, see docs/RELEASE_WINDOWS.md); the
-packages land in dist/msix/. The identity is a test one, NoteOrganizer.Test
-and CN=NoteOrganizerTest, until Partner Center reserves the Store's; the
-Store signs what it publishes, and a test package is signed inside Windows
+packages land in dist/msix/. The identity is the Store's, reserved in Partner
+Center on 2026-11-25 (docs/STORE_LISTING.md); --name NoteOrganizer.Test
+--publisher CN=NoteOrganizerTest gives the test one used before. The Store
+signs what it publishes, and a package is signed for testing inside Windows
 Sandbox (make_sandbox_test.py), so this machine's certificate stores are
 never touched. The Store also wants a Major of 1 or more: 0.x.y.0 is for
 Sandbox only.
@@ -161,8 +162,8 @@ def pack(version, args, makeappx):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--name", default="NoteOrganizer.Test")
-    parser.add_argument("--publisher", default="CN=NoteOrganizerTest")
+    parser.add_argument("--name", default="AlexandraMoldovan.NoteOrganizer")
+    parser.add_argument("--publisher", default="CN=64AA2E20-9F7F-4AD8-B932-ABAFCE65CBA2")
     parser.add_argument("--publisher-display", default="Alexandra Moldovan")
     parser.add_argument("--update", action="store_true",
                         help="also pack a build one higher, to play an update in Sandbox")

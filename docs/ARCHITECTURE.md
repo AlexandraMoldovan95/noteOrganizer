@@ -1586,9 +1586,9 @@ in time leaves nothing.
 ## Feedback and the crash log: what the app says about itself
 
 The app makes no network calls, and feedback does not change that: it is a review in the store
-the app came from. Once the app has a Microsoft Store page (`STORE_REVIEW_URL` in
-`core/diagnostics.py`), **Settings → About → Feedback → Write a review** opens it; before that,
-About has no Feedback card. The store keeps the review, and the answer goes back there, under the
+the app came from. **Settings → About → Feedback → Write a review** opens the app's page in the
+Microsoft Store (`STORE_REVIEW_URL` in `core/diagnostics.py`, set at 1.0.0); a copy built with
+it set to `None` has no Feedback card. The store keeps the review, and the answer goes back there, under the
 name Note Organizer. The one public contact beside it is the project's own address,
 noteorganizer.app@gmail.com, which Google Play requires and the [privacy policy](PRIVACY.md)
 names; the owner's personal address appears nowhere.

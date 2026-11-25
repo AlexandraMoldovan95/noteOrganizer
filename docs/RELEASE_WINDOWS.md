@@ -86,10 +86,13 @@ packages left beside it would have played an update from that one.
 Double-clicking a `.wsb` opens a disposable Windows whose script signs the packages with a
 certificate made there. Only `dist/msix/out` leaves it; a message says when it is done, and
 closing the window throws the rest away. Nothing touches this machine's certificates or
-notebooks. The identity is a test one (`NoteOrganizer.Test`) until Partner Center reserves the
-Store's, given then to `build_msix.py` as `--name` and `--publisher`; the sandbox scripts read the
-identity from the package itself, so the package with the Store's identity can be the one signed
-and proved (they read it since 2026-11-13; the runs below are of the test identity, before that).
+notebooks. The package carries the Store's identity, reserved in Partner Center on 2026-11-25
+and written in `build_msix.py` as its default: `AlexandraMoldovan.NoteOrganizer`, published by
+`CN=64AA2E20-9F7F-4AD8-B932-ABAFCE65CBA2` as Alexandra Moldovan
+([the listing](STORE_LISTING.md#product-identity)). Before that it was a test one,
+`NoteOrganizer.Test`, which `--name` and `--publisher` still give. The sandbox scripts read the
+identity from the package itself, so the package the Store receives is the one signed and proved
+(they read it since 2026-11-13; the runs below up to 0.103.558 are of the test identity).
 A Major of `0` is for Sandbox only. The sandboxes run without a network, and without
 a virtual GPU: started from the Start menu, one lost its connection on this machine.
 
@@ -157,9 +160,10 @@ Four things wait for the listing, when there is one:
   apart from the apps' users (the owner's rule, 2026-10-21; see
   [site/README.md](../site/README.md#kept-apart-from-the-apps)). Phone and postal address are
   optional for an individual developer and not shown to customers; they are left out too.
-- **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` is `None`
-  until the app has a Store page; set to that page's review link, **Settings → About** shows the
-  Feedback card, whose **Write a review** opens it. It is the app's only way in for feedback.
+- **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` holds the
+  Store page's review link since 1.0.0 (`ms-windows-store://review/?ProductId=9NBS2548QTXF`), so
+  **Settings → About** shows the Feedback card, whose **Write a review** opens it; set to `None`,
+  the card is gone. It is the app's only way in for feedback.
   Answers to reviews stay public: a private reply by email would make the policy's "I answer in
   the store, publicly" untrue.
 

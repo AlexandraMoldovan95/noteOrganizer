@@ -23,6 +23,7 @@ How a release reaches the Store, and what is proved before it does, is in the
 
 ## Contents
 
+- [Product identity](#product-identity)
 - [Store listing](#store-listing)
 - [Properties](#properties)
 - [Age rating](#age-rating)
@@ -30,6 +31,24 @@ How a release reaches the Store, and what is proved before it does, is in the
 - [Notes for certification](#notes-for-certification)
 - [Decided](#decided)
 - [To check once the listing is live](#to-check-once-the-listing-is-live)
+
+## Product identity
+
+What Partner Center assigned when the name was reserved, on 2026-11-25, under an Individual
+account. The package carries the first three (`tools/msix/build_msix.py` has them as its
+default), and **Settings → About → Feedback** opens the review link (`STORE_REVIEW_URL` in
+`noteorganizer/core/diagnostics.py`). A reservation that is not published within three months
+is removed: the app is published before 2027-02-25.
+
+| Value | |
+|---|---|
+| `Package/Identity/Name` | `AlexandraMoldovan.NoteOrganizer` |
+| `Package/Identity/Publisher` | `CN=64AA2E20-9F7F-4AD8-B932-ABAFCE65CBA2` |
+| `Package/Properties/PublisherDisplayName` | `Alexandra Moldovan` |
+| Package family name | `AlexandraMoldovan.NoteOrganizer_j1h13h1gyzgr8` |
+| Store ID | `9NBS2548QTXF` |
+| The Store's page | `https://apps.microsoft.com/detail/9NBS2548QTXF` |
+| Its review link | `ms-windows-store://review/?ProductId=9NBS2548QTXF` |
 
 ## Store listing
 
@@ -216,7 +235,7 @@ The IARC questionnaire, asked one question at a time. The expected result is the
 | Users interact or exchange content with other users | No | A share code is text the person copies and pastes; nothing goes online |
 | Shares the user's location | No | |
 | Digital purchases | No | |
-| Unrestricted internet access, such as a browser in the app | No | The app opens two fixed pages in the system's browser: the privacy policy and, once there is one, its Store page |
+| Unrestricted internet access, such as a browser in the app | No | The app opens two fixed pages in the system's browser: the privacy policy and its Store page |
 | Advertising | No | |
 
 ## Pricing and availability
