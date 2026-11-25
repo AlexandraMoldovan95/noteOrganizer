@@ -29,7 +29,7 @@ The test suite does not run for a change that only touches `site/`.
 | `public/` | **The finished site — this is what goes to Netlify.** Never edit it by hand: the build replaces it. Not in git: the build makes it again whenever it is needed. |
 | `src/` | The source: the overview page, the page template, the site's privacy notice, the styles, the desktop demo (`demo/`), the Android demo (`android-demo/`), the Netlify headers. |
 | `build.py` | Turns `src/` plus the two apps' repositories into `public/`. The Android page is made here, from the Android repository's README and screenshots. |
-| `site.json` | The site's address; where the Android repository is (`android_repo`, beside this one by default); and, later, each repository's public address (`repo_url`, `android_repo_url`). |
+| `site.json` | The site's address; where the Android repository is (`android_repo`, beside this one by default); each repository's public address (`repo_url`, `android_repo_url`); and the portfolio's (`portfolio_url`), which every page's header links in its top right corner, first in the menu on a phone. |
 | `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), both demos included, on a computer and on a phone, and photographs it. |
 | `tools/check_demo.py` | The walk's door: it starts `check_demo.mjs`, which will not start any other way, with the computer's turn, a memory ceiling and a time limit, and ends every Edge process with it. |
 | `tools/verify_share_codes.py` | Holds both demos' share codes to the app's own code, both ways. |

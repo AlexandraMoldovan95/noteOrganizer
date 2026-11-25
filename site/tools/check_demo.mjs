@@ -286,6 +286,51 @@ try {
   await sleep(100);
   check("Escape closes the phone menu", await js("!document.getElementById('site-nav').classList.contains('open')"));
 
+  // ---------------- The way back to the portfolio ----------------
+  // site.json's portfolio_url, on every page that wears the site's header:
+  // in the top right corner, last before the theme button, with the bar
+  // still one row; on a phone, first in the menu (the owner, 2026-11-25).
+  const portfolioUrl = JSON.parse(fs.readFileSync(path.resolve(HERE, "..", "site.json"), "utf8")).portfolio_url;
+  const corner = `(() => {
+    const a = document.querySelector(".site-header .portfolio-link");
+    const t = document.getElementById("theme-toggle");
+    if (!a || !t) return { found: false };
+    const r = a.getBoundingClientRect(), tr = t.getBoundingClientRect();
+    const links = [...document.querySelectorAll(".site-nav a")];
+    const others = links.filter((e) => e !== a).map((e) => e.getBoundingClientRect());
+    return { found: true, href: a.href, shown: r.width > 0 && r.height > 0,
+             corner: r.right <= tr.left && others.every((o) => o.right <= r.left),
+             row: Math.abs((r.top + r.bottom) / 2 - (tr.top + tr.bottom) / 2) <= 4,
+             header: Math.round(document.querySelector(".site-header").getBoundingClientRect().height),
+             first: links.every((e) => e === a || e.getBoundingClientRect().top > r.top) };
+  })()`;
+  check("site.json names the portfolio's address", /^https:\/\//.test(portfolioUrl || ""), String(portfolioUrl));
+  // 901: the narrowest bar that still holds every page (site.css, 900).
+  for (const w of [1366, 1024, 901]) {
+    await viewport(w, 900, false, "light", "reduce");
+    for (const p of ["index.html", "android.html", "how-its-built.html", "in-my-words.html", "testing.html",
+                     "bug-reports.html", "site-privacy.html", "nowhere"]) {
+      await go("/" + p);
+      const c = await js(corner);
+      check(`${p} at ${w}px: Portfolio in the top right corner, the bar one row`,
+            c.found && c.href === new URL(portfolioUrl).href && c.shown && c.corner && c.row && c.header <= 62,
+            JSON.stringify(c));
+      if (p === "index.html") await shot(`site-index-portfolio-corner-${w}`);
+    }
+  }
+  for (const [w, mobile, label] of [[390, true, "phone"], [900, false, "900px"]]) {
+    await viewport(w, 844, mobile, "light", "reduce");
+    await go("/index.html");
+    const shut = await js(corner);
+    check(`${label}: Portfolio waits in the closed menu, the bar one row`,
+          shut.found && !shut.shown && shut.header <= 62, JSON.stringify(shut));
+    await click("#menu-toggle");
+    const open = await js(corner);
+    check(`${label}: Portfolio is first in the open menu`, open.shown && open.first, JSON.stringify(open));
+    await shot(`site-index-menu-portfolio-${w}`);
+    await click("#menu-toggle");
+  }
+
   // ---------------- The fade, with motion on ----------------
   // Kept by the owner's choice (2026-10-24), slow and gradual as it first
   // was -- a quicker one read as no animation at all -- and held to what
