@@ -5536,6 +5536,16 @@
     "expect": "killed"
   },
   {
+    "id": "FB14",
+    "about": "the app ships without its Store page's review link, so About has no way to leave feedback",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "STORE_REVIEW_URL = \"ms-windows-store://review/?ProductId=9NBS2548QTXF\"\n",
+               "replace": "STORE_REVIEW_URL = None\n"}],
+    "must_fail": ["the app ships its Microsoft Store page's review link"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "FB10",
     "about": "the notebook's attached files are not counted",
     "edits": [{"file": "noteorganizer/core/diagnostics.py",

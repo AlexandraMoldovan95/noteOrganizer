@@ -29,9 +29,10 @@ ABOUT_TERMS = ("Free software under the MIT license, provided as is. "
 # tools/make_third_party_notices.py writes it; NoteOrganizer.spec ships it.
 NOTICES = "THIRD_PARTY_NOTICES.txt"
 
-# The Microsoft Store's review page, once the app is published there. While
-# it is None, About has no Feedback card: reviews are the only way in.
-STORE_REVIEW_URL = None
+# The app's review page in the Microsoft Store (docs/STORE_LISTING.md), which
+# About's Feedback card opens. A copy built with None has no Feedback card:
+# reviews are the only way in.
+STORE_REVIEW_URL = "ms-windows-store://review/?ProductId=9NBS2548QTXF"
 
 # Every detail a crash log entry carries, in its order.
 DETAIL_KEYS = ("version", "scale", "sharp", "theme", "notes", "files", "mb",

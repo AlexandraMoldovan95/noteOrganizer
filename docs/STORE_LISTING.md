@@ -23,6 +23,7 @@ How a release reaches the Store, and what is proved before it does, is in the
 
 ## Contents
 
+- [Product identity](#product-identity)
 - [Store listing](#store-listing)
 - [Properties](#properties)
 - [Age rating](#age-rating)
@@ -30,6 +31,24 @@ How a release reaches the Store, and what is proved before it does, is in the
 - [Notes for certification](#notes-for-certification)
 - [Decided](#decided)
 - [To check once the listing is live](#to-check-once-the-listing-is-live)
+
+## Product identity
+
+What Partner Center assigned when the name was reserved, on 2026-11-25, under an Individual
+account. The package carries the first three (`tools/msix/build_msix.py` has them as its
+default), and **Settings → About → Feedback** opens the review link (`STORE_REVIEW_URL` in
+`noteorganizer/core/diagnostics.py`). A reservation that is not published within three months
+is removed: the app is published before 2027-02-25.
+
+| Value | |
+|---|---|
+| `Package/Identity/Name` | `AlexandraMoldovan.NoteOrganizer` |
+| `Package/Identity/Publisher` | `CN=64AA2E20-9F7F-4AD8-B932-ABAFCE65CBA2` |
+| `Package/Properties/PublisherDisplayName` | `Alexandra Moldovan` |
+| Package family name | `AlexandraMoldovan.NoteOrganizer_j1h13h1gyzgr8` |
+| Store ID | `9NBS2548QTXF` |
+| The Store's page | `https://apps.microsoft.com/detail/9NBS2548QTXF` |
+| Its review link | `ms-windows-store://review/?ProductId=9NBS2548QTXF` |
 
 ## Store listing
 
@@ -170,23 +189,22 @@ it open from **Settings → About** in the app.
 ### Screenshots
 
 Desktop pictures: PNG, at least 1366×768, up to 10, at least four recommended. They are retaken
-on the version released by `tools/doc_screenshots.py`, the script that takes the repository's
-pictures ([how](screenshots/README.md)), so they show what people install. The set, in order,
-with the caption each one carries:
+on the version released by the `store` scene of `tools/doc_screenshots.py`, the script that
+takes the repository's pictures ([how](screenshots/README.md)), so they show what people
+install. Each is the whole window: some of the guide's pictures are crops, lower than the
+Store's 768. They are uploaded from `dist/store/`, beside the package, and not kept in the
+repository. The set, in order, with the caption each one carries:
 
 | # | Picture | Caption |
 |---|---|---|
-| 1 | `main-window` (dark) | Your notes, with a table right in the note |
-| 2 | `main-window-light` | Eight themes, light and dark |
-| 3 | `calendar-view` | Every note on its day, repeating ones included |
-| 4 | `recurrence-setup` | Notes that repeat, on your schedule |
-| 5 | `checklist` | A checklist in any note |
-| 6 | `search-and-sort` | Search, sort, group and pin |
-| 7 | `templates-panel` | Templates for the notes you write often |
-| 8 | `settings-overview` | Backup, Trash and settings on one page |
-
-`checklist.png` (1426×622) and `recurrence-setup.png` (1407×909) are crops in the repository,
-the first lower than the Store's 768; the Store's set takes the whole window for both.
+| 1 | `store-1-main` (dark) | Your notes, with a table right in the note |
+| 2 | `store-2-light` | Eight themes, light and dark |
+| 3 | `store-3-calendar` | Every note on its day, repeating ones included |
+| 4 | `store-4-repeat` | Notes that repeat, on your schedule |
+| 5 | `store-5-checklist` | A checklist in any note |
+| 6 | `store-6-search` | Search, sort, group and pin |
+| 7 | `store-7-templates` | Templates for the notes you write often |
+| 8 | `store-8-settings` | Backup, Trash and settings on one page |
 
 ## Properties
 
@@ -216,7 +234,7 @@ The IARC questionnaire, asked one question at a time. The expected result is the
 | Users interact or exchange content with other users | No | A share code is text the person copies and pastes; nothing goes online |
 | Shares the user's location | No | |
 | Digital purchases | No | |
-| Unrestricted internet access, such as a browser in the app | No | The app opens two fixed pages in the system's browser: the privacy policy and, once there is one, its Store page |
+| Unrestricted internet access, such as a browser in the app | No | The app opens two fixed pages in the system's browser: the privacy policy and its Store page |
 | Advertising | No | |
 
 ## Pricing and availability

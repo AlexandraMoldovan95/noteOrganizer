@@ -1652,6 +1652,11 @@ try:
           and str(_fb_said.get('scale', '')).endswith('%')
           and _fb_said.get('sharp') in ('on', 'off'))
     check('...and nothing from the notes', 'SECRET' not in repr(_fb_said))
+    check(f'the app ships its Microsoft Store page\'s review link ({_fb_real[1]})',
+          re.fullmatch(r'ms-windows-store://review/\?ProductId=9[0-9A-Z]{11}',
+                       str(_fb_real[1] or '')) is not None)
+    # A copy built without a Store page, as before the app had one.
+    _fb_diag.STORE_REVIEW_URL = None
     app._build_settings_about_panel(_fb_frame)
     check('no Feedback card while the app is not in the Store',
           find_btn_qa6(_fb_frame, 'Write a review') is None)

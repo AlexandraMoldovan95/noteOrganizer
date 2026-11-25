@@ -86,18 +86,21 @@ packages left beside it would have played an update from that one.
 Double-clicking a `.wsb` opens a disposable Windows whose script signs the packages with a
 certificate made there. Only `dist/msix/out` leaves it; a message says when it is done, and
 closing the window throws the rest away. Nothing touches this machine's certificates or
-notebooks. The identity is a test one (`NoteOrganizer.Test`) until Partner Center reserves the
-Store's, given then to `build_msix.py` as `--name` and `--publisher`; the sandbox scripts read the
-identity from the package itself, so the package with the Store's identity can be the one signed
-and proved (they read it since 2026-11-13; the runs below are of the test identity, before that).
+notebooks. The package carries the Store's identity, reserved in Partner Center on 2026-11-25
+and written in `build_msix.py` as its default: `AlexandraMoldovan.NoteOrganizer`, published by
+`CN=64AA2E20-9F7F-4AD8-B932-ABAFCE65CBA2` as Alexandra Moldovan
+([the listing](STORE_LISTING.md#product-identity)). Before that it was a test one,
+`NoteOrganizer.Test`, which `--name` and `--publisher` still give. The sandbox scripts read the
+identity from the package itself, so the package the Store receives is the one signed and proved
+(they read it since 2026-11-13; the runs below up to 0.103.558 are of the test identity).
 A Major of `0` is for Sandbox only. The sandboxes run without a network, and without
 a virtual GPU: started from the Start menu, one lost its connection on this machine.
 
 | `.wsb` | What it proves | Last run |
 |---|---|---|
-| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, 2026-11-09 for 0.100.512 and 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540 (updated to 0.101.541), 2026-11-22 for 0.101.542 (updated to 0.101.543), and 2026-11-23 for 0.102.556 (updated to 0.102.557): the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
-| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542 and 2026-11-23 for 0.102.556, at the sandbox's 150%: all eight themes; the window in 1 s (2 s at 0.101.540's first start) and inside the work area every time; the app 67 to 68 MB (37 to 38 MB its own), with 330 to 470 MB of the sandbox's left (223 to 303 MB for 0.101.540, 64 to 290 MB for 0.101.542, the 64 at one theme's start, 251 to 280 MB for 0.102.556). For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
-| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512, 2026-11-10 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542 and 2026-11-23 for 0.102.556: overall WARNING each time, below. |
+| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, 2026-11-09 for 0.100.512 and 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540 (updated to 0.101.541), 2026-11-22 for 0.101.542 (updated to 0.101.543), 2026-11-23 for 0.102.556 (updated to 0.102.557), and 2026-11-25 for 1.0.0, the first with the Store's identity (updated to 1.0.1): the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
+| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542, 2026-11-23 for 0.102.556 and 2026-11-25 for 1.0.0, at the sandbox's 150%: all eight themes; the window in 1 s (2 s at 0.101.540's first start) and inside the work area every time; the app 67 to 68 MB (37 to 38 MB its own), with 330 to 470 MB of the sandbox's left (223 to 303 MB for 0.101.540, 64 to 290 MB for 0.101.542, the 64 at one theme's start, 251 to 280 MB for 0.102.556, 290 to 349 MB for 1.0.0). For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
+| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512, 2026-11-10 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542, 2026-11-23 for 0.102.556 and 2026-11-25 for 1.0.0, with the Store's identity: overall WARNING each time, below. |
 
 #### The certification kit (WACK)
 
@@ -109,7 +112,7 @@ alone does not run there. `make_sandbox_test.py` maps in its test engine (TAEF, 
 with `reg export`, for the sandbox to import. A run without each of them stopped at it.
 
 Run on 2026-11-09 for 0.100.512, on 2026-11-10 for 0.100.513, on 2026-11-12 for 0.100.524, on
-2026-11-21 for 0.101.540, on 2026-11-22 for 0.101.542 and on 2026-11-23 for 0.102.556, the result was **WARNING** each time, which is not a failure: of 24 tests, 22 passed, and two did not.
+2026-11-21 for 0.101.540, on 2026-11-22 for 0.101.542, on 2026-11-23 for 0.102.556 and on 2026-11-25 for 1.0.0, the result was **WARNING** each time, which is not a failure: of 24 tests, 22 passed, and two did not.
 
 - **Blocked executables** failed. It is an optional test, and optional tests "are informational
   only and will not be used to evaluate your app during Microsoft Store onboarding"
@@ -157,9 +160,10 @@ Four things wait for the listing, when there is one:
   apart from the apps' users (the owner's rule, 2026-10-21; see
   [site/README.md](../site/README.md#kept-apart-from-the-apps)). Phone and postal address are
   optional for an individual developer and not shown to customers; they are left out too.
-- **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` is `None`
-  until the app has a Store page; set to that page's review link, **Settings → About** shows the
-  Feedback card, whose **Write a review** opens it. It is the app's only way in for feedback.
+- **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` holds the
+  Store page's review link since 1.0.0 (`ms-windows-store://review/?ProductId=9NBS2548QTXF`), so
+  **Settings → About** shows the Feedback card, whose **Write a review** opens it; set to `None`,
+  the card is gone. It is the app's only way in for feedback.
   Answers to reviews stay public: a private reply by email would make the policy's "I answer in
   the store, publicly" untrue.
 

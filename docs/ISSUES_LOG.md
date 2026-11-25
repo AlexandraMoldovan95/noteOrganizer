@@ -9011,6 +9011,18 @@ the next red names its road. A sweep of the qa suites for `focus_force()` follow
 promise"); a check that broke it waited for a loaded day to show it. A check that cannot be
 reproduced is made to explain itself the next time, not re-run until green.
 
+**A third red, a day later (2026-11-25).** The full run for 1.0.0 went red on the Space check's
+sibling, "Space on a template checklist's bin…": the keyboard on the window itself after the
+bin at the end of a chunk went, as before. It said nothing more. Its Spaces went through the
+same helper, which took the record, but the template check never read it: the instrument added
+the day before was a fix like any other, and its sibling was not swept. It reads it now, says
+SKIP when a click from outside met a Space, and otherwise prints the route of a wrong answer.
+Docker Desktop was being started on the same machine during that run, which is all that is known
+of it. Asking each Space whether another program held the front was tried and dropped: an app a
+script starts never holds the Windows foreground, so the answer was "another program" at every
+Space of a run that went right, and a SKIP on it would have judged nothing. The cause is still
+not proven; the next red will name its route.
+
 ## Smaller lessons, moved out of the code
 
 *Each of these was once a long comment beside the code it explains. The code now says why in a

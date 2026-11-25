@@ -168,9 +168,10 @@ for when you need it:
   [Microsoft Store listing](docs/STORE_LISTING.md); the
   [archive](docs/archive/) holds two finished registers.
 
-Until 1.0.0 the version counts what has shipped: the middle number is every
-feature added so far, the last every fix
-([the rule](docs/ROADMAP.md#versioning)).
+The first release in the Microsoft Store is 1.0.0. Before it, the version
+counted what had shipped (0.103.558: every feature added so far, then every
+fix); from it, a release of fixes raises the last number and one with a new
+feature the middle one ([the rule](docs/ROADMAP.md#versioning)).
 
 ## Known limitations
 

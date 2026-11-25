@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [1.0.0](#100--2026-11-25) | 2026-11-25 | The first release in the Microsoft Store: the app of 0.103.558, with feedback as a review on its Store page. |
 | [0.103.558](#0103558--2026-11-24) | 2026-11-24 | Typing straight after clicking a table cell lands in it, a long checklist item uses its row's width, and several rows or columns are deleted or cleared at once. |
 | [0.102.556](#0102556--2026-11-23) | 2026-11-23 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too, and what a review panel found by using it; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
@@ -110,6 +111,21 @@ How the numbers themselves are counted is the
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
 
 ---
+
+## [1.0.0] — 2026-11-25
+
+*Highlights: the first release in the Microsoft Store. The app is 0.103.558's, which the owner
+tested by hand, with feedback as a review on its Store page; from here the version follows
+semantic versioning.*
+
+### Changed
+
+- **Feedback is a review on the app's page in the Microsoft Store.** **Settings → About** shows
+  a Feedback card, whose **Write a review** opens the page there; the answer comes back in the
+  Store. Until the app had a Store page, About had no Feedback card.
+- **The version is 1.0.0.** Up to 0.103.558 its numbers counted every feature added and every
+  fix; from here a release of fixes raises the last number and one with a new feature the middle
+  one ([Versioning](docs/ROADMAP.md#versioning)).
 
 ## [0.103.558] — 2026-11-24
 
