@@ -56,6 +56,16 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   merges would be walked again, and the phone needs a release of its own. Not on the eve of
   the stores.
 
+- **After the stores: a window a screen reader can read** (the owner's call, 2026-11-25). Tk
+  8.6, which draws the app, describes almost none of its controls to Windows, so a screen reader
+  cannot read most of the window ([Known limitations](../README.md#known-limitations)), and the
+  Store's accessibility box stays unticked ([why](STORE_LISTING.md#decided)). Tk 9.1 now
+  speaks to screen readers on Windows, through Microsoft Active Accessibility, but Python 3.13
+  ships Tk 8.6.15: the way opens when the Python the app is built with ships Tk 9.1. Even then,
+  every control the app draws itself, the table on its canvas and the hand-built popups and
+  dialogs among them, needs a name and a role of its own, and the whole window is tried with
+  NVDA and with Narrator before the box is ticked.
+
 - **Feedback from real readers at the public launch, colour-blind readers among them.** The
   colour-blind check so far is an AI simulation: photographs of the app simulated for
   protanopia, deuteranopia and tritanopia, read by AI reviewers (the test plan's case 625). A

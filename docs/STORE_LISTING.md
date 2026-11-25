@@ -258,7 +258,8 @@ The owner's choices, 2026-11-25:
   reader cannot read most of the window: Tk 8.6, which the app is drawn with, describes almost
   none of its controls to Windows ([Known limitations](../README.md#known-limitations)). Tk 9.1
   reads to screen readers on Windows, but Python 3.13 ships Tk 8.6.15, and the app's drawn
-  tables and hand-built windows would each need describing too.
+  tables and hand-built windows would each need describing too: planned for after the stores
+  ([roadmap](ROADMAP.md#under-consideration)).
 
 ## To check once the listing is live
 
