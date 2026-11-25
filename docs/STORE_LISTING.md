@@ -189,23 +189,22 @@ it open from **Settings → About** in the app.
 ### Screenshots
 
 Desktop pictures: PNG, at least 1366×768, up to 10, at least four recommended. They are retaken
-on the version released by `tools/doc_screenshots.py`, the script that takes the repository's
-pictures ([how](screenshots/README.md)), so they show what people install. The set, in order,
-with the caption each one carries:
+on the version released by the `store` scene of `tools/doc_screenshots.py`, the script that
+takes the repository's pictures ([how](screenshots/README.md)), so they show what people
+install. Each is the whole window: some of the guide's pictures are crops, lower than the
+Store's 768. They are uploaded from `dist/store/`, beside the package, and not kept in the
+repository. The set, in order, with the caption each one carries:
 
 | # | Picture | Caption |
 |---|---|---|
-| 1 | `main-window` (dark) | Your notes, with a table right in the note |
-| 2 | `main-window-light` | Eight themes, light and dark |
-| 3 | `calendar-view` | Every note on its day, repeating ones included |
-| 4 | `recurrence-setup` | Notes that repeat, on your schedule |
-| 5 | `checklist` | A checklist in any note |
-| 6 | `search-and-sort` | Search, sort, group and pin |
-| 7 | `templates-panel` | Templates for the notes you write often |
-| 8 | `settings-overview` | Backup, Trash and settings on one page |
-
-`checklist.png` (1426×622) and `recurrence-setup.png` (1407×909) are crops in the repository,
-the first lower than the Store's 768; the Store's set takes the whole window for both.
+| 1 | `store-1-main` (dark) | Your notes, with a table right in the note |
+| 2 | `store-2-light` | Eight themes, light and dark |
+| 3 | `store-3-calendar` | Every note on its day, repeating ones included |
+| 4 | `store-4-repeat` | Notes that repeat, on your schedule |
+| 5 | `store-5-checklist` | A checklist in any note |
+| 6 | `store-6-search` | Search, sort, group and pin |
+| 7 | `store-7-templates` | Templates for the notes you write often |
+| 8 | `store-8-settings` | Backup, Trash and settings on one page |
 
 ## Properties
 

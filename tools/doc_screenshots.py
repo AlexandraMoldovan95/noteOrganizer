@@ -872,9 +872,7 @@ def categories_panel():
     pump()
 
 
-@scene('templates-panel')
-def templates_panel():
-    """Settings -> Templates, with templates to manage."""
+def _templates_scene():
     _demo_notebook()
     app.templates = [
         {'name': 'Meeting notes', 'title': 'Meeting — ',
@@ -887,9 +885,55 @@ def templates_panel():
     ]
     NO.save_templates(app.templates)
     _settings('templates')
+
+
+@scene('templates-panel')
+def templates_panel():
+    """Settings -> Templates, with templates to manage."""
+    _templates_scene()
     capture('templates-panel')
     app.hide_settings_page()
     pump()
+
+
+@scene('store')
+def store_set():
+    """The Microsoft Store's eight pictures, in the listing's order
+    (docs/STORE_LISTING.md). Each is the whole window: the Store asks for
+    1366x768 or more, and some of the guide's pictures are crops."""
+    def main():
+        _demo_notebook()
+        _table_note()
+
+    def light():
+        main()
+        app.set_theme('light')
+
+    def calendar():
+        _september()
+        _open_day('2026-09-14')
+
+    was = app.theme_name
+    for name, stage in (('store-1-main', main), ('store-2-light', light),
+                        ('store-3-calendar', calendar), ('store-4-repeat', _weekly_note),
+                        ('store-5-checklist', _checklist_scene),
+                        ('store-6-search', _search_scene),
+                        ('store-7-templates', _templates_scene)):
+        clean()
+        try:
+            stage()
+            pump(14)
+            capture(name)
+        finally:
+            try:
+                app.hide_settings_page()
+            except Exception:
+                pass
+            if app.theme_name != was:
+                app.set_theme(was)
+            pump()
+    clean()
+    _settings_overview('store-8-settings')
 
 
 @scene('trash-panel')
