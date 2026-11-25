@@ -1,7 +1,7 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **995 cases** on 24 November
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **995 cases** on 25 November
 2026. I walk it
 by hand on the packaged `.exe` before a release - a case I pass is one I've seen pass, and a
 pass that is the scripts' says so.
@@ -19,16 +19,18 @@ pass that is the scripts' says so.
 
 ## The plan in numbers
 
-Counted on 24 November 2026: 995 cases, 994 walked and passed, 1 not yet
-walked. Of the passes, 698 are mine, by hand, among them every case that
-needs my eye, and cases 1100 to 1102, added on 24 November for two fixes
-from my own field test and a new way to delete and clear rows and
-columns; 296 are the scripted suites', run for the final audit on the
-source of 0.102.556 and marked *Claude (automated, final audit)*: a pass
-for what the suites walk, not a walk by hand like mine, with what they
-leave to the hand named in Actual Result. The one not yet walked, case
-704, needs the app installed from the Microsoft Store, and waits for the
-listing.
+Counted on 25 November 2026: 995 cases, 994 walked and passed, 0 not yet
+walked, 1 blocked. Of the passes, 699 are mine, by hand, among them every
+case that needs my eye, cases 1100 to 1102, added on 24 November for two
+fixes from my own field test and a new way to delete and clear rows and
+columns, and case 686, the review button opening the app's page, walked
+on 1.0.0 installed from the Microsoft Store; 295 are the scripted
+suites', run for the final audit on the source of 0.102.556 and marked
+*Claude (automated, final audit)*: a pass for what the suites walk, not a
+walk by hand like mine, with what they leave to the hand named in Actual
+Result. The blocked one, case 704, is walked in part on the same install:
+an uninstall and a reinstall from the Store keep every note; its first
+step, an update from the Store, waits for the first newer version.
 
 ### By priority
 
