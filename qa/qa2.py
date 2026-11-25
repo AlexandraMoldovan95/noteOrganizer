@@ -1747,14 +1747,26 @@ def _ll_tpl_bin_by_key(count, at):
 app._edit_template(None, lambda: None); _ll_settle(4)
 _LL_T = 2 * min(_ll_stack_canvas(app._mini_popup)._row_stack.groups[1].every, 64)
 app._dismiss_mini_popup(); _ll_settle()
+# The note's check above, its sibling: it went red the same way once, in a
+# full run while Docker Desktop was starting (2026-11-25), and said nothing
+# of its route, the record of the Space taken but never read.
+del _ll_space_runs[:]
 _ll_tkeys = {'end of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2 - 1),
              'first of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2),
              'alone at the end': _ll_tpl_bin_by_key(_LL_T + 1, _LL_T)}
-check(f"Space on a template checklist's bin hands the keyboard to the bin in its "
-      f"place, or to the last, at every place among the chunks ({_ll_tkeys})",
-      _ll_tkeys == {'end of a chunk': f'item {_LL_T // 2}',
-                    'first of a chunk': f'item {_LL_T // 2 + 1}',
-                    'alone at the end': f'item {_LL_T - 1}'})
+_ll_tsaid = dict(zip(_ll_tkeys, _ll_space_runs))
+_ll_want_tkeys = {'end of a chunk': f'item {_LL_T // 2}',
+                  'first of a chunk': f'item {_LL_T // 2 + 1}',
+                  'alone at the end': f'item {_LL_T - 1}'}
+if any(run['unscripted press'] for run in _ll_space_runs):
+    print(f"SKIP Space on a template checklist's bin hands the keyboard to the bin "
+          f"in its place: a pointer press this script never made reached the app "
+          f"({_ll_tkeys}; {_ll_tsaid})")
+else:
+    check(f"Space on a template checklist's bin hands the keyboard to the bin in its "
+          f"place, or to the last, at every place among the chunks ({_ll_tkeys}; the "
+          f"wrong ones went {[_ll_tsaid.get(k) for k in _ll_tkeys if _ll_tkeys[k] != _ll_want_tkeys[k]]})",
+          _ll_tkeys == _ll_want_tkeys)
 
 # A table in a template's body given more columns, at the same height and
 # with no scrollbar of its own: no chunk changes height, and the editor is
