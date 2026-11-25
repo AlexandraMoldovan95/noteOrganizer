@@ -5,9 +5,10 @@ Center for it, kept here so the listing says what the app does, no more and no l
 changes with it. Each field is in a block, ready to paste as it is. The listing is in English,
 like the app.
 
-Prepared on 2026-11-25 for the first release, 1.0.0, not yet submitted. Every claim was checked
-against the [user guide](USER_GUIDE.md), the [README](../README.md) and the
-[privacy policy](PRIVACY.md) at 0.103.558.
+Submitted for certification on 2026-11-25: version 1.0.0, to a private audience first. Every
+claim was checked against the [user guide](USER_GUIDE.md), the [README](../README.md) and the
+[privacy policy](PRIVACY.md) at 0.103.558. What follows is what that submission holds, page by
+page, in the order Partner Center asks for it.
 
 Three things keep it true:
 
@@ -28,6 +29,8 @@ How a release reaches the Store, and what is proved before it does, is in the
 - [Properties](#properties)
 - [Age rating](#age-rating)
 - [Pricing and availability](#pricing-and-availability)
+- [Packages](#packages)
+- [Submission options](#submission-options)
 - [Notes for certification](#notes-for-certification)
 - [Decided](#decided)
 - [To check once the listing is live](#to-check-once-the-listing-is-live)
@@ -145,15 +148,16 @@ Your notes stay in a folder on your computer, even if you uninstall the app
 
 ### What's new in this version
 
-Up to 1,500 characters; at every release, exactly what changed.
-
-```
-The first release of Note Organizer in the Microsoft Store.
-```
+Up to 1,500 characters. Left empty at the first submission, as Partner Center's own hint asks
+("Leave blank if this is the first submission for this product"); from the next release on,
+exactly what changed.
 
 ### Search terms
 
-Up to 7 terms and 21 different words in all; customers never see them.
+Partner Center calls them Keywords, under Additional information: each typed and followed by
+Enter. Up to 7 terms, 40 characters each and 21 different words in all; customers never see
+them. The keywords the field offers to suggest with AI are not taken: they could name what the
+app does not do.
 
 ```
 offline notes
@@ -206,49 +210,102 @@ repository. The set, in order, with the caption each one carries:
 | 7 | `store-7-templates` | Templates for the notes you write often |
 | 8 | `store-8-settings` | Backup, Trash and settings on one page |
 
+### Left empty
+
+Store logos (the 9:16 poster art and 1:1 box art, required only on Xbox), the Store display
+images (the Store uses the package's own icons without them), trailers and the 16:9 hero art
+that goes with them, the Xbox images, and the short and voice titles.
+
 ## Properties
 
 Partner Center → the product → Properties.
 
 | Field | Value | Why |
 |---|---|---|
-| Category | Productivity | |
+| Category | Productivity, no subcategory (it has none), no secondary category | |
+| Does this product access, collect, or transmit personal information? | Yes | Store Policy 10.5.1 counts every Win32 product as accessing personal information, so it always needs a privacy policy, and the field for one comes with Yes. The app sends nothing, but it keeps a person's notes on their own computer; the policy says so |
 | Privacy policy URL | `https://sites.google.com/view/noteorganizer-privacy` | `PRIVACY_URL`, the page **Settings → About** opens; [required](RELEASE_WINDOWS.md#what-the-listing-needs) |
 | Website | *empty* | [Kept apart](../site/README.md#kept-apart-from-the-apps) |
 | Support contact info | `noteorganizer.app@gmail.com` | The project's own address, never a personal one |
-| This product accesses, collects or transmits personal information | No | The app connects to nothing and collects nothing |
-| This app has been tested to meet accessibility guidelines | Not ticked | [Decided](#decided) |
-| Customers can install this app to alternate drives or removable storage | Ticked (the default) | The notebook is in the profile folder, wherever the app is installed |
-| Windows can include this app's data in automatic backups to OneDrive | The default | The notes are not in the app's data but in the profile's `Note Organizer` folder |
-| System requirements, minimum | Keyboard, mouse; memory 2 GB | Proved in Windows Sandbox with 2 GB ([the look proof](RELEASE_WINDOWS.md#packing-it-and-proving-it-in-windows-sandbox)) |
+| Phone number, address | *empty* | Optional, and shown on the public page when given |
+| Display mode (PC, HoloLens) | Not ticked | For Mixed Reality apps; the boundary setup under it is ignored then |
+| Allows purchases outside the Store's commerce system | Not ticked | It sells nothing |
+| Tested to meet accessibility guidelines | Not ticked | [Decided](#decided) |
+| Customers can install to alternate drives or removable storage | Ticked (the default) | The notebook is in the profile folder, wherever the app is installed |
+| Windows can include this product's data in automatic backups to OneDrive | Ticked (the default) | The notes are not in the app's data but in the profile's `Note Organizer` folder |
+| Customers can record and broadcast clips | Not ticked | For games only, as Partner Center's warning under it says |
+| Supports pen and ink input | Not ticked | It has nothing of its own for a pen |
+| Incorporates generative AI features | Not ticked | The app has none; that an AI agent helped build it is not what the question asks |
+| System requirements, minimum | Keyboard, mouse; memory 2 GB; the rest not specified, processor and graphics empty | Proved in Windows Sandbox with 2 GB ([the look proof](RELEASE_WINDOWS.md#packing-it-and-proving-it-in-windows-sandbox)); the Store reads the processor from the package (x64) |
+| System requirements, recommended | *empty* | |
 
 ## Age rating
 
-The IARC questionnaire, asked one question at a time. The expected result is the lowest rating
-(3+, Everyone).
+The IARC questionnaire (version 10.4), as Partner Center asked it, with the owner's agreement to
+IARC's terms of use given there.
 
 | Question | Answer | Why |
 |---|---|---|
-| Category of the product | Productivity or utility: not a game, not social or communication | |
-| Violence, fear, sexual content, language, drugs, gambling | No, to each | |
+| App type | All other app types | Not a game, not social or communication |
+| Ratings-relevant content (sex, violence, language) in the package | No | |
 | Users interact or exchange content with other users | No | A share code is text the person copies and pastes; nothing goes online |
-| Shares the user's location | No | |
+| Online content not in the download, reached from the app | No | It opens two fixed pages in the system's browser: the privacy policy and its Store page |
+| Promotes or sells age-restricted products or activities | No | |
+| Shares the user's precise location | No | |
 | Digital purchases | No | |
-| Unrestricted internet access, such as a browser in the app | No | The app opens two fixed pages in the system's browser: the privacy policy and its Store page |
-| Advertising | No | |
+| Cash rewards, gift cards, play-to-earn, cryptocurrency, NFTs | No | |
+| A web browser or search engine | No | |
+| Primarily a news or educational product | No | |
+| Ratings from a ratings board, or physical media | No | |
+
+The ratings it gave, the lowest everywhere: IARC 3+, PEGI 3, ESRB Everyone, USK 0, and "all
+ages" in Brazil, Chile and Russia, with no interactive elements.
 
 ## Pricing and availability
 
 | Setting | Value | Why |
 |---|---|---|
-| Markets | Every market but China | `sites.google.com`, where the privacy policy lives, is blocked in mainland China ([what the listing needs](RELEASE_WINDOWS.md#what-the-listing-needs)) |
-| Price | Free, no trial | |
-| Visibility, first submission | Private audience: the page only for the people listed | The [rollout's](RELEASE_WINDOWS.md#rolling-out-and-stopping-a-release) first step; public once the package installed from the Store has been tried |
-| Publish date | As soon as certified | Private, so nobody else sees it yet |
+| Markets | All worldwide markets but China | `sites.google.com`, where the privacy policy lives, is blocked in mainland China ([what the listing needs](RELEASE_WINDOWS.md#what-the-listing-needs)); China also asks for papers the app has no need of |
+| Future markets | Ticked: any market Microsoft adds, at the base price | Free, so free there too |
+| Base price | Free: shown as 0 in whichever currency is chosen | |
+| Free trial, sale pricing | None | |
+| Organizational licensing | The default | |
+| Audience, first submission | Private: a known user group, "test Note Organizer", of personal Microsoft accounts (the owner's and one tester's) | The [rollout's](RELEASE_WINDOWS.md#rolling-out-and-stopping-a-release) first step: the package the Store signed, tried before anyone else sees it. Microsoft asks for no testers; a work or school account cannot see a private app |
+| "Make this product public on" | Not ticked, no date | It goes public by a new submission, once tried, never by itself |
+| Discoverability | Available and discoverable | While private, it applies only to the group |
+| Schedule, publishing hold | As soon as certified | Private, so nobody else sees it yet |
+
+While it is private, the group installs it from its own link,
+`https://apps.microsoft.com/detail/restricted/9NBS2548QTXF`, signed in to the Microsoft Store
+app with the account in the group, on Windows 11 24H2 or later; the ordinary page and search do
+not show it. Once public, it cannot go back to a private audience.
+
+## Packages
+
+Only `NoteOrganizer_1.0.0.0.msix`, from `dist/msix/` (the `1.0.1.0` beside it is the Sandbox's
+update test, never uploaded). Partner Center validated it: version 1.0.0.0, x64,
+`Windows.Desktop` from 10.0.26100.0. Device family: Windows 10/11 Desktop only, and "Let
+Microsoft decide whether to make this app available to any future device families" unticked:
+what was never tried is not declared, as with the oldest Windows
+([which Windows](RELEASE_WINDOWS.md#which-windows)).
+
+Its one warning is expected: `runFullTrust`, the restricted capability every packaged desktop
+app of this kind declares, needs approval, asked for under Submission options.
+
+## Submission options
+
+Publishing hold: as soon as it passes certification. Restricted capabilities, "Why do you need
+the runFullTrust capability, and how will it be used in your product?":
+
+```
+Note Organizer is a desktop (Win32) app written in Python with Tkinter and packaged with PyInstaller, then as MSIX. runFullTrust is what lets a desktop app of this kind run as it does outside the Store. It uses no other restricted capability, connects to nothing, and keeps the user's notes in a folder in their own profile.
+```
 
 ## Notes for certification
 
-Submission options → Notes for certification.
+Not under Submission options any more: Partner Center keeps them on a page of their own, the
+product's Supplemental info → Additional Testing Information, saved with Save description.
+No credentials: the app has no account.
 
 ```
 Note Organizer is a desktop app (Python with Tkinter, packaged with PyInstaller) for writing notes offline. It needs no account, no sign-in and no network connection, and it connects to nothing.
@@ -281,8 +338,21 @@ The owner's choices, 2026-11-25:
 
 ## To check once the listing is live
 
+First on the private audience, on the package installed from the Store through the group's
+link, before a new submission makes it public:
+
+- **The install**: no unknown-publisher warning, Note Organizer in Start, **Settings → About**
+  saying 1.0.0, the notes in the profile's `Note Organizer` folder.
+- **The page**: its words, the eight pictures and the publisher's name as given here.
+- **Write a review** opens that page, ready for a review (test plan case 686, its hand part).
+- **Uninstall and reinstall** keep the notes, a backup made first (case 704); its update step
+  waits for the first newer version.
+
+Then, once public:
+
 - **Who answers a review.** The privacy policy says replies come "as Note Organizer". If the
   Store shows them under the publisher's name instead, the policy's sentence changes first, by
   the [privacy page's steps](RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
-- **The review link and the uninstall**, on the package installed from the Store: both are in
+- **Markets**: the page opened from a market other than the owner's, to see it offered there.
+  Why the review link and the uninstall are checked at all is in
   [what the listing needs](RELEASE_WINDOWS.md#what-the-listing-needs).
