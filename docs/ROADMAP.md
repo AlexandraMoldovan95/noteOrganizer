@@ -386,6 +386,10 @@ If the UI is ever rebuilt on a different toolkit, that is the moment to revisit 
 
 ### Right now: pre-1.0.0
 
+*The rule up to `0.103.558`. From `1.0.0`, on 2026-11-25, the app follows
+[semantic versioning](#at-the-real-launch-100-and-after); this section and the ledger below stay
+as the record of how the earlier numbers were counted.*
+
 Keep the first number at `0` until the app actually has a real public launch, so `1.0.0` stays
 meaningful (a clean first release, not used up early).
 
@@ -531,6 +535,7 @@ same two; at `0.103.558`, 104 and 571 against 103 and 558, the same two.
 | `0.101.542` | 2026-11-22 | 101 | 542 | **Two** `Fixed`, no `Added`, from the final audit's lows wave (21 and 22 November): of the deferred lows, the owner chose the app's own and the test plans' untrue rows. `0.101.540` was cut but never shipped, so all share one CHANGELOG section. The `Fixed`, each in `0.97.405`'s code: Import complete saying "2 category/categories"; Ctrl+T giving a bold letter swapped with a plain one back plain, and a line's first two letters its indent away. NOT counted, folded into the entry it belongs to: the big table's words written over by its note's dates when the note opens (the audit's own words). Not counted: the plans, the docs, the site's renderer and the checks — the catalogue's 1,391 → 1,403. |
 | `0.102.556` | 2026-11-23 | 102 | 556 | **One** `Added` and **fourteen** `Fixed`, from the review panel's fifth meeting (22 November), whose readers also used the app, and the rounds on its fixes; read from the 21 commits that touch the app's code since `0.101.542`, which was cut but never shipped, so all share one CHANGELOG section. The `Added`: the first Tab typed into a note says how to move on (a hint; Tab did what it always did). The `Fixed`, one per mechanism, each in `0.97.405`'s code: a count's noun and verb not following its number (about forty messages, Import complete's own first line among them); Generate code's code drawn below the window's edge; a note's own Delete read as gone for good; a "Note moved to Trash" Undo left up after its note left the Trash elsewhere; the find bar over the top of the note; the unreadable file's notice sending a person to ask for help; the same file attached twice, an empty one without a word; a window narrower than its editor; the Trash's Undo taking the editor from the note being written; a cell's "\|" kept as "/" without a word; a file that is no backup said in the library's words; an export onto a full disk said as "[Errno 28]" (the backup's and a note's, one mechanism); a note brought back by an import while in the Trash too, unsaid (a backup and a share code, one mechanism); a file copy cut short by a full disk left behind (Add file and a duplicated note, one mechanism). NOT counted, folded into the entry it belongs to: "1 of them are OLDER" (the counts' mechanism, missed by its sweep), the pipe's word said again at each autosave and an encrypted zip losing its own words (both introduced by their fixes and repaired). Not counted: the docs, the plans, the walk, and the tests — PW01–PW54, the catalogue's 1,403 → 1,457. |
 | `0.103.558` | 2026-11-24 | 103 | 558 | **One** `Added` and **two** `Fixed`, from the owner's own field test of `0.102.556` and her re-test the same day; read from the commits that touch the app's code since `0.102.556`. The `Added`: several rows or columns deleted or cleared at once from a selection's menu, Clear row and Clear column in a cell's own, Delete now deleting down to the whole table, a table left with one column becoming lines of text (her asks, one feature). The `Fixed`, each in `0.102.556`'s code: typing straight after a click on a table cell went under the table, the cell opening only at the release (the drag that waits for a moved hand, and the keyboard never stopping under the table on its way to the next cell, are the same fix); a long checklist item wrapped at 380 px however wide the page. Not counted: the mutant catalogue's refusal of an id given twice (a tool), the docs and the test plan. |
+| `1.0.0` | 2026-11-25 | — | — | **The launch: the count stops.** The first release in the Microsoft Store: the app of `0.103.558`, which the owner had tested by hand, with one change, About's Feedback card opening the app's review page in the Store (a `Changed`, which never counted). From here [semantic versioning](#at-the-real-launch-100-and-after) takes over, and the ledger keeps no more totals. |
 
 ### At the real launch: 1.0.0 and after
 
@@ -545,6 +550,10 @@ the release above it** — no more cumulative totals:
 - **MAJOR** (`x.0.0`) — reserved for something big enough to warrant it: a real redesign, a
   breaking data-format change, a genuinely new "generation" of the app. Rare; minor and patch both
   reset to `0`.
+
+Reached on 2026-11-25, with the first package for the Microsoft Store, which refuses a Major of
+`0` anyway ([RELEASE_WINDOWS](RELEASE_WINDOWS.md#microsoft-store-msix)). The Store's first
+audience is private, a few people trying the installed app; the same `1.0.0` then goes public.
 
 ### Platform-specific packaging/publishing
 
