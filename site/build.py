@@ -672,19 +672,20 @@ def check_kept_apart(repo, config, android):
     """This site presents the project to the people sent here; the apps,
     and the privacy policy the stores are given, never point at it -- the
     owner's rule (2026-10-21), so its users need not know it exists. The
-    desktop app's sources and docs/PRIVACY.md must not name the site's
-    address, and neither may the Android app's, now that the build reads
-    its repository too."""
+    desktop app's sources, docs/PRIVACY.md and the Store's listing
+    (docs/STORE_LISTING.md) must not name the site's address, and neither
+    may the Android app's, now that the build reads its repository too."""
     host = urllib.parse.urlparse(config.get("site_url", "")).netloc
     if not host:
         return ["site.json has no site_url, so the apps cannot be checked for it"]
-    files = [os.path.join(repo, "note_organizer.py"), os.path.join(repo, "docs", "PRIVACY.md")]
+    files = [os.path.join(repo, "note_organizer.py"), os.path.join(repo, "docs", "PRIVACY.md"),
+             os.path.join(repo, "docs", "STORE_LISTING.md")]
     for root, _, names in os.walk(os.path.join(repo, "noteorganizer")):
         files += [os.path.join(root, n) for n in names if n.endswith(".py")]
     for root, _, names in os.walk(os.path.join(android, "app", "src", "main")):
         files += [os.path.join(root, n) for n in names if n.endswith((".kt", ".xml"))]
-    return ["%s names this site (%s): the apps and their privacy policy must not point "
-            "here" % (f, host)
+    return ["%s names this site (%s): the apps, their privacy policy and their Store "
+            "listing must not point here" % (f, host)
             for f in sorted(files) if host.lower() in read(f).lower()]
 
 
