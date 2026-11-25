@@ -134,8 +134,8 @@ the apps are published, its overview links to their store pages. The
 other way round, nothing the apps' users see points at it: not the apps,
 not their store pages (whose optional website field stays empty), not
 their privacy policy (the owner's rule, 2026-10-21). The build refuses a
-site whose address appears in either app's sources or in
-`docs/PRIVACY.md`.
+site whose address appears in either app's sources, in
+`docs/PRIVACY.md` or in the Store's listing, `docs/STORE_LISTING.md`.
 
 So the apps' privacy policy is not one of the site's pages, and does not
 cover it. The site has its own short notice, `src/site-privacy.html`:

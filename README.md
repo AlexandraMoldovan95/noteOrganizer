@@ -162,10 +162,11 @@ for when you need it:
 - **The website and web demo:** [`site/`](site/README.md) — the page that
   presents the app, a demo to try it in a browser, and how both are built
   and published.
-- **Releasing:** the [git workflow](docs/GIT_WORKFLOW.md) and the release
+- **Releasing:** the [git workflow](docs/GIT_WORKFLOW.md), the release
   guides for [Windows](docs/RELEASE_WINDOWS.md) and
-  [Android](docs/RELEASE_ANDROID.md); the [archive](docs/archive/) holds two
-  finished registers.
+  [Android](docs/RELEASE_ANDROID.md), and the
+  [Microsoft Store listing](docs/STORE_LISTING.md); the
+  [archive](docs/archive/) holds two finished registers.
 
 Until 1.0.0 the version counts what has shipped: the middle number is every
 feature added so far, the last every fix

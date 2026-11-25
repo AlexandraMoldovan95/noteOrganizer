@@ -770,7 +770,8 @@ being re-asked:
   design decisions → `ARCHITECTURE`, code walkthrough → `CODE_TOUR`,
   release deltas → `CHANGELOG`, investigations → `ISSUES_LOG`,
   plans/versioning → `ROADMAP`, test map and house rules → `qa/README`,
-  git commands → `GIT_WORKFLOW`.
+  git commands → `GIT_WORKFLOW`, the Microsoft Store's listing →
+  `STORE_LISTING`.
 - **README is the hub and stays a 1–2 minute read**: curated highlights
   rather than exhaustive lists, one hero screenshot plus a small gallery
   row, and a reader-routing Documentation section linking every deeper

@@ -140,6 +140,11 @@ Windows 10 needs a virtual machine this project does not have. Windows Sandbox i
 oldest version it was proved on. Versions 21H2 to 23H2 no longer get updates on Home and Pro.
 Lowering the number later is a new package and a new proof on that Windows, never only an edit.
 
+### What the listing needs
+
+Every value and text typed into Partner Center, ready to paste, is in
+[STORE_LISTING.md](STORE_LISTING.md); this section says why some of them are as they are.
+
 Four things wait for the listing, when there is one:
 
 - **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for
