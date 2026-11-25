@@ -34,6 +34,22 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     to date, and is where people look for it. The Windows options are in
     [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
 
+- **For 1.0.1: a smaller package, for a quicker install** (the owner's call, 2026-11-25).
+  Installing 1.0.0 from the Store, the owner saw its download and its "Installing" step take a
+  while. Of the build's 975 files, 609 are Tcl's time zones (`_tcl_data/tzdata`) and 145 the
+  translations Tcl and Tk carry (`msgs`); Windows unpacks every file and Defender scans each one,
+  and in Windows Sandbox the install alone took about 16 seconds. The app's dates are Python's,
+  not Tcl's, so those could stay out of the build, leaving about 220 files. Measured before and
+  after (files, size, the install in Sandbox), with the whole suite and the Sandbox proofs run
+  on the smaller build: a file left out that the app does need fails only where it is used.
+
+- **For 1.0.1: a welcome note without red underlines** (the owner's call, 2026-11-25). The
+  welcome note, the first thing a new person sees, is written in British English ("Organise",
+  "colour"), and spelling checked with Windows' own dictionaries
+  ([Spelling](USER_GUIDE.md#spelling)) underlines those words in red where Windows' language is
+  US English, as on the owner's computer after the Store install. Either the welcome note goes
+  unchecked, or it says those things in words both spell alike; which, decided when it is made.
+
 - **After the stores: what the review panel raised for later** (the owner's call, 2026-11-08).
   The final audit's panel of reviewers asked for these; each changes much of what a person sees,
   or code across files, so none goes in on the eve of a release:
