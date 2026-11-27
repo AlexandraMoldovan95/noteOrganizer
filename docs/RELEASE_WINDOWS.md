@@ -130,18 +130,35 @@ Run on 2026-11-09 for 0.100.512, on 2026-11-10 for 0.100.513, on 2026-11-12 for 
 
 ### Which Windows
 
-The package asks for **Windows 11, version 24H2 or later**: `MinVersion="10.0.26100.0"` in the
-manifest `build_msix.py` writes. Below it Windows does not count the package as applicable, so
-the Store does not offer the app there
+The package asks for **Windows 11, version 21H2 or later**, every Windows 11:
+`MinVersion="10.0.22000.0"` in the manifest `build_msix.py` writes. Below it Windows does not
+count the package as applicable, so the Store does not offer the app there
 ([TargetDeviceFamily](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-targetdevicefamily));
 the Store accepts any Windows 10 or 11 version it supports, given in that attribute
 ([package requirements](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements#supported-versions)).
 
-The owner's choice, 2026-11-09: what was never tried is not declared. The package had said
-Windows 10 version 1809 (`10.0.17763.0`) while it had only ever run on Windows 11; trying it on
-Windows 10 needs a virtual machine this project does not have. Windows Sandbox is 24H2, the
-oldest version it was proved on. Versions 21H2 to 23H2 no longer get updates on Home and Pro.
-Lowering the number later is a new package and a new proof on that Windows, never only an edit.
+**How it came to this.** Until 1.0.1 the package asked for 24H2 (`10.0.26100.0`), the owner's
+choice of 2026-11-09: what was never tried is not declared. It had said Windows 10 version 1809
+(`10.0.17763.0`) while it had only ever run on Windows 11, and Windows Sandbox, where the package
+is proved, is 24H2. On 2026-11-27, two days after 1.0.0 went public, a person on Windows 11 23H2
+was refused by the Store ("doesn't meet minimum requirements"): people keep older versions of
+Windows, and not all of them update. The owner's choice then was every Windows 11, and no
+Windows 10 ([why not](ROADMAP.md#explicitly-not-planned-right-now)).
+
+**What stands behind it**, since 21H2 to 23H2 can no longer be downloaded to try:
+
+- The whole suite runs in CI on Windows Server 2022 as well (build 20348, older than any
+  Windows 11; `.github/workflows/tests.yml`), beside the newest Windows and Linux.
+- The Sandbox proofs run on 24H2, and 1.0.0 was installed from the Store on 26H2.
+- The app uses nothing those versions lack: the title bar's colours are Windows 11's own and
+  fail silently elsewhere, the call that keeps text sharp is Windows 8.1's, the spelling check
+  Windows 8's.
+
+A Windows without the Microsoft Store (an LTSC edition, many modified copies) cannot install the
+app from it whatever its version; a download outside the Store is a separate decision, not
+taken.
+
+Changing the number again is a new package and a new proof, never only an edit.
 
 ### What the listing needs
 

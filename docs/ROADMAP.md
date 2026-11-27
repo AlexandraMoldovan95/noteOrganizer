@@ -192,6 +192,10 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 - Tags as a separate feature from categories — removed in 0.3.0 after concluding categories cover
   the need on their own; revisiting this isn't currently planned.
 - Cloud sync / accounts — the app is intentionally offline-only.
+- **Windows 10** — the owner's call, 2026-11-27. From 1.0.1 the Store offers the app on every
+  Windows 11 ([which Windows](RELEASE_WINDOWS.md#which-windows)). Windows 10 from 2004 was
+  weighed and left out: nothing here can try it but a virtual machine, and a declaration without
+  a try would be a guess about a Windows Microsoft no longer updates.
 - Importing a `.md`/`.html` file as a note — decided against (2026-09-15). Exporting one is
   enough: it answers "get this note out of here", which is the question people actually ask.
   The reverse direction asks the app to align somebody else's HTML with the editor's own idea of
