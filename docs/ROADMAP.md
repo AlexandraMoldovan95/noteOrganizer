@@ -34,7 +34,8 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     to date, and is where people look for it. The Windows options are in
     [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
 
-- **For 1.0.1: a smaller package, for a quicker install** (the owner's call, 2026-11-25).
+- **For 1.0.2: a smaller package, for a quicker install** (the owner's call, 2026-11-25; meant
+  for 1.0.1, which became the Store's offer on every Windows 11 alone).
   Installing 1.0.0 from the Store, the owner saw its download and its "Installing" step take a
   while. Of the build's 975 files, 609 are Tcl's time zones (`_tcl_data/tzdata`) and 145 the
   translations Tcl and Tk carry (`msgs`); Windows unpacks every file and Defender scans each one,
@@ -43,12 +44,22 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   after (files, size, the install in Sandbox), with the whole suite and the Sandbox proofs run
   on the smaller build: a file left out that the app does need fails only where it is used.
 
-- **For 1.0.1: a welcome note without red underlines** (the owner's call, 2026-11-25). The
+- **For 1.0.2: a welcome note without red underlines** (the owner's call, 2026-11-25). The
   welcome note, the first thing a new person sees, is written in British English ("Organise",
   "colour"), and spelling checked with Windows' own dictionaries
   ([Spelling](USER_GUIDE.md#spelling)) underlines those words in red where Windows' language is
   US English, as on the owner's computer after the Store install. Either the welcome note goes
   unchecked, or it says those things in words both spell alike; which, decided when it is made.
+
+- **Only if someone reports it: the welcome note's titles in one column on any font** (the
+  owner's call, 2026-11-27). Each heading of the welcome note opens with an icon from the emoji
+  block, and its title lines up with the others because Windows 11's emoji font draws every icon
+  at one width. CI's Windows Server 2022 carries Windows 10's emoji font, whose icons differ in
+  width, and there the titles started 36 to 42 pixels in; qa5 now skips that check below
+  Windows 11 (build 22000) and prints the starts it measured. The Store offers the app only on
+  Windows 11, so a person would see it only on a Windows 11 still drawing the older font. A
+  report from one is the reason to draw the titles so their start no longer depends on the icon's
+  width; until then the welcome note stays as it is.
 
 - **After the stores: what the review panel raised for later** (the owner's call, 2026-11-08).
   The final audit's panel of reviewers asked for these; each changes much of what a person sees,
