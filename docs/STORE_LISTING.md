@@ -5,9 +5,10 @@ Center for it, kept here so the listing says what the app does, no more and no l
 changes with it. Each field is in a block, ready to paste as it is. The listing is in English,
 like the app.
 
-Submitted for certification on 2026-11-25: version 1.0.0, to a private audience first. Every
-claim was checked against the [user guide](USER_GUIDE.md), the [README](../README.md) and the
-[privacy policy](PRIVACY.md) at 0.103.558. What follows is what that submission holds, page by
+Version 1.0.0 was submitted for certification on 2026-11-25, to a private audience first, and
+made public on 2026-11-27; 1.0.1 follows, offered on every Windows 11. Every claim was checked
+against the [user guide](USER_GUIDE.md), the [README](../README.md) and the
+[privacy policy](PRIVACY.md) at 0.103.558. What follows is what the submissions hold, page by
 page, in the order Partner Center asks for it.
 
 Three things keep it true:
@@ -117,7 +118,7 @@ GOOD TO KNOW
 • Note Organizer works on one computer at a time. It does not sync: notes move to another computer by backup or share code.
 • Your notes are kept in plain files, not encrypted; your Windows account protects them.
 • A screen reader cannot read most of the window.
-• It needs Windows 11, version 24H2 or later.
+• It runs on every version of Windows 11, not on Windows 10.
 
 To report a problem or share an idea, write a review here in the Store. I read every one and answer here, publicly.
 ```
@@ -149,8 +150,12 @@ Your notes stay in a folder on your computer, even if you uninstall the app
 ### What's new in this version
 
 Up to 1,500 characters. Left empty at the first submission, as Partner Center's own hint asks
-("Leave blank if this is the first submission for this product"); from the next release on,
-exactly what changed.
+("Leave blank if this is the first submission for this product"), and at the second, which only
+made 1.0.0 public; from the next release on, exactly what changed. For 1.0.1:
+
+```
+Note Organizer now installs on every version of Windows 11. Until now the Store offered it only from version 24H2.
+```
 
 ### Search terms
 
@@ -277,17 +282,18 @@ ages" in Brazil, Chile and Russia, with no interactive elements.
 
 While it is private, the group installs it from its own link,
 `https://apps.microsoft.com/detail/restricted/9NBS2548QTXF`, signed in to the Microsoft Store
-app with the account in the group, on Windows 11 24H2 or later; the ordinary page and search do
-not show it. Once public, it cannot go back to a private audience.
+app with the account in the group, on a Windows the package accepts; the ordinary page and search
+do not show it. Once public, it cannot go back to a private audience; 1.0.0 went public on
+2026-11-27, by a second submission that changed the audience alone.
 
 ## Packages
 
-Only `NoteOrganizer_1.0.0.0.msix`, from `dist/msix/` (the `1.0.1.0` beside it is the Sandbox's
-update test, never uploaded). Partner Center validated it: version 1.0.0.0, x64,
-`Windows.Desktop` from 10.0.26100.0. Device family: Windows 10/11 Desktop only, and "Let
-Microsoft decide whether to make this app available to any future device families" unticked:
-what was never tried is not declared, as with the oldest Windows
-([which Windows](RELEASE_WINDOWS.md#which-windows)).
+One package per release, from `dist/msix/`, never the one a build higher beside it (the
+Sandbox's update test): `NoteOrganizer_1.0.0.0.msix` for 1.0.0, validated as version 1.0.0.0,
+x64, `Windows.Desktop` from 10.0.26100.0; `NoteOrganizer_1.0.1.0.msix` for 1.0.1, from
+10.0.22000.0, every Windows 11 ([which Windows](RELEASE_WINDOWS.md#which-windows)). Device
+family: Windows 10/11 Desktop only, and "Let Microsoft decide whether to make this app
+available to any future device families" unticked: what was never tried is not declared.
 
 Its one warning is expected: `runFullTrust`, the restricted capability every packaged desktop
 app of this kind declares, needs approval, asked for under Submission options.

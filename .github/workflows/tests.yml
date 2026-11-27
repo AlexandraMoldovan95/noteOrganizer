@@ -7,11 +7,16 @@ name: QA Tests
 # the whole test suite. If anything fails, the commit/PR gets a clear red X
 # instead of finding out later by hand.
 #
-# THE SUITE RUNS ON TWO PLATFORMS, AND THE ROLES DIFFER:
+# THE SUITE RUNS ON THREE MACHINES, AND THE ROLES DIFFER:
 #
 # - windows-latest is the platform the app actually ships on: real Segoe UI
 #   metrics, Windows Tk, no virtual display. A red here is a product bug --
 #   the fix goes in the app, never in the check.
+# - windows-2022 is Windows Server 2022, build 20348: older than every
+#   Windows 11 the Store package declares (from 21H2, build 22000), so the
+#   oldest Windows the Store offers the app on has a floor below it here.
+#   Added 2026-11-27, when a person on Windows 11 23H2 was refused by a
+#   package that asked for 24H2; 21H2 to 23H2 cannot be downloaded to try.
 # - ubuntu-latest keeps exercising the pure logic and everything that turned
 #   out to behave differently under X11 (async window mapping, focus
 #   semantics, attribute types) -- differences that have caught real bugs.
@@ -26,7 +31,7 @@ name: QA Tests
 # Written while the repository was private and every minute was billed
 # against the account's monthly allowance (a Windows minute as two);
 # public now, GitHub runs it free, and this suite is still the long one:
-# two platforms. Four measures keep it short without narrowing what gets
+# three machines. Four measures keep it short without narrowing what gets
 # checked:
 #
 #   * Once per change, not twice. Pushes are watched only on `main`;
@@ -87,7 +92,7 @@ jobs:
       # verdicts is the point of running both.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, windows-2022]
     runs-on: ${{ matrix.os }}
     # A safety net, not a normal expectation — the whole suite runs in well
     # under 5 minutes on Linux; Windows runners are roughly twice as slow,

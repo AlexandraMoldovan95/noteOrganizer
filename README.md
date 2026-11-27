@@ -178,9 +178,8 @@ feature the middle one ([the rule](docs/ROADMAP.md#versioning)).
 - The entry file is still large: it is the window's shared surface, split
   as far as measurement supports
   ([why](docs/ARCHITECTURE.md#case-study-deciding-the-split-with-a-call-graph)).
-- Built for Windows 11, version 24H2 or later: the oldest Windows it was
-  proved on, so the Store offers it nowhere older
-  ([why](docs/RELEASE_WINDOWS.md#which-windows)). It runs on Linux too —
+- Built for Windows 11, every version from 21H2; the Store does not offer
+  it on Windows 10 ([why](docs/RELEASE_WINDOWS.md#which-windows)). It runs on Linux too —
   the tests do — but its fonts and window behaviour are tuned for Windows.
 - One computer at a time: notes move between computers by backup or share
   code, not by sync.

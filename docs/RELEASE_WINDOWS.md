@@ -98,9 +98,9 @@ a virtual GPU: started from the Start menu, one lost its connection on this mach
 
 | `.wsb` | What it proves | Last run |
 |---|---|---|
-| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, 2026-11-09 for 0.100.512 and 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540 (updated to 0.101.541), 2026-11-22 for 0.101.542 (updated to 0.101.543), 2026-11-23 for 0.102.556 (updated to 0.102.557), and 2026-11-25 for 1.0.0, the first with the Store's identity (updated to 1.0.1): the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
-| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542, 2026-11-23 for 0.102.556 and 2026-11-25 for 1.0.0, at the sandbox's 150%: all eight themes; the window in 1 s (2 s at 0.101.540's first start) and inside the work area every time; the app 67 to 68 MB (37 to 38 MB its own), with 330 to 470 MB of the sandbox's left (223 to 303 MB for 0.101.540, 64 to 290 MB for 0.101.542, the 64 at one theme's start, 251 to 280 MB for 0.102.556, 290 to 349 MB for 1.0.0). For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
-| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512, 2026-11-10 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542, 2026-11-23 for 0.102.556 and 2026-11-25 for 1.0.0, with the Store's identity: overall WARNING each time, below. |
+| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, 2026-11-09 for 0.100.512 and 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540 (updated to 0.101.541), 2026-11-22 for 0.101.542 (updated to 0.101.543), 2026-11-23 for 0.102.556 (updated to 0.102.557), 2026-11-25 for 1.0.0, the first with the Store's identity (updated to 1.0.1), and 2026-11-27 for 1.0.1, asking for Windows 11 21H2 (updated to 1.0.2): the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
+| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542, 2026-11-23 for 0.102.556, 2026-11-25 for 1.0.0 and 2026-11-27 for 1.0.1, at the sandbox's 150%: all eight themes; the window in 1 s (2 s at 0.101.540's first start) and inside the work area every time; the app 67 to 68 MB (37 to 38 MB its own), with 330 to 470 MB of the sandbox's left (223 to 303 MB for 0.101.540, 64 to 290 MB for 0.101.542, the 64 at one theme's start, 251 to 280 MB for 0.102.556, 290 to 349 MB for 1.0.0, 256 to 343 MB for 1.0.1). For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
+| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512, 2026-11-10 for 0.100.513, 2026-11-12 for 0.100.524, 2026-11-21 for 0.101.540, 2026-11-22 for 0.101.542, 2026-11-23 for 0.102.556, 2026-11-25 for 1.0.0 and 2026-11-27 for 1.0.1, the last two with the Store's identity: overall WARNING each time, below. |
 
 #### The certification kit (WACK)
 
@@ -112,7 +112,7 @@ alone does not run there. `make_sandbox_test.py` maps in its test engine (TAEF, 
 with `reg export`, for the sandbox to import. A run without each of them stopped at it.
 
 Run on 2026-11-09 for 0.100.512, on 2026-11-10 for 0.100.513, on 2026-11-12 for 0.100.524, on
-2026-11-21 for 0.101.540, on 2026-11-22 for 0.101.542, on 2026-11-23 for 0.102.556 and on 2026-11-25 for 1.0.0, the result was **WARNING** each time, which is not a failure: of 24 tests, 22 passed, and two did not.
+2026-11-21 for 0.101.540, on 2026-11-22 for 0.101.542, on 2026-11-23 for 0.102.556, on 2026-11-25 for 1.0.0 and on 2026-11-27 for 1.0.1, the result was **WARNING** each time, which is not a failure: of 24 tests, 22 passed, and two did not.
 
 - **Blocked executables** failed. It is an optional test, and optional tests "are informational
   only and will not be used to evaluate your app during Microsoft Store onboarding"
@@ -130,18 +130,35 @@ Run on 2026-11-09 for 0.100.512, on 2026-11-10 for 0.100.513, on 2026-11-12 for 
 
 ### Which Windows
 
-The package asks for **Windows 11, version 24H2 or later**: `MinVersion="10.0.26100.0"` in the
-manifest `build_msix.py` writes. Below it Windows does not count the package as applicable, so
-the Store does not offer the app there
+The package asks for **Windows 11, version 21H2 or later**, every Windows 11:
+`MinVersion="10.0.22000.0"` in the manifest `build_msix.py` writes. Below it Windows does not
+count the package as applicable, so the Store does not offer the app there
 ([TargetDeviceFamily](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-targetdevicefamily));
 the Store accepts any Windows 10 or 11 version it supports, given in that attribute
 ([package requirements](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements#supported-versions)).
 
-The owner's choice, 2026-11-09: what was never tried is not declared. The package had said
-Windows 10 version 1809 (`10.0.17763.0`) while it had only ever run on Windows 11; trying it on
-Windows 10 needs a virtual machine this project does not have. Windows Sandbox is 24H2, the
-oldest version it was proved on. Versions 21H2 to 23H2 no longer get updates on Home and Pro.
-Lowering the number later is a new package and a new proof on that Windows, never only an edit.
+**How it came to this.** Until 1.0.1 the package asked for 24H2 (`10.0.26100.0`), the owner's
+choice of 2026-11-09: what was never tried is not declared. It had said Windows 10 version 1809
+(`10.0.17763.0`) while it had only ever run on Windows 11, and Windows Sandbox, where the package
+is proved, is 24H2. On 2026-11-27, two days after 1.0.0 went public, a person on Windows 11 23H2
+was refused by the Store ("doesn't meet minimum requirements"): people keep older versions of
+Windows, and not all of them update. The owner's choice then was every Windows 11, and no
+Windows 10 ([why not](ROADMAP.md#explicitly-not-planned-right-now)).
+
+**What stands behind it**, since 21H2 to 23H2 can no longer be downloaded to try:
+
+- The whole suite runs in CI on Windows Server 2022 as well (build 20348, older than any
+  Windows 11; `.github/workflows/tests.yml`), beside the newest Windows and Linux.
+- The Sandbox proofs run on 24H2, and 1.0.0 was installed from the Store on 26H2.
+- The app uses nothing those versions lack: the title bar's colours are Windows 11's own and
+  fail silently elsewhere, the call that keeps text sharp is Windows 8.1's, the spelling check
+  Windows 8's.
+
+A Windows without the Microsoft Store (an LTSC edition, many modified copies) cannot install the
+app from it whatever its version; a download outside the Store is a separate decision, not
+taken.
+
+Changing the number again is a new package and a new proof, never only an edit.
 
 ### What the listing needs
 

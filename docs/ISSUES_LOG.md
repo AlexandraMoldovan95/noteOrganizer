@@ -242,6 +242,7 @@ is in the table below as well.
 | [The panel's fifth meeting: what using the apps found](#the-panels-fifth-meeting-what-using-the-apps-found) | A reader of the code finds what it says; a person using the app finds where it is said: a result out of sight, an offer older than its subject, words that keep back what happened. | 0.102.556 |
 | [The digit typed between the press and the release](#the-digit-typed-between-the-press-and-the-release) | A gesture still deciding what it is must not move the keyboard somewhere nobody chose: give the keys to the likeliest target, and let the rarer gesture take them back. | 0.103.558 |
 | [Two reds from a day the PC was in use](#two-reds-from-a-day-the-pc-was-in-use) | A precondition written as a bet waits for a loaded day; a red that cannot be reproduced is made to explain itself next time, not re-run until green. | — |
+| [The minimum Windows that kept a person out](#the-minimum-windows-that-kept-a-person-out) | A minimum version is a promise to the people below it too: set it at what the app needs, with a tested floor beneath it, not at the oldest version at hand. | 1.0.1 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -6167,6 +6168,33 @@ RU26 and RU27 re-aimed.
 **Takeaway:** a widget's place has a limit as well as its size, and not the same one on every
 system. A list that grows is built in pieces that each stay inside every limit, and whatever
 reads a position asks where the pieces really stand.
+
+### The minimum Windows that kept a person out
+
+*(2026-11-27 · 1.0.0, two days public · a person on Windows 11 23H2, refused by the Store)*
+
+**Symptom:** the Microsoft Store refused to install Note Organizer on a PC with Windows 11,
+version 23H2: "the version of Windows on your PC doesn't meet the minimum requirements". Nothing
+was downloaded; the app never ran.
+
+**Root cause:** the package declared Windows 11, version 24H2 (`MinVersion="10.0.26100.0"`), the
+owner's choice of 2026-11-09 under a sound rule, what was never tried is not declared: the
+package was proved only in Windows Sandbox, which is 24H2. The rule held for what it guarded
+and cost what it did not count. People keep older versions of Windows, and not all of them
+update: 21H2 to 23H2 no longer get updates on Home and Pro, and are still in use.
+
+**Fix:** the package asks for every Windows 11 (`10.0.22000.0`). Since 21H2 to 23H2 can no longer
+be downloaded to try, what stands behind it is named rather than assumed: the whole suite runs in
+CI on Windows Server 2022 as well, build 20348, older than any Windows 11; the Sandbox proofs on
+24H2; 1.0.0 installed from the Store on 26H2; and a reading of the app's own Windows calls (the
+title bar's colours, sharp text, the spelling check), each present on every Windows 11 or
+failing silently below it ([which Windows](RELEASE_WINDOWS.md#which-windows)). Windows 10 stays
+out, the owner's call: without a Windows 10 to try, a declaration would be a guess. Case 1103 in
+the test plan waits for 1.0.1 in the Store.
+
+**Takeaway:** a minimum version is a promise to the people below it as much as to those above.
+Set it at what the app needs, with a floor tested beneath it, not at the oldest version that
+happened to be at hand.
 
 ## Editor & input interaction
 
