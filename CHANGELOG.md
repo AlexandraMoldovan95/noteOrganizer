@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [1.0.1](#101--2026-11-27) | 2026-11-27 | The Microsoft Store installs the app on every version of Windows 11, not only from 24H2. |
 | [1.0.0](#100--2026-11-25) | 2026-11-25 | The first release in the Microsoft Store: the app of 0.103.558, with feedback as a review on its Store page. |
 | [0.103.558](#0103558--2026-11-24) | 2026-11-24 | Typing straight after clicking a table cell lands in it, a long checklist item uses its row's width, and several rows or columns are deleted or cleared at once. |
 | [0.102.556](#0102556--2026-11-23) | 2026-11-23 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too, and what a review panel found by using it; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
@@ -111,6 +112,17 @@ How the numbers themselves are counted is the
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
 
 ---
+
+## [1.0.1] — 2026-11-27
+
+*Highlights: the Microsoft Store offers the app on every version of Windows 11.*
+
+### Fixed
+
+- **The Microsoft Store installs the app on every version of Windows 11.** The package asked for
+  Windows 11, version 24H2 or later, and a person on 23H2 was refused ("doesn't meet minimum
+  requirements"); it asks for version 21H2, the first Windows 11, now. Windows 10 stays out
+  ([why](docs/RELEASE_WINDOWS.md#which-windows)).
 
 ## [1.0.0] — 2026-11-25
 
