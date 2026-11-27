@@ -212,6 +212,10 @@ def project_numbers(repo):
     numbers["hand_passed"] = sum(
         1 for row in cases
         if row[status] == "Pass" and not str(row[tested_by] or "").startswith("Claude"))
+    # "or still to do" only while a case is: at 996 of 996 it was untrue.
+    numbers["plan_rest"] = ("the rest by the scripts"
+                            if all(row[status] == "Pass" for row in cases)
+                            else "the rest by the scripts or still to do")
     workbook.close()
 
     with open(os.path.join(repo, "tools", "mutants.json"), encoding="utf-8") as f:
@@ -608,6 +612,22 @@ def nav_html(current, config, prefix=""):
         items.append('<a class="portfolio-link" href="%s"><span aria-hidden="true">&larr;</span>'
                      ' Portfolio</a>' % html.escape(portfolio))
     return "\n        ".join(items)
+
+
+def store_button(config):
+    """The desktop app's page in the Microsoft Store (site.json's store_url),
+    beside the demo in the overview's hero, the demo staying the filled
+    button (the owner, 2026-11-27). Named "Microsoft Store" alone, her
+    choice: "Get it from the Microsoft Store" did not fit beside the demo's
+    button in the hero's column, and the lede above says the rest. The site
+    may link the stores; nothing the apps' users see links the site
+    (check_kept_apart)."""
+    url = config.get("store_url", "")
+    if not url:
+        return ""
+    if not url.startswith("https://apps.microsoft.com/"):
+        fail("site.json's store_url is not a Microsoft Store page: %s" % url)
+    return '<a class="btn store-link" href="%s">Microsoft Store</a>' % html.escape(url)
 
 
 def og_tags(config, page, title, description):
@@ -1116,6 +1136,7 @@ def main():
         "version": version,
         "og": og_tags(config, "", html.unescape(index_title), html.unescape(index_description)),
         "nav": nav_html("index.html", config),
+        "store_button": store_button(config),
         "android_version": droid["version"],
         "theme_count": len(themes["THEMES"]),
         "theme_names": ", ".join(themes["THEME_LABELS"][key] for key in

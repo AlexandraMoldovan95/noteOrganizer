@@ -33,7 +33,8 @@
       <h1>Notes that stay on your own device</h1>
       <p class="lede">A notes app that keeps everything on your own computer: rich notes with
         tables and checklists, notes that repeat, and a calendar that shows them. No account,
-        no cloud, no network calls. An Android version is on its way to Google Play: no account
+        no cloud, no network calls. It is in the Microsoft Store, for every version of
+        Windows 11. An Android version is on its way to Google Play: no account
         and no server of its own either, though the phone's own backup to a Google account takes
         a copy of its notes while that is on.</p>
       <p class="byline">Built by me, Alexandra Moldovan, with Claude Code, an AI coding agent. I
@@ -41,6 +42,7 @@
         most of the code.</p>
       <div class="actions">
         <a class="btn btn-primary" href="demo/index.html">Try it in your browser</a>
+        {{store_button}}
       </div>
     </div>
     <figure class="window">
@@ -243,7 +245,7 @@
       <li><b>~{{checks}}</b><span>automated checks, on Windows and Linux</span></li>
       <li><b>{{qa_suites}} + {{unit_suites}}</b><span>GUI test suites and unit suites</span></li>
       <li><b>{{mutants}}</b><span>mutants: fixes taken out again to prove a check fails without them</span></li>
-      <li><b>{{test_cases}}</b><span>manual test cases: {{hand_passed}} passed by hand, the rest by the scripts or still to do</span></li>
+      <li><b>{{test_cases}}</b><span>manual test cases: {{hand_passed}} passed by hand, {{plan_rest}}</span></li>
     </ul>
     <div class="cards spaced">
       <a class="card cat-general" href="how-its-built.html">

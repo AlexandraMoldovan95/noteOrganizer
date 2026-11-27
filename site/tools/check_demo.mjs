@@ -401,6 +401,27 @@ try {
   // after another -- the owner found the page static (2026-10-24).
   await go("/index.html");
   check("the overview's hero is never hidden", await js("!document.querySelector('.hero h1').closest('.reveal')"));
+  // The desktop app's page in the Microsoft Store (site.json's store_url),
+  // beside the demo, which stays the filled button, the two on one row on a
+  // computer (the owner, 2026-11-27: "Microsoft Store" alone, so it fits).
+  const storeUrl = JSON.parse(fs.readFileSync(path.resolve(HERE, "..", "site.json"), "utf8")).store_url;
+  const storeButton = await js(`(() => {
+    const buttons = [...document.querySelectorAll(".hero .actions a.btn")];
+    const store = buttons.find((a) => a.classList.contains("store-link"));
+    if (!store) return { found: false, buttons: buttons.map((a) => a.textContent.trim()) };
+    const r = store.getBoundingClientRect(), d = buttons[0].getBoundingClientRect();
+    return { found: true, href: store.getAttribute("href"), text: store.textContent.trim(),
+             shown: r.width > 0 && r.height > 0, filled: store.classList.contains("btn-primary"),
+             second: buttons.indexOf(store) === 1
+               && buttons[0].getAttribute("href") === "demo/index.html"
+               && buttons[0].classList.contains("btn-primary"),
+             width: innerWidth, row: Math.abs(r.top - d.top) <= 2 && r.left > d.right };
+  })()`);
+  check("the overview's hero links the app's page in the Microsoft Store, beside the demo, which stays filled, on one row",
+    /^https:\/\/apps\.microsoft\.com\//.test(storeUrl || "") && storeButton.found && storeButton.href === storeUrl
+      && storeButton.text === "Microsoft Store" && storeButton.shown
+      && !storeButton.filled && storeButton.second && storeButton.width >= 1000 && storeButton.row,
+    JSON.stringify({ storeUrl, storeButton }));
   const below = await js(`(() => { const cards = [...document.querySelectorAll('.cards .card')]
       .filter((c) => c.getBoundingClientRect().top > innerHeight * 0.92);
     return { n: cards.length, waiting: cards.filter((c) => c.matches('.reveal:not(.in-view)')).length }; })()`);

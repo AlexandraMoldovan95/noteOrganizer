@@ -32,7 +32,9 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     Google Play for Android — rather than the built `dist/` folder to download. A store signs the
     app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up
     to date, and is where people look for it. The Windows options are in
-    [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
+    [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md). The Microsoft Store's is done (2026-11-27:
+    a button beside the demo's at the top of the overview, `store_url` in `site/site.json`);
+    Google Play's waits for the Android app to be there.
 
 - **For 1.0.2: a smaller package, for a quicker install** (the owner's call, 2026-11-25; meant
   for 1.0.1, which became the Store's offer on every Windows 11 alone).

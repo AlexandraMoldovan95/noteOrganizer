@@ -29,7 +29,7 @@ The test suite does not run for a change that only touches `site/`.
 | `public/` | **The finished site — this is what goes to Netlify.** Never edit it by hand: the build replaces it. Not in git: the build makes it again whenever it is needed. |
 | `src/` | The source: the overview page, the page template, the site's privacy notice, the styles, the desktop demo (`demo/`), the Android demo (`android-demo/`), the Netlify headers. |
 | `build.py` | Turns `src/` plus the two apps' repositories into `public/`. The Android page is made here, from the Android repository's README and screenshots. |
-| `site.json` | The site's address; where the Android repository is (`android_repo`, beside this one by default); each repository's public address (`repo_url`, `android_repo_url`); and the portfolio's (`portfolio_url`), which every page's header links in its top right corner, first in the menu on a phone. |
+| `site.json` | The site's address; where the Android repository is (`android_repo`, beside this one by default); each repository's public address (`repo_url`, `android_repo_url`); and the portfolio's (`portfolio_url`), which every page's header links in its top right corner, first in the menu on a phone; and the desktop app's page in the Microsoft Store (`store_url`), a button beside the demo's at the top of the overview, the demo's staying the filled one. |
 | `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), both demos included, on a computer and on a phone, and photographs it. |
 | `tools/check_demo.py` | The walk's door: it starts `check_demo.mjs`, which will not start any other way, with the computer's turn, a memory ceiling and a time limit, and ends every Edge process with it. |
 | `tools/verify_share_codes.py` | Holds both demos' share codes to the app's own code, both ways. |
@@ -129,9 +129,9 @@ the app's codes, the second reads the demo's.
 
 ## Kept apart from the apps
 
-The site presents the project to the people the owner sends here — once
-the apps are published, its overview links to their store pages. The
-other way round, nothing the apps' users see points at it: not the apps,
+The site presents the project to the people the owner sends here — its
+overview links to the desktop app's page in the Microsoft Store, and will
+link the Android app's on Google Play once it is there. The other way round, nothing the apps' users see points at it: not the apps,
 not their store pages (whose optional website field stays empty), not
 their privacy policy (the owner's rule, 2026-10-21). The build refuses a
 site whose address appears in either app's sources, in
