@@ -19,20 +19,19 @@ pass that is the scripts' says so.
 
 ## The plan in numbers
 
-Counted on 27 November 2026: 996 cases, 994 walked and passed, 1 not yet
-walked, 1 blocked. Of the passes, 699 are mine, by hand, among them every
-case that needs my eye, cases 1100 to 1102, added on 24 November for two
-fixes from my own field test and a new way to delete and clear rows and
-columns, and case 686, the review button opening the app's page, walked
-on 1.0.0 installed from the Microsoft Store; 295 are the scripted
-suites', run for the final audit on the source of 0.102.556 and marked
+Counted on 27 November 2026: 996 cases, 996 walked and passed, 0 not yet
+walked. Of the passes, 701 are mine, by hand, among them every case that
+needs my eye, cases 1100 to 1102, added on 24 November for two fixes from
+my own field test and a new way to delete and clear rows and columns, and
+three walked on the app installed from the Microsoft Store: case 686, the
+review button opening the app's page, on 1.0.0; case 704, every note kept
+through an uninstall and a reinstall on 1.0.0 and through the Store's
+update to 1.0.1; and case 1103, 1.0.1 offered, installed and opened on
+Windows 11 23H2, the PC 1.0.0 had refused. 295 are the scripted suites',
+run for the final audit on the source of 0.102.556 and marked
 *Claude (automated, final audit)*: a pass for what the suites walk, not a
 walk by hand like mine, with what they leave to the hand named in Actual
-Result. The blocked one, case 704, is walked in part on the same install:
-an uninstall and a reinstall from the Store keep every note; its first
-step, an update from the Store, waits for the first newer version. The
-one not yet walked, case 1103, is 1.0.1's: the Store offering the app on
-every Windows 11, and needs 1.0.1 published.
+Result.
 
 ### By priority
 
