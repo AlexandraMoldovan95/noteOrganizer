@@ -6171,7 +6171,7 @@ reads a position asks where the pieces really stand.
 
 ### The minimum Windows that kept a person out
 
-*(2026-11-27 · 1.0.0, two days public · a person on Windows 11 23H2, refused by the Store)*
+*(2026-11-27 · 1.0.0, just public · a person on Windows 11 23H2, refused by the Store)*
 
 **Symptom:** the Microsoft Store refused to install Note Organizer on a PC with Windows 11,
 version 23H2: "the version of Windows on your PC doesn't meet the minimum requirements". Nothing
@@ -6189,8 +6189,9 @@ CI on Windows Server 2022 as well, build 20348, older than any Windows 11; the S
 24H2; 1.0.0 installed from the Store on 26H2; and a reading of the app's own Windows calls (the
 title bar's colours, sharp text, the spelling check), each present on every Windows 11 or
 failing silently below it ([which Windows](RELEASE_WINDOWS.md#which-windows)). Windows 10 stays
-out, the owner's call: without a Windows 10 to try, a declaration would be a guess. Case 1103 in
-the test plan waits for 1.0.1 in the Store.
+out, the owner's call: without a Windows 10 to try, a declaration would be a guess. 1.0.1 reached
+the Store the same day, and the PC on 23H2 that 1.0.0 had refused installed it and opened it on
+its welcome note (case 1103 in the test plan).
 
 **Takeaway:** a minimum version is a promise to the people below it as much as to those above.
 Set it at what the app needs, with a floor tested beneath it, not at the oldest version that

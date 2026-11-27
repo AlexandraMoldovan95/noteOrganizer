@@ -6,7 +6,8 @@ changes with it. Each field is in a block, ready to paste as it is. The listing 
 like the app.
 
 Version 1.0.0 was submitted for certification on 2026-11-25, to a private audience first, and
-made public on 2026-11-27; 1.0.1 follows, offered on every Windows 11. Every claim was checked
+made public on 2026-11-27; 1.0.1, offered on every Windows 11, was submitted and reached the
+Store the same day, certified in under an hour. Every claim was checked
 against the [user guide](USER_GUIDE.md), the [README](../README.md) and the
 [privacy policy](PRIVACY.md) at 0.103.558. What follows is what the submissions hold, page by
 page, in the order Partner Center asks for it.
@@ -352,7 +353,7 @@ link, before a new submission makes it public:
 - **The page**: its words, the eight pictures and the publisher's name as given here.
 - **Write a review** opens that page, ready for a review (test plan case 686, its hand part).
 - **Uninstall and reinstall** keep the notes, a backup made first (case 704); its update step
-  waits for the first newer version.
+  walked on 2026-11-27, the Store's update to 1.0.1 keeping every note.
 
 Then, once public:
 

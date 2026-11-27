@@ -140,7 +140,7 @@ the Store accepts any Windows 10 or 11 version it supports, given in that attrib
 **How it came to this.** Until 1.0.1 the package asked for 24H2 (`10.0.26100.0`), the owner's
 choice of 2026-11-09: what was never tried is not declared. It had said Windows 10 version 1809
 (`10.0.17763.0`) while it had only ever run on Windows 11, and Windows Sandbox, where the package
-is proved, is 24H2. On 2026-11-27, two days after 1.0.0 went public, a person on Windows 11 23H2
+is proved, is 24H2. On 2026-11-27, just after 1.0.0 went public, a person on Windows 11 23H2
 was refused by the Store ("doesn't meet minimum requirements"): people keep older versions of
 Windows, and not all of them update. The owner's choice then was every Windows 11, and no
 Windows 10 ([why not](ROADMAP.md#explicitly-not-planned-right-now)).
@@ -149,7 +149,10 @@ Windows 10 ([why not](ROADMAP.md#explicitly-not-planned-right-now)).
 
 - The whole suite runs in CI on Windows Server 2022 as well (build 20348, older than any
   Windows 11; `.github/workflows/tests.yml`), beside the newest Windows and Linux.
-- The Sandbox proofs run on 24H2, and 1.0.0 was installed from the Store on 26H2.
+- The Sandbox proofs run on 24H2, and 1.0.0 was installed from the Store on 26H2 and updated
+  there to 1.0.1 on 2026-11-27, every note kept.
+- On 2026-11-27 the PC on Windows 11 23H2 that 1.0.0 had been refused on installed 1.0.1 from
+  the Store and opened it on its welcome note.
 - The app uses nothing those versions lack: the title bar's colours are Windows 11's own and
   fail silently elsewhere, the call that keeps text sharp is Windows 8.1's, the spelling check
   Windows 8's.
