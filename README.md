@@ -8,6 +8,8 @@ dependency (Pillow, for images).
 
 [![Tests](https://github.com/AlexandraMoldovan95/noteOrganizer/actions/workflows/tests.yml/badge.svg)](https://github.com/AlexandraMoldovan95/noteOrganizer/actions/workflows/tests.yml)
 
+**Get it:** in the [Microsoft Store](https://apps.microsoft.com/detail/9NBS2548QTXF), for every
+version of Windows 11.
 **Try it without installing:** a [web demo](https://note-organizer-8f7772.netlify.app/demo/)
 re-creates the app in the browser, in HTML and JavaScript, not the app itself.
 **Written by Alexandra herself:** [In my words](docs/IN_MY_WORDS.md), and
@@ -77,7 +79,8 @@ code ([where they come from](docs/screenshots/README.md)).
 
 ## Running it
 
-Python 3.13, the version the tests run on:
+The app installs from the [Microsoft Store](https://apps.microsoft.com/detail/9NBS2548QTXF).
+From source, with Python 3.13, the version the tests run on:
 
 ```
 pip install -r requirements.txt
